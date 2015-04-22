@@ -3,9 +3,15 @@
 #include "vid_support.h"
 #include "vid_softfx.h"
 
+#ifdef OSX
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#include <OpenGL/glext.h>
+#else
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glext.h>
+#endif
 
 #ifdef frame_timer
 #include <sys/time.h>

@@ -16,6 +16,21 @@ ROMDIR		= /usr/local/share/roms/
 BINDIR		= /usr/local/bin/
 FILES		= fbasdl.ini gamelist.txt fb.png
 
+CFLAGS =
+CXXFLAGS =
+
+ifneq ($(OS),Windows_NT)
+	# Host OS
+	UNAME_S := $(shell uname -s)
+	ifeq ($(UNAME_S),Darwin)
+		CFLAGS += -D OSX
+		CXXFLAGS += -D OSX
+		OSX=1
+		# A bunch of MMX stuff fails to build otherwise
+		BUILD_X86_ASM=
+	endif
+endif
+
 # Check for changes in header files
 DEPEND = 1
 
@@ -124,12 +139,20 @@ alldir	= burn \
 		dep/vc/include \
 		dep/generated
 
-incdir	= $(foreach dir,$(alldir),-I$(srcdir)$(dir)) -I$(objdir)dep/generated -I/local/include -I/include/SDL
+incdir	= $(foreach dir,$(alldir),-I$(srcdir)$(dir)) -I$(objdir)dep/generated -I/local/include -I/include/SDL -I/usr/local/include
+libdir  = -L/usr/local/include
 
 ifeq ($(OS),Windows_NT)
 lib	= -static -lstdc++ -lpng -lmingw32 -Wl,-Bdynamic -lSDL -lz -lopengl32 -lglu32
 else
-lib	= -lstdc++ -lSDL -lGL -lGLU -lz
+lib	= -lstdc++ -lSDL -lz 
+
+ifndef OSX
+lib	+= -lGL -lGLU
+else
+lib     += -framework OpenGL
+endif
+
 endif
 
 
@@ -343,8 +366,8 @@ LD	= $(CXX)
 AS	= nasm
 
 HOSTCFLAGS = $(incdir)
-CFLAGS = -O2 -fomit-frame-pointer -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
-CXXFLAGS = -O2 -fomit-frame-pointer -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
+CFLAGS += -O2 -fomit-frame-pointer -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
+CXXFLAGS += -O2 -fomit-frame-pointer -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
 DEF := -DCPUTYPE=$(CPUTYPE) -DUSE_SPEEDHACKS -DBUILD_SDL
 
 CFLAGS += -U__cdecl -U__fastcall -D__cdecl="" -D__fastcall=""
@@ -377,8 +400,11 @@ endif
 
 CFLAGS += $(DEF) $(incdir)
 CXXFLAGS += $(DEF) $(incdir)
+LDFLAGS += -L/usr/local/lib
 ifndef DEBUG
+ifndef OSX
 LDFLAGS += -s
+endif
 endif
 ASFLAGS = -O1
 
