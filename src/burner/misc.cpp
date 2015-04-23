@@ -42,10 +42,15 @@ static UINT32 __cdecl HighCol16(INT32 r, INT32 g, INT32 b, INT32 /* i */)
 static UINT32 __cdecl HighCol24(INT32 r, INT32 g, INT32 b, INT32  /* i */)
 {
 	UINT32 t;
+#ifdef OSX
+	t =(b<<24)&0xff000000;
+	t|=(g<<16)&0x00ff0000;
+	t|=(r<<8 )&0x0000ff00;
+#else
 	t =(r<<16)&0xff0000;
 	t|=(g<<8 )&0x00ff00;
 	t|=(b    )&0x0000ff;
-
+#endif
 	return t;
 }
 

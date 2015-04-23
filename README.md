@@ -9,11 +9,17 @@ Source is based on
 [FBA for OpenDingux](https://github.com/dmitrysmagin/fba-sdl), sans the
 OpenDingux-specific stuff.
 
+I've also made some minor changes to make the SDL version compilable (though
+not necessarily usable) on OS X.
+
 Compiling
 ---------
 
-To compile from source, run `make pi` and grab a :coffee: - it's going to be a
-while.
+To compile on a Raspberry Pi, run `make pi` and grab a :coffee: - it's
+going to be a while.
+
+To compile on a Mac, run `make sdl`. You will also need the SDL libraries:
+you can get them via [Homebrew](http://brew.sh/) by running `brew install sdl`.
 
 Quitting
 --------
