@@ -24,9 +24,10 @@ static void resetJoystickMap();
 #define JOY_DIR_DOWN  2
 #define JOY_DIR_LEFT  3
 
-#define JOY_MAP_DIR(joy,dir) ((((joy)&0xff)<<8)|(1<<(((dir)&0x3)&0x1f)))
-#define JOY_MAP_BUTTON(joy,button) ((((joy)&0xff)<<8)|(1<<((button+4)&0x1f)))
-#define JOY_IS_DOWN(value) (joyButtonStates[((value)>>8)&0x7]&((value)&0xff))
+#define JOY_MAP_DIR(joy,dir) ((((joy)&0xff)<<8)|((dir)&0x3))
+#define JOY_MAP_BUTTON(joy,button) ((((joy)&0xff)<<8)|(((button)+4)&0x1f))
+#define JOY_IS_DOWN(value) (joyButtonStates[((value)>>8)&0x7]&(1<<((value)&0xff)))
+#define JOY_CLEAR(value) joyButtonStates[((value)>>8)&0x7]&=~(1<<((value)&0xff))
 
 #define JOY_DEADZONE 0x4000
 
@@ -259,65 +260,45 @@ int SDLinpMouseAxis(int i, int nAxis)
 // Check a subcode (the 40xx bit in 4001, 4102 etc) for a joystick input code
 static int JoystickState(int i, int nSubCode)
 {
-	if (i < 0 || i >= nJoystickCount) {							// This joystick isn't connected
-		return 0;
-	}
-
-	if (ReadJoystick() != 0) {									// Error polling the joystick
-		return 0;
-	}
-
-	if (nSubCode < 0x10) {										// Joystick directions
-		const int DEADZONE = 0x4000;
-
-		if (SDL_JoystickNumAxes(JoyList[i]) <= nSubCode) {
-			return 0;
+	if (i >= 0 && i < nJoystickCount) {
+		if (nSubCode < 0x10) {
+			// Directions
+			switch (nSubCode) {
+				case 0x00: return JOY_IS_DOWN(JOY_MAP_DIR(i,JOY_DIR_LEFT));
+				case 0x01: return JOY_IS_DOWN(JOY_MAP_DIR(i,JOY_DIR_RIGHT));
+				case 0x02: return JOY_IS_DOWN(JOY_MAP_DIR(i,JOY_DIR_UP));
+				case 0x03: return JOY_IS_DOWN(JOY_MAP_DIR(i,JOY_DIR_DOWN));
+				// Don't really care about additional axes
+			}
 		}
+		if (nSubCode < 0x20) {
+			// POV hat controls
+			SDL_Joystick *joystick = JoyList[i];
+			if (SDL_JoystickNumHats(joystick) <= ((nSubCode & 0x0F) >> 2)) {
+				return 0;
+			}
 
-		switch (nSubCode) {
-			case 0x00: return SDL_JoystickGetAxis(JoyList[i], 0) < -DEADZONE;		// Left
-			case 0x01: return SDL_JoystickGetAxis(JoyList[i], 0) > DEADZONE;		// Right
-			case 0x02: return SDL_JoystickGetAxis(JoyList[i], 1) < -DEADZONE;		// Up
-			case 0x03: return SDL_JoystickGetAxis(JoyList[i], 1) > DEADZONE;		// Down
-			case 0x04: return SDL_JoystickGetAxis(JoyList[i], 2) < -DEADZONE;
-			case 0x05: return SDL_JoystickGetAxis(JoyList[i], 2) > DEADZONE;
-			case 0x06: return SDL_JoystickGetAxis(JoyList[i], 3) < -DEADZONE;
-			case 0x07: return SDL_JoystickGetAxis(JoyList[i], 3) > DEADZONE;
-			case 0x08: return SDL_JoystickGetAxis(JoyList[i], 4) < -DEADZONE;
-			case 0x09: return SDL_JoystickGetAxis(JoyList[i], 4) > DEADZONE;
-			case 0x0A: return SDL_JoystickGetAxis(JoyList[i], 5) < -DEADZONE;
-			case 0x0B: return SDL_JoystickGetAxis(JoyList[i], 5) > DEADZONE;
-			case 0x0C: return SDL_JoystickGetAxis(JoyList[i], 6) < -DEADZONE;
-			case 0x0D: return SDL_JoystickGetAxis(JoyList[i], 6) > DEADZONE;
-			case 0x0E: return SDL_JoystickGetAxis(JoyList[i], 7) < -DEADZONE;
-			case 0x0F: return SDL_JoystickGetAxis(JoyList[i], 7) > DEADZONE;
+			switch (nSubCode & 3) {
+				case 0:
+					return SDL_JoystickGetHat(joystick,
+						(nSubCode & 0x0F) >> 2) & SDL_HAT_LEFT;
+				case 1:
+					return SDL_JoystickGetHat(joystick,
+						(nSubCode & 0x0F) >> 2) & SDL_HAT_RIGHT;
+				case 2:
+					return SDL_JoystickGetHat(joystick,
+						(nSubCode & 0x0F) >> 2) & SDL_HAT_UP;
+				case 3:
+					return SDL_JoystickGetHat(joystick,
+						(nSubCode & 0x0F) >> 2) & SDL_HAT_DOWN;
+			}
+		}
+		if (nSubCode < 0x80 + MAX_JOY_BUTTONS) {
+			// Joystick buttons
+			return JOY_IS_DOWN(JOY_MAP_BUTTON(i,nSubCode & 0x7F));
 		}
 	}
-	if (nSubCode < 0x20) {										// POV hat controls
-		if (SDL_JoystickNumHats(JoyList[i]) <= ((nSubCode & 0x0F) >> 2)) {
-			return 0;
-		}
-
-		switch (nSubCode & 3) {
-			case 0:												// Left
-				return SDL_JoystickGetHat(JoyList[i], (nSubCode & 0x0F) >> 2) & SDL_HAT_LEFT;
-			case 1:												// Right
-				return SDL_JoystickGetHat(JoyList[i], (nSubCode & 0x0F) >> 2) & SDL_HAT_RIGHT;
-			case 2:												// Up
-				return SDL_JoystickGetHat(JoyList[i], (nSubCode & 0x0F) >> 2) & SDL_HAT_UP;
-			case 3:												// Down
-				return SDL_JoystickGetHat(JoyList[i], (nSubCode & 0x0F) >> 2) & SDL_HAT_DOWN;
-		}
-
-		return 0;
-	}
-	if (nSubCode < 0x80) {										// Undefined
-		return 0;
-	}
-	if (nSubCode < 0x80 + SDL_JoystickNumButtons(JoyList[i])) {	// Joystick buttons
-		return SDL_JoystickGetButton(JoyList[i],nSubCode & 0x7F);
-	}
-
+	
 	return 0;
 }
 
@@ -343,23 +324,29 @@ int SDLinpState(int nCode)
 		return 0;
 	}
 
+	if (!joysticksScanned) {
+		scanJoysticks();
+		joysticksScanned = 1;
+	}
+	
 	if (nCode < 0x100) {
 		if (ReadKeyboard() != 0) {							// Check keyboard has been read - return not pressed on error
 			return 0;
 		}
 		
 		int isDown = SDL_KEY_DOWN(nCode);
-		if (isDown) {
-			return isDown;
+		if (!isDown) {
+			// Nothing from the keyboard - try the joystick
+			int joyMap = fbkToJoystickMap[nCode];
+			if (joyMap != -1) {
+				isDown = JOY_IS_DOWN(joyMap);
+				if (isDown) {
+					JOY_CLEAR(joyMap);
+				}
+			}
 		}
 		
-		if (!joysticksScanned) {
-			scanJoysticks();
-			joysticksScanned = 1;
-		}
-if (fbkToJoystickMap[nCode] != -1) {
-	return JOY_IS_DOWN(fbkToJoystickMap[nCode]);
-}
+		return isDown;
 	}
 
 	if (nCode < 0x4000) {
@@ -367,11 +354,7 @@ if (fbkToJoystickMap[nCode] != -1) {
 	}
 
 	if (nCode < 0x8000) {
-		// Codes 4000-8000 = Joysticks
-		int nJoyNumber = (nCode - 0x4000) >> 8;
-
-		// Find the joystick state in our array
-		return JoystickState(nJoyNumber, nCode & 0xFF);
+		return JoystickState((nCode - 0x4000) >> 8, nCode & 0xFF);
 	}
 
 	if (nCode < 0xC000) {
@@ -405,12 +388,13 @@ int SDLinpFind(bool CreateBaseline)
 
 	// Now check all the connected joysticks
 	for (int i = 0; i < nJoystickCount; i++) {
-		int j;
-		if (ReadJoystick() != 0) {							// There was an error polling the joystick
-			continue;
+		if (!joysticksScanned) {
+			scanJoysticks();
+			joysticksScanned = 1;
 		}
-
-		for (j = 0; j < 0x10; j++) {						// Axes
+		
+		for (int j = 0; j < 0x10; j++) {
+			// Axes
 			int nDelta = JoyPrevAxes[(i << 3) + (j >> 1)] - SDLinpJoyAxis(i, (j >> 1));
 			if (nDelta < -0x4000 || nDelta > 0x4000) {
 				if (JoystickState(i, j)) {
@@ -420,14 +404,15 @@ int SDLinpFind(bool CreateBaseline)
 			}
 		}
 
-		for (j = 0x10; j < 0x20; j++) {						// POV hats
+		for (int j = 0x10; j < 0x20; j++) {
+			// POV hats
 			if (JoystickState(i, j)) {
 				nRetVal = 0x4000 | (i << 8) | j;
 				goto End;
 			}
 		}
 
-		for (j = 0x80; j < 0x80 + SDL_JoystickNumButtons(JoyList[i]); j++) {
+		for (int j = 0x80; j < 0x80 + SDL_JoystickNumButtons(JoyList[i]); j++) {
 			if (JoystickState(i, j)) {
 				nRetVal = 0x4000 | (i << 8) | j;
 				goto End;
@@ -490,7 +475,7 @@ int SDLinpGetControlName(int nCode, TCHAR* pszDeviceName, TCHAR* pszControlName)
 		case 0x4000: {
 			int i = (nCode >> 8) & 0x3F;
 
-			if (i >= nJoystickCount) {				// This joystick isn't connected
+			if (i >= nJoystickCount) {
 				return 0;
 			}
 			_tsprintf(pszDeviceName, "%hs", SDL_JoystickName(i));
@@ -539,7 +524,7 @@ static void scanJoysticks()
 		}
 		for (int button = 0, shift = 4; button < buttonCount; button++, shift++) {
 			int state = SDL_JoystickGetButton(joystick, button);
-			joyButtonStates[joy] |= (state & 1) << shift;
+			joyButtonStates[joy] |= ((state & 1) << shift);
 		}
 	}
 }
@@ -550,10 +535,17 @@ static void resetJoystickMap()
 	for (int i = 0; i < 512; i++) {
 		fbkToJoystickMap[i] = -1;
 	}
-	fbkToJoystickMap[FBK_UPARROW] = JOY_MAP_BUTTON(0,0);
-	fbkToJoystickMap[FBK_DOWNARROW] = JOY_MAP_BUTTON(0,1);
-	fbkToJoystickMap[FBK_LEFTARROW] = JOY_MAP_BUTTON(0,2);
-	fbkToJoystickMap[FBK_RIGHTARROW] = JOY_MAP_BUTTON(0,3);
+	fbkToJoystickMap[FBK_UPARROW] = JOY_MAP_DIR(0,JOY_DIR_UP);
+	fbkToJoystickMap[FBK_DOWNARROW] = JOY_MAP_DIR(0,JOY_DIR_DOWN);
+	fbkToJoystickMap[FBK_LEFTARROW] = JOY_MAP_DIR(0,JOY_DIR_LEFT);
+	fbkToJoystickMap[FBK_RIGHTARROW] = JOY_MAP_DIR(0,JOY_DIR_RIGHT);
+	fbkToJoystickMap[FBK_Z] = JOY_MAP_BUTTON(0,0);
+	fbkToJoystickMap[FBK_X] = JOY_MAP_BUTTON(0,1);
+	fbkToJoystickMap[FBK_C] = JOY_MAP_BUTTON(0,2);
+	fbkToJoystickMap[FBK_V] = JOY_MAP_BUTTON(0,3);
+	fbkToJoystickMap[FBK_1] = JOY_MAP_BUTTON(0,7);
+	fbkToJoystickMap[FBK_5] = JOY_MAP_BUTTON(0,6);
+/*
 	fbkToJoystickMap[FBK_5] = JOY_MAP_BUTTON(0,4);
 	fbkToJoystickMap[FBK_1] = JOY_MAP_BUTTON(0,5);
 	
@@ -561,6 +553,7 @@ static void resetJoystickMap()
 	fbkToJoystickMap[FBK_X] = JOY_MAP_DIR(0,JOY_DIR_DOWN);
 	fbkToJoystickMap[FBK_C] = JOY_MAP_DIR(0,JOY_DIR_LEFT);
 	fbkToJoystickMap[FBK_V] = JOY_MAP_DIR(0,JOY_DIR_RIGHT);
+*/
 }
 
 struct InputInOut InputInOutSDL = { SDLinpInit, SDLinpExit, SDLinpSetCooperativeLevel, SDLinpStart, SDLinpState, SDLinpJoyAxis, SDLinpMouseAxis, SDLinpFind, SDLinpGetControlName, NULL, _T("SDL input") };
