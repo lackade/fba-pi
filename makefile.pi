@@ -93,6 +93,7 @@ alldir	= burn \
 		intf/cd/sdl \
 		intf/input \
 		intf/input/sdl \
+		intf/input/pi \
 		intf/video \
 		intf/video/sdl \
 		intf/video/pi \
@@ -130,7 +131,7 @@ alldir	= burn \
 incdir	= $(foreach dir,$(alldir),-I$(srcdir)$(dir)) -I$(objdir)dep/generated -I/local/include -I/include/SDL
 incdir += -I/opt/vc/include/interface/vcos/pthreads -I/opt/vc/include/interface/vmcs_host/linux -I$(BCM_INCDIR)
 
-lib	= -lstdc++ -lSDL -lz -lbcm_host -lEGL -lGLESv2 -lpthread -L$(X11_LIBDIR) -L$(BCM_LIBDIR)
+lib	= -lstdc++ -lSDL -lz -lbcm_host -lEGL -lGLESv2 -lpthread -ludev -L$(X11_LIBDIR) -L$(BCM_LIBDIR)
 
 
 drvobj	+= \
@@ -214,7 +215,7 @@ depobj	+= \
 		ioapi.o unzip.o conc.o cong.o dat.o gamc.o gami.o image.o \
 		misc.o sshot.o state.o statec.o zipfn.o \
 		\
-		aud_sdl.o inp_sdl.o \
+		aud_sdl.o inp_udev.o inp_pi.o \
 		\
 		vid_pi.o \
 		\

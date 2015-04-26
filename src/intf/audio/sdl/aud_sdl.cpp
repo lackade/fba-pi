@@ -160,7 +160,12 @@ static int SDLSoundInit()
 	nSoundFps = nAppVirtualFps;
 	nAudSegLen = (nAudSampleRate[0] * 100 + (nSoundFps >> 1)) / nSoundFps;
 	nAudLoopLen = (nAudSegLen * nAudSegCount) << 2;
+#ifdef BUILD_PI
+	// Anything less results in a buffer underrun
+	for (nSDLBufferSize = 64; nSDLBufferSize < nAudSegLen; nSDLBufferSize <<= 1) { }
+#else
 	for (nSDLBufferSize = 64; nSDLBufferSize < (nAudSegLen >> 1); nSDLBufferSize <<= 1) { }
+#endif
 
 	audiospec_req.freq = nAudSampleRate[0];
 	audiospec_req.format = AUDIO_S16;
