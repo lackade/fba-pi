@@ -6,6 +6,7 @@
 
 extern "C" {
 #include "inp_udev.h"
+#include "cJSON.h"
 }
 
 // Note that these constants are tied to the JOY_ macros!
@@ -31,6 +32,8 @@ static void resetJoystickMap();
 
 #define JOY_DEADZONE 0x4000
 
+static char* globFile(const char *path);
+
 ///
 
 extern int nExitEmulator;
@@ -41,30 +44,6 @@ static int nInitedSubsytems = 0;
 static SDL_Joystick* JoyList[MAX_JOYSTICKS];
 static int* JoyPrevAxes = NULL;
 static int nJoystickCount = 0;						// Number of joysticks connected to this machine
-
-// Sets up one Joystick (for example the range of the joystick's axes)
-static int SDLinpJoystickInit(int joystick)
-{
-	JoyList[joystick] = SDL_JoystickOpen(joystick);
-	return 0;
-}
-
-// Set up the keyboard
-static int SDLinpKeyboardInit()
-{
-	for (int i = 0; i < 512; i++) {
-		if (SDLtoFBK[i] > 0)
-			FBKtoSDL[SDLtoFBK[i]] = i;
-	}
-
-	return 0;
-}
-
-// Get an interface to the mouse
-static int SDLinpMouseInit()
-{
-	return 0;
-}
 
 int SDLinpSetCooperativeLevel(bool bExclusive, bool /*bForeGround*/)
 {
@@ -124,17 +103,17 @@ int SDLinpInit()
 	// Set up the joysticks
 	nJoystickCount = SDL_NumJoysticks();
 	for (int i = 0; i < nJoystickCount; i++) {
-		SDLinpJoystickInit(i);
+		JoyList[i] = SDL_JoystickOpen(i);
 	}
 	SDL_JoystickEventState(SDL_IGNORE);
 
 	resetJoystickMap();
 	
 	// Set up the keyboard
-	SDLinpKeyboardInit();
-
-	// Set up the mouse
-	SDLinpMouseInit();
+	for (int i = 0; i < 512; i++) {
+		if (SDLtoFBK[i] > 0)
+			FBKtoSDL[SDLtoFBK[i]] = i;
+	}
 
 	return 0;
 }
@@ -330,7 +309,7 @@ int SDLinpState(int nCode)
 	}
 	
 	if (nCode < 0x100) {
-		if (ReadKeyboard() != 0) {							// Check keyboard has been read - return not pressed on error
+		if (ReadKeyboard() != 0) {
 			return 0;
 		}
 		
@@ -539,21 +518,59 @@ static void resetJoystickMap()
 	fbkToJoystickMap[FBK_DOWNARROW] = JOY_MAP_DIR(0,JOY_DIR_DOWN);
 	fbkToJoystickMap[FBK_LEFTARROW] = JOY_MAP_DIR(0,JOY_DIR_LEFT);
 	fbkToJoystickMap[FBK_RIGHTARROW] = JOY_MAP_DIR(0,JOY_DIR_RIGHT);
+/*
 	fbkToJoystickMap[FBK_Z] = JOY_MAP_BUTTON(0,0);
 	fbkToJoystickMap[FBK_X] = JOY_MAP_BUTTON(0,1);
 	fbkToJoystickMap[FBK_C] = JOY_MAP_BUTTON(0,2);
 	fbkToJoystickMap[FBK_V] = JOY_MAP_BUTTON(0,3);
+*/
+	fbkToJoystickMap[FBK_A] = JOY_MAP_BUTTON(0,0);
+	fbkToJoystickMap[FBK_S] = JOY_MAP_BUTTON(0,1);
+	fbkToJoystickMap[FBK_D] = JOY_MAP_BUTTON(0,2);
+	fbkToJoystickMap[FBK_Z] = JOY_MAP_BUTTON(0,3);
+	fbkToJoystickMap[FBK_X] = JOY_MAP_BUTTON(0,4);
+	fbkToJoystickMap[FBK_C] = JOY_MAP_BUTTON(0,5);
 	fbkToJoystickMap[FBK_1] = JOY_MAP_BUTTON(0,7);
 	fbkToJoystickMap[FBK_5] = JOY_MAP_BUTTON(0,6);
-/*
-	fbkToJoystickMap[FBK_5] = JOY_MAP_BUTTON(0,4);
-	fbkToJoystickMap[FBK_1] = JOY_MAP_BUTTON(0,5);
+
+	char *foo = globFile("0583-2060.joy");
+	if (foo != NULL) {
+		free(foo);
+		cJSON *root = cJSON_Parse(foo);
+		if (root != NULL) {
+			cJSON *p1 = cJSON_GetObjectItem(root,"p1");
+			cJSON_Delete(root);
+		}
+	}
+}
+
+static char* globFile(const char *path)
+{
+	char *contents = NULL;
 	
-	fbkToJoystickMap[FBK_Z] = JOY_MAP_DIR(0,JOY_DIR_UP);
-	fbkToJoystickMap[FBK_X] = JOY_MAP_DIR(0,JOY_DIR_DOWN);
-	fbkToJoystickMap[FBK_C] = JOY_MAP_DIR(0,JOY_DIR_LEFT);
-	fbkToJoystickMap[FBK_V] = JOY_MAP_DIR(0,JOY_DIR_RIGHT);
-*/
+	FILE *file = fopen("path","r");
+	if (file) {
+		// Determine size
+		fseek(file, 0L, SEEK_END);
+		long size = ftell(file);
+		rewind(file);
+	
+		// Allocate memory
+		contents = (char *)malloc(size + 1);
+		if (contents) {
+			contents[size] = '\0';
+		
+			// Read contents
+			if (fread(contents, size, 1, file) != 1) {
+				free(contents);
+				contents = NULL;
+			}
+		}
+
+		fclose(file);
+	}
+	
+	return contents;
 }
 
 struct InputInOut InputInOutSDL = { SDLinpInit, SDLinpExit, SDLinpSetCooperativeLevel, SDLinpStart, SDLinpState, SDLinpJoyAxis, SDLinpMouseAxis, SDLinpFind, SDLinpGetControlName, NULL, _T("SDL input") };
