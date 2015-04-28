@@ -1,3 +1,6 @@
+#ifndef INP_KEYS_H
+#define INP_KEYS_H
+
 // FB Alpha key definitions
 
 #define FBK_ESCAPE          0x01
@@ -146,3 +149,7 @@
 #define FBK_MYCOMPUTER      0xEB				// My Computer
 #define FBK_MAIL            0xEC				// Mail
 #define FBK_MEDIASELECT     0xED				// Media Select
+
+int InputFindKey(const char *keystring);
+
+#endif

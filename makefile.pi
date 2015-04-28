@@ -222,7 +222,7 @@ depobj	+= \
 		\
 		vid_pi.o \
 		\
-		aud_dsp.o aud_interface.o  inp_interface.o interface.o \
+		aud_dsp.o aud_interface.o  inp_interface.o inp_keys.o interface.o \
 		lowpass2.o vid_interface.o vid_softfx.o vid_support.o \
 		\
 		cd_interface.o cd_isowav.o cdsound.o neocdlist.o \

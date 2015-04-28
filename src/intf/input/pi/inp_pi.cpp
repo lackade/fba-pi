@@ -508,39 +508,112 @@ static void scanJoysticks()
 	}
 }
 
+static bool usesStreetFighterLayout()
+{
+	int fireButtons = 0;
+	struct BurnInputInfo bii;
+
+	for (UINT32 i = 0; i < 0x1000; i++) {
+		bii.szName = NULL;
+		if (BurnDrvGetInputInfo(&bii,i)) {
+			break;
+		}
+		
+		BurnDrvGetInputInfo(&bii, i);
+		if (bii.szName == NULL) {
+			bii.szName = "";
+		}
+
+		bool bPlayerInInfo = (toupper(bii.szInfo[0]) == 'P' && bii.szInfo[1] >= '1' && bii.szInfo[1] <= '4'); // Because some of the older drivers don't use the standard input naming.
+		bool bPlayerInName = (bii.szName[0] == 'P' && bii.szName[1] >= '1' && bii.szName[1] <= '4');
+
+		if (bPlayerInInfo || bPlayerInName) {
+			INT32 nPlayer = 0;
+
+			if (bPlayerInName) {
+				nPlayer = bii.szName[1] - '1';
+			}
+			if (bPlayerInInfo && nPlayer == 0) {
+				nPlayer = bii.szInfo[1] - '1';
+			}
+			if (nPlayer == 0) {
+				if (strncmp(" fire", bii.szInfo + 2, 5) == 0) {
+					fireButtons++;
+				}
+			}
+		}
+	}
+
+	int hardwareMask = BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK;
+	return fireButtons >= 5 &&
+		(hardwareMask == HARDWARE_CAPCOM_CPS1 ||
+		hardwareMask == HARDWARE_CAPCOM_CPS2 ||
+		hardwareMask == HARDWARE_CAPCOM_CPS3);
+}
+
+static void parsePlayerConfig(int player, cJSON *json)
+{
+	cJSON *node;
+	int fbk;
+
+	const char *dirnames[] = { "up","down","left","right" };
+	int dirconsts[] = { JOY_DIR_UP,JOY_DIR_DOWN,JOY_DIR_LEFT,JOY_DIR_RIGHT };
+	
+	for (int i = 0; i < 4; i++) {
+		if ((node = cJSON_GetObjectItem(json, dirnames[i])) != NULL) {
+			if ((fbk = InputFindKey(node->valuestring)) != -1) {
+				fbkToJoystickMap[fbk] = JOY_MAP_DIR(player, dirconsts[i]);
+			}
+		}
+	}
+	
+	char temp[100];
+	for (int i = 0; i < MAX_JOY_BUTTONS; i++) {
+		snprintf(temp, sizeof(temp) - sizeof(char), "button%d", i + 1);
+		if ((node = cJSON_GetObjectItem(json, temp)) != NULL) {
+			if ((fbk = InputFindKey(node->valuestring)) != -1) {
+				fbkToJoystickMap[fbk] = JOY_MAP_BUTTON(player, i);
+			}
+		}
+	}
+
+	if (usesStreetFighterLayout()) {
+		// Check for SF layout overrides
+		cJSON *sf = cJSON_GetObjectItem(json, "sfLayout");
+		if (sf != NULL) {
+			for (int i = 0; i < MAX_JOY_BUTTONS; i++) {
+				snprintf(temp, sizeof(temp) - sizeof(char), "button%d", i + 1);
+				if ((node = cJSON_GetObjectItem(sf, temp)) != NULL) {
+					if ((fbk = InputFindKey(node->valuestring)) != -1) {
+						fbkToJoystickMap[fbk] = JOY_MAP_BUTTON(player, i);
+					}
+				}
+			}
+		}
+	}
+}
+
 static void resetJoystickMap()
 {
 	// FIXME
 	for (int i = 0; i < 512; i++) {
 		fbkToJoystickMap[i] = -1;
 	}
-	fbkToJoystickMap[FBK_UPARROW] = JOY_MAP_DIR(0,JOY_DIR_UP);
-	fbkToJoystickMap[FBK_DOWNARROW] = JOY_MAP_DIR(0,JOY_DIR_DOWN);
-	fbkToJoystickMap[FBK_LEFTARROW] = JOY_MAP_DIR(0,JOY_DIR_LEFT);
-	fbkToJoystickMap[FBK_RIGHTARROW] = JOY_MAP_DIR(0,JOY_DIR_RIGHT);
-/*
-	fbkToJoystickMap[FBK_Z] = JOY_MAP_BUTTON(0,0);
-	fbkToJoystickMap[FBK_X] = JOY_MAP_BUTTON(0,1);
-	fbkToJoystickMap[FBK_C] = JOY_MAP_BUTTON(0,2);
-	fbkToJoystickMap[FBK_V] = JOY_MAP_BUTTON(0,3);
-*/
-	fbkToJoystickMap[FBK_A] = JOY_MAP_BUTTON(0,0);
-	fbkToJoystickMap[FBK_S] = JOY_MAP_BUTTON(0,1);
-	fbkToJoystickMap[FBK_D] = JOY_MAP_BUTTON(0,2);
-	fbkToJoystickMap[FBK_Z] = JOY_MAP_BUTTON(0,3);
-	fbkToJoystickMap[FBK_X] = JOY_MAP_BUTTON(0,4);
-	fbkToJoystickMap[FBK_C] = JOY_MAP_BUTTON(0,5);
-	fbkToJoystickMap[FBK_1] = JOY_MAP_BUTTON(0,7);
-	fbkToJoystickMap[FBK_5] = JOY_MAP_BUTTON(0,6);
 
 	char *foo = globFile("0583-2060.joy");
 	if (foo != NULL) {
-		free(foo);
 		cJSON *root = cJSON_Parse(foo);
 		if (root != NULL) {
-			cJSON *p1 = cJSON_GetObjectItem(root,"p1");
+			cJSON *player;
+			if ((player = cJSON_GetObjectItem(root, "p1")) != NULL) {
+				parsePlayerConfig(0, player);
+			}
+			if ((player = cJSON_GetObjectItem(root, "p2")) != NULL) {
+				parsePlayerConfig(1, player);
+			}
 			cJSON_Delete(root);
 		}
+		free(foo);
 	}
 }
 
@@ -548,7 +621,7 @@ static char* globFile(const char *path)
 {
 	char *contents = NULL;
 	
-	FILE *file = fopen("path","r");
+	FILE *file = fopen(path,"r");
 	if (file) {
 		// Determine size
 		fseek(file, 0L, SEEK_END);
@@ -559,7 +632,6 @@ static char* globFile(const char *path)
 		contents = (char *)malloc(size + 1);
 		if (contents) {
 			contents[size] = '\0';
-		
 			// Read contents
 			if (fread(contents, size, 1, file) != 1) {
 				free(contents);
