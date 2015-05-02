@@ -150,6 +150,6 @@
 #define FBK_MAIL            0xEC				// Mail
 #define FBK_MEDIASELECT     0xED				// Media Select
 
-int InputFindKey(const char *keystring);
+int InputFindCode(const char *keystring);
 
 #endif

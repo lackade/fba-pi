@@ -46,6 +46,8 @@ static void destroyUSBDevice(struct USBDevice *usbDev);
 
 static const char* deviceId(int index,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
+static const char* deviceProduct(int index,
+	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
 static void addDevice(struct udev_device *dev,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
 static void removeDevice(struct udev_device *dev,
@@ -139,6 +141,11 @@ int udevMouseCount()
 const char* udevDeviceId(int index)
 {
 	return deviceId(index, joysticks, &joystickCount, &joystickLock);
+}
+
+const char* udevDeviceName(int index)
+{
+	return deviceProduct(index, joysticks, &joystickCount, &joystickLock);
 }
 
 static void scanDevices()
@@ -297,6 +304,22 @@ static const char* deviceId(int index,
 	if (index < *deviceCount) {
 		snprintf(temp, 99, "%s:%s",
 			devices[index]->vendorId, devices[index]->productId);
+		result = temp;
+	}
+	pthread_mutex_unlock(mutex);
+	
+	return result;
+}
+
+static const char* deviceProduct(int index,
+	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex)
+{
+	char *result = NULL;
+	static char temp[100];
+	
+	pthread_mutex_lock(mutex);
+	if (index < *deviceCount) {
+		strncpy(temp, devices[index]->product, 99);
 		result = temp;
 	}
 	pthread_mutex_unlock(mutex);

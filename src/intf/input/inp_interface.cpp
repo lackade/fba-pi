@@ -12,7 +12,7 @@ static bool bCinpOkay;
 #elif defined (BUILD_SDL)
 	extern struct InputInOut InputInOutSDL;
 #elif defined (BUILD_PI)
-	extern struct InputInOut InputInOutSDL;
+	extern struct InputInOut InputInOutPi;
 #elif defined (_XBOX)
 	extern struct InputInOut InputInOutXInput2;
 #elif defined (BUILD_QT)
@@ -26,7 +26,7 @@ static struct InputInOut *pInputInOut[]=
 #elif defined (BUILD_SDL)
 	&InputInOutSDL,
 #elif defined (BUILD_PI)
-	&InputInOutSDL,
+	&InputInOutPi,
 #elif defined (_XBOX)
 	&InputInOutXInput2,
 #elif defined (BUILD_QT)

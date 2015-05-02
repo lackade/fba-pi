@@ -21,6 +21,7 @@ int udevShutdown();
 int udevJoystickCount();
 int udevMouseCount();
 
+const char* udevDeviceName(int index);
 const char* udevDeviceId(int index);
 
 #endif
