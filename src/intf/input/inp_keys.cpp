@@ -20,6 +20,7 @@ static const Input allInputs[] = {
 	{ "P2 COIN", FBK_6, },
 	{ "DIAGNOSTICS", FBK_F2, },
 	{ "RESET", FBK_F3, },
+	{ "QUIT", FBK_F12, },
 
 	// Keyboard
 	{ "P1 UP", FBK_UPARROW, },

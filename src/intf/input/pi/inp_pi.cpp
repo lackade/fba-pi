@@ -230,11 +230,22 @@ static void scanJoysticks()
 		int xPos = SDL_JoystickGetAxis(joystick, 0);
 		int yPos = SDL_JoystickGetAxis(joystick, 1);
 
-		joyButtonStates[joy] |= ((xPos < -JOY_DEADZONE) << JOY_DIR_LEFT);
-		joyButtonStates[joy] |= ((xPos > JOY_DEADZONE) << JOY_DIR_RIGHT);
-		joyButtonStates[joy] |= ((yPos < -JOY_DEADZONE) << JOY_DIR_UP);
-		joyButtonStates[joy] |= ((yPos > JOY_DEADZONE) << JOY_DIR_DOWN);
+		// Directions
+		int dirStates[] = {
+			(xPos < -JOY_DEADZONE), // left
+			(xPos > JOY_DEADZONE),  // right
+			(yPos < -JOY_DEADZONE), // up
+			(yPos > JOY_DEADZONE),  // down
+		};
+		for (int i = 0; i < 4; i++) {
+			joyButtonStates[joy] |= (dirStates[i] << i);
+			if (dirStates[i] && joyLookupTable[FBK_F12] == JOY_MAP_DIR(joy, i)) {
+				nExitEmulator = 1;
+				return;
+			}
+		}
 
+		// Buttons
 		int buttonCount = SDL_JoystickNumButtons(joystick);
 		if (buttonCount > MAX_JOY_BUTTONS) {
 			buttonCount = MAX_JOY_BUTTONS;
@@ -242,6 +253,11 @@ static void scanJoysticks()
 		for (int button = 0, shift = 4; button < buttonCount; button++, shift++) {
 			int state = SDL_JoystickGetButton(joystick, button);
 			joyButtonStates[joy] |= ((state & 1) << shift);
+
+			if (state && joyLookupTable[FBK_F12] == JOY_MAP_BUTTON(joy, button)) {
+				nExitEmulator = 1;
+				return;
+			}
 		}
 
 		if (joyButtonStates[joy] != 0) {
