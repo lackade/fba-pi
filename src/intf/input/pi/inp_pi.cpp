@@ -14,11 +14,16 @@ extern "C" {
 #define MAX_JOYSTICKS   8
 #define MAX_JOY_BUTTONS 28
 
+int nKioskTimeout = 0;
+
+static clock_t lastInputEvent;
+
 static unsigned int joyButtonStates[MAX_JOYSTICKS];
 static int *joyLookupTable = NULL;
 static int keyLookupTable[512];
 
 static int mouseScanned = 0;
+static int inputEventOccurred = 0;
 
 static void scanKeyboard();
 static void scanJoysticks();
@@ -125,6 +130,17 @@ static int piInputStart()
 	// Mouse not read this frame
 	mouseScanned = 0;
 
+	if (nKioskTimeout > 0) {
+		clock_t now = clock();
+		if (inputEventOccurred) {
+			lastInputEvent = now;
+			inputEventOccurred = 0;
+		} else if (now - lastInputEvent > nKioskTimeout * 1000000) {
+			nExitEmulator = 1;
+			fprintf(stderr, "Kiosk mode - %ds timeout exceeded\n", nKioskTimeout);
+		}
+	}
+
 	return 0;
 }
 
@@ -137,6 +153,7 @@ static int piInputState(int nCode)
 	if (nCode < 0x100) {
 		int mapped = keyLookupTable[nCode];
 		if (KEY_IS_DOWN(mapped)) {
+			inputEventOccurred = 1;
 			return 1;
 		}
 	}
@@ -225,6 +242,10 @@ static void scanJoysticks()
 		for (int button = 0, shift = 4; button < buttonCount; button++, shift++) {
 			int state = SDL_JoystickGetButton(joystick, button);
 			joyButtonStates[joy] |= ((state & 1) << shift);
+		}
+
+		if (joyButtonStates[joy] != 0) {
+			inputEventOccurred = 1;
 		}
 	}
 }

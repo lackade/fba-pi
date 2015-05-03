@@ -86,6 +86,7 @@ alldir	= burn \
 		burn/snd \
 		burner \
 		burner/sdl \
+		burner/pi \
 		intf \
 		intf/audio \
 		intf/audio/sdl \
@@ -212,7 +213,7 @@ drvobj	+= \
 depobj	+= \
 		cJSON.o cJSON_Utils.o \
 		\
-		bzip.o config.o drv.o inpdipsw.o main.o media.o run.o stated.o \
+		bzip.o pi/config.o drv.o inpdipsw.o pi/main.o media.o run.o stated.o \
 		stringset.o ips_manager.o support_paths.o scrn.o \
 		\
 		ioapi.o unzip.o conc.o cong.o dat.o gamc.o gami.o image.o \
