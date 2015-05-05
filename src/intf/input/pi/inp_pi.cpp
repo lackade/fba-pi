@@ -1,4 +1,3 @@
-// Module for input using SDL
 #include <SDL/SDL.h>
 #include <unistd.h>
 
@@ -335,7 +334,7 @@ static struct JoyConfig* createJoyConfig(cJSON *root)
 				}
 				labelNode = labelNode->next;
 			}
-			
+
 			if (jc->labelCount > 0) {
 				jc->labels = (char **)calloc(jc->labelCount, sizeof(char *));
 				if (jc->labels) {
@@ -351,6 +350,7 @@ static struct JoyConfig* createJoyConfig(cJSON *root)
 			}
 		}
 	}
+
 	return jc;
 }
 
@@ -375,7 +375,7 @@ static void destroyJoyConfig(struct JoyConfig *jc)
 static int findButton(struct JoyConfig *jc, const char *label)
 {
 	for (int i = 0; i < jc->labelCount; i++) {
-		if (strcasecmp(jc->labels[i], label) == 0) {
+		if (jc->labels[i] && strcasecmp(jc->labels[i], label) == 0) {
 			return i;
 		}
 	}
@@ -430,33 +430,39 @@ static void parsePlayerConfig(int player, struct JoyConfig *jc, cJSON *json)
 	}
 }
 
-static void readConfigFile(const char *path)
+static int setupDefaults(int pindex)
 {
-	char *contents = globFile(path);
-	if (contents) {
-		cJSON *root = cJSON_Parse(contents);
-		if (root) {
-			struct JoyConfig *jc = createJoyConfig(root);
-			
-			cJSON *player;
-			if ((player = cJSON_GetObjectItem(root, "p1"))) {
-				parsePlayerConfig(0, jc, player);
-			}
-			if ((player = cJSON_GetObjectItem(root, "p2"))) {
-				parsePlayerConfig(1, jc, player);
-			}
-			if ((player = cJSON_GetObjectItem(root, "p3"))) {
-				parsePlayerConfig(2, jc, player);
-			}
-			if ((player = cJSON_GetObjectItem(root, "p4"))) {
-				parsePlayerConfig(3, jc, player);
-			}
-
-			destroyJoyConfig(jc);
-			cJSON_Delete(root);
-		}
-		free(contents);
+	if (pindex >= 0 && pindex <= 3) {
+		fprintf(stderr, "FIXME!\n");
 	}
+}
+
+static int readConfigFile(int pindex, const char *path)
+{
+	int success = 0;
+	if (pindex >= 0 && pindex <= 3) {
+		char *pnodes[] = { "p1", "p2", "p3", "p4" };
+		char *contents = globFile(path);
+		if (contents) {
+			cJSON *root = cJSON_Parse(contents);
+			if (root) {
+				struct JoyConfig *jc = createJoyConfig(root);
+				
+				cJSON *player;
+				if ((player = cJSON_GetObjectItem(root, pnodes[pindex]))) {
+					parsePlayerConfig(pindex, jc, player);
+				}
+
+				destroyJoyConfig(jc);
+				cJSON_Delete(root);
+
+				success = 1;
+			}
+			free(contents);
+		}
+	}
+
+	return success;
 }
 
 static void resetJoystickMap()
@@ -470,20 +476,30 @@ static void resetJoystickMap()
 		keyLookupTable[code] = (code > 0) ? i : -1;
 	}
 
-	if (udevJoystickCount() > 0) {
-		const char *devId = udevDeviceId(0);
+	for (int i = 0, n = udevJoystickCount(); i < n; i++) {
+		const char *devId = udevDeviceId(i);
+		fprintf(stderr, "Detected \"%s\" (USB id %s) in port %d\n",
+			udevDeviceName(i), devId, i + 1);
 		if (devId != NULL) {
 			char path[100];
-			snprintf(path, 99, "%s.joy", devId);
+			snprintf(path, 99, "joyconfig/%s.joy", devId);
+			
 			char *colon = strchr(path, ':');
-			if (colon) {
-				*colon = '-';
-			}
-			if (access(path, F_OK) != -1) {
-				fprintf(stderr, "detected device \"%s\" - found a joy config file \"%s\"\n",
-					udevDeviceName(0), path);
+			if (colon) *colon = '-';
 
-				readConfigFile(path);
+			int loadDefaults = 1;
+			if (access(path, F_OK) != -1) {
+				fprintf(stderr, " * Found configuration file \"%s\"\n", path);
+				if (readConfigFile(i, path)) {
+					loadDefaults = 0;
+				} else {
+					fprintf(stderr, "Error reading configuration file - check format\n");
+				}
+			}
+
+			if (loadDefaults) {
+				fprintf(stderr, " * Setting up defaults for P%d\n", i + 1);
+				setupDefaults(i);
 			}
 		}
 	}

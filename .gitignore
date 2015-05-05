@@ -18,7 +18,8 @@ fbasdl.ini
 fbapi
 fbasdl
 .DS_Store
-._.DS_Store
+._*
 output.stderr
 fbasdl
 fbapi.ini
+roms
