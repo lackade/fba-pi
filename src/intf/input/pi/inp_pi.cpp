@@ -432,9 +432,60 @@ static void parsePlayerConfig(int player, struct JoyConfig *jc, cJSON *json)
 
 static int setupDefaults(int pindex)
 {
-	if (pindex >= 0 && pindex <= 3) {
-		fprintf(stderr, "FIXME!\n");
+	int fbDirs[4];
+	int fbButtons[6]; // absolute max
+	int buttonCount = 0;
+
+	if (pindex == 0) {
+		int i = 0;
+		fbDirs[i++] = FBK_UPARROW;
+		fbDirs[i++] = FBK_LEFTARROW;
+		fbDirs[i++] = FBK_RIGHTARROW;
+		fbDirs[i++] = FBK_DOWNARROW;
+
+		if (usesStreetFighterLayout()) {
+			fbButtons[buttonCount++] = FBK_A;
+			fbButtons[buttonCount++] = FBK_S;
+			fbButtons[buttonCount++] = FBK_D;
+			fbButtons[buttonCount++] = FBK_Z;
+			fbButtons[buttonCount++] = FBK_X;
+			fbButtons[buttonCount++] = FBK_C;
+		} else {
+			fbButtons[buttonCount++] = FBK_Z;
+			fbButtons[buttonCount++] = FBK_X;
+			fbButtons[buttonCount++] = FBK_C;
+			fbButtons[buttonCount++] = FBK_V;
+		}
+	} else if (pindex >= 1 && pindex <= 3) {
+		// P2 to P4
+		int pmasks[] = { 0x4000, 0x4100, 0x4200 };
+		int pmask = pmasks[pindex - 1];
+
+		int i = 0;
+		fbDirs[i++] = pmask|0x02;
+		fbDirs[i++] = pmask|0x00;
+		fbDirs[i++] = pmask|0x01;
+		fbDirs[i++] = pmask|0x03;
+
+		for (; buttonCount < 6; buttonCount++) {
+			fbButtons[buttonCount] = pmask|(0x80 + buttonCount);
+		}
+	} else {
+		return 0;
 	}
+
+	// Set direction defaults
+	int joyDirs[] = { JOY_DIR_UP, JOY_DIR_LEFT, JOY_DIR_RIGHT, JOY_DIR_DOWN };
+	for (int i = 0; i < 4; i++) {
+		joyLookupTable[fbDirs[i]] = JOY_MAP_DIR(pindex, joyDirs[i]);
+	}
+
+	// Set button defaults
+	for (int i = 0; i < buttonCount; i++) {
+		joyLookupTable[fbButtons[i]] = JOY_MAP_BUTTON(pindex, i);
+	}
+
+	return 1;
 }
 
 static int readConfigFile(int pindex, const char *path)
