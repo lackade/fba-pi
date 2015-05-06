@@ -393,12 +393,19 @@ static int findButton(struct JoyConfig *jc, const char *label)
 static void parseButtons(int player, struct JoyConfig *jc, cJSON *json)
 {
 	cJSON *node = json->child;
+	char temp[100];
 	while (node) {
 		int index = findButton(jc, node->string);
 		if (index > -1) {
 			int code;
 			if ((code = InputFindCode(node->valuestring)) != -1) {
 				joyLookupTable[code] = JOY_MAP_BUTTON(player, index);
+			} else {
+				// No literal match - try prepending player id
+				snprintf(temp, 99, "P%d %s", player + 1, node->valuestring);
+				if ((code = InputFindCode(temp)) != -1) {
+					joyLookupTable[code] = JOY_MAP_BUTTON(player, index);
+				}
 			}
 		}
 		node = node->next;
@@ -412,11 +419,18 @@ static void parsePlayerConfig(int player, struct JoyConfig *jc, cJSON *json)
 
 	const char *dirnames[] = { "up","down","left","right" };
 	int dirconsts[] = { JOY_DIR_UP,JOY_DIR_DOWN,JOY_DIR_LEFT,JOY_DIR_RIGHT };
-	
+	char temp[100];
+
 	for (int i = 0; i < 4; i++) {
 		if ((node = cJSON_GetObjectItem(json, dirnames[i]))) {
 			if ((code = InputFindCode(node->valuestring)) != -1) {
 				joyLookupTable[code] = JOY_MAP_DIR(player, dirconsts[i]);
+			} else {
+				// No literal match - try prepending player id (e.g. P1, etc)
+				snprintf(temp, 99, "P%d %s", player + 1, node->valuestring);
+				if ((code = InputFindCode(temp)) != -1) {
+					joyLookupTable[code] = JOY_MAP_DIR(player, dirconsts[i]);
+				}
 			}
 		}
 	}
@@ -500,6 +514,9 @@ static int readConfigFile(int pindex, const char *path)
 				struct JoyConfig *jc = createJoyConfig(root);
 				
 				cJSON *player;
+				if ((player = cJSON_GetObjectItem(root, "default"))) {
+					parsePlayerConfig(pindex, jc, player);
+				}
 				if ((player = cJSON_GetObjectItem(root, pnodes[pindex]))) {
 					parsePlayerConfig(pindex, jc, player);
 				}
@@ -531,6 +548,11 @@ static void resetJoystickMap()
 		const char *devId = udevDeviceId(i);
 		fprintf(stderr, "Detected \"%s\" (USB id %s) in port %d\n",
 			udevDeviceName(i), devId, i + 1);
+
+		// Set the defaults
+		setupDefaults(i);
+
+		// Try loading a config file
 		if (devId != NULL) {
 			char path[100];
 			snprintf(path, 99, "joyconfig/%s.joy", devId);
@@ -538,19 +560,13 @@ static void resetJoystickMap()
 			char *colon = strchr(path, ':');
 			if (colon) *colon = '-';
 
-			int loadDefaults = 1;
 			if (access(path, F_OK) != -1) {
 				fprintf(stderr, " * Found configuration file \"%s\"\n", path);
-				if (readConfigFile(i, path)) {
-					loadDefaults = 0;
-				} else {
+				if (!readConfigFile(i, path)) {
 					fprintf(stderr, "Error reading configuration file - check format\n");
 				}
-			}
-
-			if (loadDefaults) {
-				fprintf(stderr, " * Setting up defaults for P%d\n", i + 1);
-				setupDefaults(i);
+			} else {
+				fprintf(stderr, " * No configuration file at \"%s\" - will use defaults\n", path);
 			}
 		}
 	}

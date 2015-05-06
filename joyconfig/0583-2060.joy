@@ -10,45 +10,20 @@
 		"button5": "l",
 		"button6": "r"
 	},
-	"p1": {
-		"up":"P1 UP",
-		"down":"P1 DOWN",
-		"left":"P1 LEFT",
-		"right":"P1 RIGHT",
-		"y":"P1 BUTTON 1",
-		"b":"P1 BUTTON 2",
-		"a":"P1 BUTTON 3",
-		"x":"P1 BUTTON 4",
+	"default": {
+		"y":"BUTTON 1",
+		"b":"BUTTON 2",
+		"a":"BUTTON 3",
+		"x":"BUTTON 4",
 		"sfLayout": {
-			"y":"P1 JAB",
-			"x":"P1 FIERCE",
-			"b":"P1 SHORT",
-			"a":"P1 ROUNDHOUSE",
-			"l":"P1 STRONG",
-			"r":"P1 FORWARD"
+			"y":"JAB",
+			"x":"FIERCE",
+			"b":"SHORT",
+			"a":"ROUNDHOUSE",
+			"l":"STRONG",
+			"r":"FORWARD"
 		},
-		"select":"P1 COIN",
-		"start":"P1 START"
-	},
-	"p2": {
-		"up":"P2 UP",
-		"down":"P2 DOWN",
-		"left":"P2 LEFT",
-		"right":"P2 RIGHT",
-		"y":"P2 BUTTON 1",
-		"b":"P2 BUTTON 2",
-		"a":"P2 BUTTON 3",
-		"x":"P2 BUTTON 4",
-		"sfLayout": {
-			"y":"P2 JAB",
-			"x":"P2 FIERCE",
-			"b":"P2 SHORT",
-			"a":"P2 ROUNDHOUSE",
-			"l":"P2 STRONG",
-			"r":"P2 FORWARD"
-		},
-		"select":"P2 COIN",
-		"start":"P2 START"
+		"select":"COIN",
+		"start":"START"
 	}
 }
-
