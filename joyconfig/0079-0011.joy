@@ -1,6 +1,6 @@
 {
 	"name": "Generic NES Gamepad",
-	"buttonLabels": {
+	"labels": {
 		"button9": "select",
 		"button10": "start",
 		"button2": "a",

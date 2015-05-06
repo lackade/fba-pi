@@ -1,6 +1,6 @@
 {
 	"name": "iBuffalo Classic USB (SNES) Gamepad",
-	"buttonLabels": {
+	"labels": {
 		"button7": "select",
 		"button8": "start",
 		"button1": "a",

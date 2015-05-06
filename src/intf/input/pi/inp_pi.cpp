@@ -320,7 +320,7 @@ static struct JoyConfig* createJoyConfig(cJSON *root)
 		jc->labels = NULL;
 		jc->labelCount = 0;
 
-		cJSON *labelParent = cJSON_GetObjectItem(root, "buttonLabels");
+		cJSON *labelParent = cJSON_GetObjectItem(root, "labels");
 		cJSON *labelNode;
 		
 		if (labelParent) {
@@ -506,7 +506,7 @@ static int readConfigFile(int pindex, const char *path)
 {
 	int success = 0;
 	if (pindex >= 0 && pindex <= 3) {
-		char *pnodes[] = { "p1", "p2", "p3", "p4" };
+		char *pnodes[] = { "joy1", "joy2", "joy3", "joy4" };
 		char *contents = globFile(path);
 		if (contents) {
 			cJSON *root = cJSON_Parse(contents);

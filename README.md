@@ -39,6 +39,12 @@ Supported Games
 
 See [gamelist.txt](gamelist.txt).
 
+License
+-------
+
+FBA's license is somewhat restrictive - see [license.txt](src/license.txt)
+for details.
+
 Credits
 -------------
 
