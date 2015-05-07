@@ -12,10 +12,14 @@ OpenDingux-specific stuff.
 Other Features
 ------------------------------
 
-This version adds a handful of other Pi-specific features, including:
+This version adds a handful of other features, including:
 
 * Configurable joystick inputs
 * Kiosk mode (shuts down the emulator after a period of inactivity)
+* NVRAM saves
+
+To enable NVRAM saves, create an `nvram` subdirectory in the same directory
+as the executable.
 
 I've also made some minor changes to make the SDL version compilable (though
 not really usable) on OS X.

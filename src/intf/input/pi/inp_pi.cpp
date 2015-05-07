@@ -1,5 +1,6 @@
 #include <SDL/SDL.h>
 #include <unistd.h>
+#include <sys/time.h>
 
 #include "burner.h"
 #include "inp_sdl_keys.h"
@@ -15,7 +16,7 @@ extern "C" {
 
 int nKioskTimeout = 0;
 
-static clock_t lastInputEvent;
+static struct timeval lastInputEvent;
 
 static unsigned int joyButtonStates[MAX_JOYSTICKS];
 static int *joyLookupTable = NULL;
@@ -100,6 +101,7 @@ static int piInputInit()
 	memset(&JoyList, 0, sizeof(JoyList));
 
 	nInitedSubsytems = SDL_WasInit(SDL_INIT_JOYSTICK);
+	gettimeofday(&lastInputEvent, NULL);
 
 	udevInit();
 	if (!(nInitedSubsytems & SDL_INIT_JOYSTICK)) {
@@ -130,11 +132,12 @@ static int piInputStart()
 	mouseScanned = 0;
 
 	if (nKioskTimeout > 0) {
-		clock_t now = clock();
+		struct timeval now;
+		gettimeofday(&now, NULL);
 		if (inputEventOccurred) {
 			lastInputEvent = now;
 			inputEventOccurred = 0;
-		} else if (now - lastInputEvent > nKioskTimeout * 1000000) {
+		} else if (now.tv_sec - lastInputEvent.tv_sec > nKioskTimeout) {
 			nExitEmulator = 1;
 			fprintf(stderr, "Kiosk mode - %ds timeout exceeded\n", nKioskTimeout);
 		}
