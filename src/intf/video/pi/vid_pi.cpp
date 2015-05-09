@@ -9,6 +9,10 @@
 
 #include "burner.h"
 
+extern "C" {
+#include "matrix.h"
+}
+
 typedef	struct ShaderInfo {
 	GLuint program;
 	GLint a_position;
@@ -44,6 +48,9 @@ static int texturePitch;
 static int textureFormat;
 static unsigned char *textureBitmap;
 
+static int screenRotated = 0;
+static int screenFlipped = 0;
+
 static ShaderInfo shader;
 static GLuint buffers[3];
 static GLuint texture;
@@ -75,7 +82,7 @@ static const GLushort indices[] = {
 static const int kVertexCount = 4;
 static const int kIndexCount = 6;
 
-static float projection[4][4];
+static struct matrix projection;
 
 static const GLfloat vertices[] = {
 	-0.5f, -0.5f, 0.0f,
@@ -251,7 +258,7 @@ static void piUpdateEmuDisplay()
 
 	glDisable(GL_BLEND);
 	glUseProgram(sh->program);
-	glUniformMatrix4fv(sh->u_vp_matrix, 1, GL_FALSE, &projection[0][0]);
+	glUniformMatrix4fv(sh->u_vp_matrix, 1, GL_FALSE, &projection.xx);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
@@ -359,20 +366,6 @@ static GLuint createProgram(const char *vertexShaderSrc, const char *fragmentSha
 	return programObject;
 }
 
-static void setOrtho(float m[4][4],
-	float left, float right, float bottom, float top,
-	float near, float far, float scaleX, float scaleY)
-{
-	memset(m, 0, 4 * 4 * sizeof(float));
-	m[0][0] = 2.0f / (right - left) * scaleX;
-	m[1][1] = 2.0f / (top - bottom) * scaleY;
-	m[2][2] = -2.0f / (far - near);
-	m[3][0] = -(right + left) / (right - left);
-	m[3][1] = -(top + bottom) / (top - bottom);
-	m[3][2] = -(far + near) / (far - near);
-	m[3][3] = 1;
-}
-
 static void drawQuad(const ShaderInfo *sh)
 {
 	glUniform1i(sh->u_texture, 0);
@@ -407,15 +400,15 @@ static int reinitTextures()
 {
 	fprintf(stderr, "Initializing textures...\n");
 	
-	textureWidth = closestPowerOfTwo(bufferWidth);
-	textureHeight = closestPowerOfTwo(bufferHeight);
+	textureWidth = closestPowerOfTwo(nVidImageWidth); // adjusted for rotation
+	textureHeight = closestPowerOfTwo(nVidImageHeight); // adjusted for rotation
 	texturePitch = textureWidth * bufferBpp;
 	textureFormat = GL_UNSIGNED_SHORT_5_6_5;
 
 	GLfloat minU = 0.0f;
 	GLfloat minV = 0.0f;
-	GLfloat maxU = ((float)bufferWidth / textureWidth - minU);
-	GLfloat maxV = ((float)bufferHeight / textureHeight);
+	GLfloat maxU = ((float)nVidImageWidth / textureWidth - minU);
+	GLfloat maxV = ((float)nVidImageHeight / textureHeight);
 	GLfloat uvs[] = {
 		minU, minV,
 		maxU, minV,
@@ -450,8 +443,12 @@ static int reinitTextures()
 		sy = a/a0;
 	}
 
-	setOrtho(projection, -0.5f, +0.5f, +0.5f, -0.5f, -1.0f, 1.0f,
-		sx * zoom, sy * zoom);
+	matrixIdentity(&projection);
+	if (screenRotated) {
+		matrixRotateZ(&projection, screenFlipped ? 270 : 90);
+	}
+	matrixOrtho(&projection, -0.5f, +0.5f, +0.5f, -0.5f, -1.0f, 1.0f);
+	matrixScale(&projection, sx * zoom, sy * zoom, 0);
 
 	fprintf(stderr, "Setting up screen...\n");
 
@@ -488,26 +485,32 @@ static int FbInit()
 	
 	int virtualWidth;
 	int virtualHeight;
-	int rotationMode = 0;
 
 	if (bDrvOkay) {
 		BurnDrvGetVisibleSize(&virtualWidth, &virtualHeight);
 		if (BurnDrvGetFlags() & BDF_ORIENTATION_VERTICAL) {
-		    rotationMode |= 1;
+		    screenRotated = 1;
 		}
 		
 		if (BurnDrvGetFlags() & BDF_ORIENTATION_FLIPPED) {
-		    rotationMode ^= 2;
+			screenFlipped = 1;
 		}
 		
-		nVidImageWidth = virtualWidth;
-		nVidImageHeight = virtualHeight;
+		fprintf(stderr, "Game screen size: %dx%d (%s,%s)\n",
+			virtualWidth, virtualHeight,
+			screenRotated ? "rotated" : "not rotated",
+			screenFlipped ? "flipped" : "not flipped");
+
 		nVidImageDepth = 16;
 		nVidImageBPP = 2;
 		
-		if (!rotationMode) {
+		if (!screenRotated) {
+			nVidImageWidth = virtualWidth;
+			nVidImageHeight = virtualHeight;
 			nVidImagePitch = nVidImageWidth * nVidImageBPP;
 		} else {
+			nVidImageWidth = virtualHeight;
+			nVidImageHeight = virtualWidth;
 			nVidImagePitch = nVidImageHeight * nVidImageBPP;
 		}
 		

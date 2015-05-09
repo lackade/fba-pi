@@ -221,7 +221,7 @@ depobj	+= \
 		\
 		aud_sdl.o inp_udev.o inp_pi.o \
 		\
-		vid_pi.o \
+		matrix.o vid_pi.o \
 		\
 		aud_dsp.o aud_interface.o  inp_interface.o inp_keys.o interface.o \
 		lowpass2.o vid_interface.o vid_softfx.o vid_support.o \
