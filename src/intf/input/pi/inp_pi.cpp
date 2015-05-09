@@ -84,7 +84,7 @@ static int piInputExit()
 	}
 
 	nInitedSubsytems = 0;
-	udevShutdown();
+	phl_udev_shutdown();
 
 	return 0;
 }
@@ -103,7 +103,7 @@ static int piInputInit()
 	nInitedSubsytems = SDL_WasInit(SDL_INIT_JOYSTICK);
 	gettimeofday(&lastInputEvent, NULL);
 
-	udevInit();
+	phl_udev_init();
 	if (!(nInitedSubsytems & SDL_INIT_JOYSTICK)) {
 		SDL_InitSubSystem(SDL_INIT_JOYSTICK);
 	}
@@ -547,10 +547,10 @@ static void resetJoystickMap()
 		keyLookupTable[code] = (code > 0) ? i : -1;
 	}
 
-	for (int i = 0, n = udevJoystickCount(); i < n; i++) {
-		const char *devId = udevDeviceId(i);
+	for (int i = 0, n = phl_udev_joy_count(); i < n; i++) {
+		const char *devId = phl_udev_joy_id(i);
 		fprintf(stderr, "Detected \"%s\" (USB id %s) in port %d\n",
-			udevDeviceName(i), devId, i + 1);
+			phl_udev_joy_name(i), devId, i + 1);
 
 		// Set the defaults
 		setupDefaults(i);

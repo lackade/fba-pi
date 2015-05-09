@@ -41,26 +41,26 @@ static int initted = 0;
 static struct udev *udev = NULL;
 static struct udev_monitor *mon;
 
-static void* udevMon(void *arg);
+static void* monitor(void *arg);
 
-static struct USBDevice* createUSBDevice(struct udev_device *dev);
-static void destroyUSBDevice(struct USBDevice *usbDev);
+static struct USBDevice* create_usb_device(struct udev_device *dev);
+static void destroy_usb_device(struct USBDevice *usbDev);
 
-static const char* deviceId(int index,
+static const char* device_id(int index,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
-static const char* deviceProduct(int index,
+static const char* device_product(int index,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
-static void addDevice(struct udev_device *dev,
+static void add_device(struct udev_device *dev,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
-static void removeDevice(struct udev_device *dev,
+static void remove_device(struct udev_device *dev,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex);
-static void clearDevices(struct USBDevice *devices[], int *deviceCount,
+static void clear_devices(struct USBDevice *devices[], int *deviceCount,
 	pthread_mutex_t *mutex);
-static void clearAllDevices();
+static void clear_all_devices();
 
-static void scanDevices();
-static void dumpAllDevices();
-static void dumpDevices(struct USBDevice *devices[], const char *desc,
+static void scan_devices();
+static void dump_all_devices();
+static void dump_devices(struct USBDevice *devices[], const char *desc,
 	int *deviceCount, pthread_mutex_t *mutex);
 
 static int joystickCount = 0;
@@ -75,7 +75,7 @@ static pthread_mutex_t mouseLock;
 // Based on
 // http://www.signal11.us/oss/udev/udev_example.c
 
-int udevInit()
+int phl_udev_init()
 {
 	if (!initted) {
 		if (!(udev = udev_new())) {
@@ -96,9 +96,9 @@ int udevInit()
 		udev_monitor_filter_add_match_subsystem_devtype(mon, "input", NULL);
 		udev_monitor_enable_receiving(mon);
 
-		scanDevices();
+		scan_devices();
 
-		if (pthread_create(&monthread, NULL, udevMon, NULL) != 0) {
+		if (pthread_create(&monthread, NULL, monitor, NULL) != 0) {
 			pthread_mutex_destroy(&mouseLock);
 			pthread_mutex_destroy(&joystickLock);
 			udev_unref(udev);
@@ -112,13 +112,13 @@ int udevInit()
 	return 1;
 }
 
-int udevShutdown()
+int phl_udev_shutdown()
 {
 	if (initted) {
 		stopMonitor = 1;
 		pthread_join(monthread, NULL);
 	
-		clearAllDevices();
+		clear_all_devices();
 		fprintf(stderr, "udev shut down\n");
 	
 		udev_unref(udev);
@@ -130,31 +130,31 @@ int udevShutdown()
 	}
 }
 
-int udevJoystickCount()
+int phl_udev_joy_count()
 {
 	return joystickCount;
 }
 
-int udevMouseCount()
+int phl_udev_mouse_count()
 {
 	return mouseCount;
 }
 
-const char* udevDeviceId(int index)
+const char* phl_udev_joy_id(int index)
 {
-	return deviceId(index, joysticks, &joystickCount, &joystickLock);
+	return device_id(index, joysticks, &joystickCount, &joystickLock);
 }
 
-const char* udevDeviceName(int index)
+const char* phl_udev_joy_name(int index)
 {
-	return deviceProduct(index, joysticks, &joystickCount, &joystickLock);
+	return device_product(index, joysticks, &joystickCount, &joystickLock);
 }
 
-static void scanDevices()
+static void scan_devices()
 {
 	fprintf(stderr, "Scanning devices...\n");
 
-	clearAllDevices();
+	clear_all_devices();
 
 	struct udev_enumerate *uenum;
 	struct udev_list_entry *devices, *devEntry;
@@ -169,9 +169,9 @@ static void scanDevices()
 		
 		const char *sysname = udev_device_get_sysname(dev);
 		if (strncmp(sysname, "mouse", 5) == 0) {
-			addDevice(dev, mice, &mouseCount, &mouseLock);
+			add_device(dev, mice, &mouseCount, &mouseLock);
 		} else if (strncmp(sysname, "js", 2) == 0) {
-			addDevice(dev, joysticks, &joystickCount, &joystickLock);
+			add_device(dev, joysticks, &joystickCount, &joystickLock);
 		}
 		
 		udev_device_unref(dev);
@@ -180,7 +180,7 @@ static void scanDevices()
 	udev_enumerate_unref(uenum);
 }
 
-static void* udevMon(void *arg)
+static void* monitor(void *arg)
 {
 	fprintf(stderr, "udev monitor starting\n");
 	
@@ -208,26 +208,24 @@ static void* udevMon(void *arg)
 				if (strncmp(sysname, "mouse", 5) == 0) {
 					if (strncmp(action, "add", 3) == 0) {
 						fprintf(stderr, "+ mouse\n");
-						addDevice(dev, mice, &mouseCount, &mouseLock);
+						add_device(dev, mice, &mouseCount, &mouseLock);
 					} else if (strncmp(action, "remove", 6) == 0) {
 						fprintf(stderr, "- mouse\n");
-						removeDevice(dev, mice, &mouseCount, &mouseLock);
+						remove_device(dev, mice, &mouseCount, &mouseLock);
 					}
-
 #ifdef DUMP_DEVICES
-					dumpAllDevices();
+					dump_all_devices();
 #endif
 				} else if (strncmp(sysname, "js", 2) == 0) {
 					if (strncmp(action, "add", 3) == 0) {
 						fprintf(stderr, "+ joystick\n");
-						addDevice(dev, joysticks, &joystickCount, &joystickLock);
+						add_device(dev, joysticks, &joystickCount, &joystickLock);
 					} else if (strncmp(action, "remove", 6) == 0) {
 						fprintf(stderr, "- joystick\n");
-						removeDevice(dev, joysticks, &joystickCount, &joystickLock);
+						remove_device(dev, joysticks, &joystickCount, &joystickLock);
 					}
-
 #ifdef DUMP_DEVICES
-					dumpAllDevices();
+					dump_all_devices();
 #endif
 				}
 
@@ -250,7 +248,7 @@ int main(int argc, char* argv[])
 	char *my_string;
 	int nbytes = 100;
 	getline(&my_string, &nbytes, stdin);
-	dumpAllDevices();
+	dump_all_devices();
 	fprintf(stderr, "Ending\n");
 	udevShutdown();
 
@@ -258,7 +256,7 @@ int main(int argc, char* argv[])
 }
 #endif
 
-static struct USBDevice* createUSBDevice(struct udev_device *dev)
+static struct USBDevice* create_usb_device(struct udev_device *dev)
 {
 	const char *path = udev_device_get_syspath(dev);
 	dev = udev_device_get_parent_with_subsystem_devtype(dev, "usb", "usb_device");
@@ -287,7 +285,7 @@ static struct USBDevice* createUSBDevice(struct udev_device *dev)
 	return usbDev;
 }
 
-static void destroyUSBDevice(struct USBDevice *usbDev)
+static void destroy_usb_device(struct USBDevice *usbDev)
 {
 	free(usbDev->vendorId);
 	free(usbDev->productId);
@@ -296,7 +294,7 @@ static void destroyUSBDevice(struct USBDevice *usbDev)
 	free(usbDev);
 }
 
-static const char* deviceId(int index,
+static const char* device_id(int index,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex)
 {
 	char *result = NULL;
@@ -313,7 +311,7 @@ static const char* deviceId(int index,
 	return result;
 }
 
-static const char* deviceProduct(int index,
+static const char* device_product(int index,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex)
 {
 	char *result = NULL;
@@ -329,12 +327,12 @@ static const char* deviceProduct(int index,
 	return result;
 }
 
-static void addDevice(struct udev_device *dev,
+static void add_device(struct udev_device *dev,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex)
 {
 	pthread_mutex_lock(mutex);
 	if (*deviceCount + 1 < MAX_DEVICES) {
-		struct USBDevice *usbDev = createUSBDevice(dev);
+		struct USBDevice *usbDev = create_usb_device(dev);
 		if (usbDev != NULL) {
 			devices[(*deviceCount)++] = usbDev;
 		}
@@ -342,7 +340,7 @@ static void addDevice(struct udev_device *dev,
 	pthread_mutex_unlock(mutex);
 }
 
-static void removeDevice(struct udev_device *dev,
+static void remove_device(struct udev_device *dev,
 	struct USBDevice *devices[], int *deviceCount, pthread_mutex_t *mutex)
 {
 	const char *path = udev_device_get_syspath(dev);
@@ -352,7 +350,7 @@ static void removeDevice(struct udev_device *dev,
 	for (i = 0; i < *deviceCount; i++) {
 		if (strcmp(path, devices[i]->path) == 0) {
 			// Destroy the removed item
-			destroyUSBDevice(devices[i]);
+			destroy_usb_device(devices[i]);
 			// Move the items back one slot
 			for (j = i + 1; j < *deviceCount; j++) {
 				devices[j - 1] = devices[j];
@@ -364,24 +362,24 @@ static void removeDevice(struct udev_device *dev,
 	pthread_mutex_unlock(mutex);
 }
 
-static void clearDevices(struct USBDevice *devices[], int *deviceCount,
+static void clear_devices(struct USBDevice *devices[], int *deviceCount,
 	pthread_mutex_t *mutex)
 {
 	int i;
     pthread_mutex_lock(mutex);
 	for (i = 0; i < *deviceCount; i++) {
-		destroyUSBDevice(devices[i]);
+		destroy_usb_device(devices[i]);
 	}
 	*deviceCount = 0;
     pthread_mutex_unlock(mutex);
 }
 
-static void clearAllDevices()
+static void clear_all_devices()
 {
-	clearDevices(joysticks, &joystickCount, &joystickLock);
+	clear_devices(joysticks, &joystickCount, &joystickLock);
 }
 
-static void dumpDevices(struct USBDevice *devices[], const char *desc,
+static void dump_devices(struct USBDevice *devices[], const char *desc,
 	int *deviceCount, pthread_mutex_t *mutex)
 {
 	int i;
@@ -397,9 +395,9 @@ static void dumpDevices(struct USBDevice *devices[], const char *desc,
     fprintf(stderr, "%d %s\n", *deviceCount, desc);
 }
 
-static void dumpAllDevices()
+static void dump_all_devices()
 {
-	dumpDevices(joysticks, "joystick(s)", &joystickCount, &joystickLock);
-	dumpDevices(mice, "m(ous|ic)e", &mouseCount, &mouseLock);
+	dump_devices(joysticks, "joystick(s)", &joystickCount, &joystickLock);
+	dump_devices(mice, "m(ous|ic)e", &mouseCount, &mouseLock);
 }
 

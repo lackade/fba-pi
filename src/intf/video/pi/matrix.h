@@ -14,24 +14,26 @@
  * limitations under the License.
  */
 
-#ifndef PI_MATRIX_H
-#define PI_MATRIX_H
+#ifndef PHL_MATRIX_H
+#define PHL_MATRIX_H
 
-struct matrix {
+struct phl_matrix {
 	float xx, xy, xz, xw;
 	float yx, yy, yz, yw;
 	float zx, zy, zz, zw;
 	float wx, wy, wz, ww;
 };
 
-void matrixIdentity(struct matrix *m);
-void matrixCopy(struct matrix *dst, const struct matrix *src);
-void matrixMultiply(struct matrix *r,
-	const struct matrix *a, const struct matrix *b);
-void matrixScale(struct matrix *m, float x, float y, float z);
-void matrixRotateZ(struct matrix *m, float angle);
-void matrixOrtho(struct matrix *m,
+void phl_matrix_identity(struct phl_matrix *m);
+void phl_matrix_copy(struct phl_matrix *dst, const struct phl_matrix *src);
+void phl_matrix_multiply(struct phl_matrix *r,
+	const struct phl_matrix *a, const struct phl_matrix *b);
+void phl_matrix_scale(struct phl_matrix *m, float x, float y, float z);
+void phl_matrix_rotate_x(struct phl_matrix *m, float angle);
+void phl_matrix_rotate_y(struct phl_matrix *m, float angle);
+void phl_matrix_rotate_z(struct phl_matrix *m, float angle);
+void phl_matrix_ortho(struct phl_matrix *m,
 	float left, float right, float bottom, float top, float near, float far);
-void matrixDump(const struct matrix *m);
+void phl_matrix_dump(const struct phl_matrix *m);
 
-#endif // PI_MATRIX_H
+#endif // PHL_MATRIX_H

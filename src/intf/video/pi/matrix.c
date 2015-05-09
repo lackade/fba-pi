@@ -20,13 +20,13 @@
 
 #include "matrix.h"
 
-void matrixIdentity(struct matrix *m)
+void phl_matrix_identity(struct phl_matrix *m)
 {
-	memset(m, 0, sizeof(struct matrix));
+	memset(m, 0, sizeof(struct phl_matrix));
 	m->xx = m->yy = m->zz = m->ww = 1.0f;
 }
 
-void matrixCopy(struct matrix *dst, const struct matrix *src)
+void phl_matrix_copy(struct phl_matrix *dst, const struct phl_matrix *src)
 {
 	dst->xx = src->xx; dst->xy = src->xy; dst->xz = src->xz; dst->xw = src->xw;
 	dst->yx = src->yx; dst->yy = src->yy; dst->yz = src->yz; dst->yw = src->yw;
@@ -34,8 +34,8 @@ void matrixCopy(struct matrix *dst, const struct matrix *src)
 	dst->wx = src->wx; dst->wy = src->wy; dst->wz = src->wz; dst->ww = src->ww;
 }
 
-void matrixMultiply(struct matrix *r,
-	const struct matrix *a, const struct matrix *b)
+void phl_matrix_multiply(struct phl_matrix *r,
+	const struct phl_matrix *a, const struct phl_matrix *b)
 {
 	r->xx = a->xx * b->xx + a->xy * b->yx + a->xz * b->zx + a->xw * b->wx;
 	r->xy = a->xx * b->xy + a->xy * b->yy + a->xz * b->zy + a->xw * b->wy;
@@ -58,28 +58,66 @@ void matrixMultiply(struct matrix *r,
 	r->ww = a->wx * b->xw + a->wy * b->yw + a->wz * b->zw + a->ww * b->ww;
 }
 
-void matrixScale(struct matrix *m, float x, float y, float z)
+void phl_matrix_scale(struct phl_matrix *m, float x, float y, float z)
 {
-	struct matrix mcopy;
-	matrixCopy(&mcopy, m);
+	struct phl_matrix mcopy;
+	phl_matrix_copy(&mcopy, m);
 
-	struct matrix smat;
-	matrixIdentity(&smat);
+	struct phl_matrix smat;
+	phl_matrix_identity(&smat);
 
 	smat.xx = x;
 	smat.yy = y;
 	smat.zz = z;
 
-	matrixMultiply(m, &mcopy, &smat);
+	phl_matrix_multiply(m, &mcopy, &smat);
 }
 
-void matrixRotateZ(struct matrix *m, float angle)
+void phl_matrix_rotate_x(struct phl_matrix *m, float angle)
 {
-	struct matrix mcopy;
-	matrixCopy(&mcopy, m);
+	struct phl_matrix mcopy;
+	phl_matrix_copy(&mcopy, m);
 
-	struct matrix rmat;
-	matrixIdentity(&rmat);
+	struct phl_matrix rmat;
+	phl_matrix_identity(&rmat);
+
+	float c = cos(angle * M_PI / 180.0);
+	float s = sin(angle * M_PI / 180.0);
+
+	rmat.yy = c;
+	rmat.yz = -s;
+	rmat.zy = s;
+	rmat.zz = c;
+
+	phl_matrix_multiply(m, &mcopy, &rmat);
+}
+
+void phl_matrix_rotate_y(struct phl_matrix *m, float angle)
+{
+	struct phl_matrix mcopy;
+	phl_matrix_copy(&mcopy, m);
+
+	struct phl_matrix rmat;
+	phl_matrix_identity(&rmat);
+
+	float c = cos(angle * M_PI / 180.0);
+	float s = sin(angle * M_PI / 180.0);
+
+	rmat.xx = c;
+	rmat.xz = s;
+	rmat.zx = -s;
+	rmat.zz = c;
+
+	phl_matrix_multiply(m, &mcopy, &rmat);
+}
+
+void phl_matrix_rotate_z(struct phl_matrix *m, float angle)
+{
+	struct phl_matrix mcopy;
+	phl_matrix_copy(&mcopy, m);
+
+	struct phl_matrix rmat;
+	phl_matrix_identity(&rmat);
 
 	float c = cos(angle * M_PI / 180.0);
 	float s = sin(angle * M_PI / 180.0);
@@ -89,17 +127,17 @@ void matrixRotateZ(struct matrix *m, float angle)
 	rmat.yx = s;
 	rmat.yy = c;
 
-	matrixMultiply(m, &mcopy, &rmat);
+	phl_matrix_multiply(m, &mcopy, &rmat);
 }
 
-void matrixOrtho(struct matrix *m,
+void phl_matrix_ortho(struct phl_matrix *m,
 	float left, float right, float bottom, float top, float near, float far)
 {
-	struct matrix mcopy;
-	matrixCopy(&mcopy, m);
+	struct phl_matrix mcopy;
+	phl_matrix_copy(&mcopy, m);
 
-	struct matrix omat;
-	matrixIdentity(&omat);
+	struct phl_matrix omat;
+	phl_matrix_identity(&omat);
 
 	omat.xx = 2.0f / (right - left);
 	omat.yy = 2.0f / (top - bottom);
@@ -108,10 +146,10 @@ void matrixOrtho(struct matrix *m,
 	omat.wy = -(top + bottom) / (top - bottom);
 	omat.wz = -(far + near) / (far - near);
 
-	matrixMultiply(m, &mcopy, &omat);
+	phl_matrix_multiply(m, &mcopy, &omat);
 }
 
-void matrixDump(const struct matrix *m)
+void phl_matrix_dump(const struct phl_matrix *m)
 {
 	printf("[%.02f,%.02f,%.02f,%.02f]\n", m->xx, m->xy, m->xz, m->xw);
 	printf("[%.02f,%.02f,%.02f,%.02f]\n", m->yx, m->yy, m->yz, m->yw);

@@ -24,9 +24,6 @@ typedef	struct ShaderInfo {
 static void drawQuad(const ShaderInfo *sh);
 static GLuint createShader(GLenum type, const char *shaderSrc);
 static GLuint createProgram(const char *vertexShaderSrc, const char *fragmentShaderSrc);
-static void setOrtho(float m[4][4],
-	float left, float right, float bottom, float top,
-	float near, float far, float scaleX, float scaleY);
 
 static EGL_DISPMANX_WINDOW_T nativeWindow;
 static EGLDisplay display = NULL;
@@ -82,7 +79,7 @@ static const GLushort indices[] = {
 static const int kVertexCount = 4;
 static const int kIndexCount = 6;
 
-static struct matrix projection;
+static struct phl_matrix projection;
 
 static const GLfloat vertices[] = {
 	-0.5f, -0.5f, 0.0f,
@@ -443,12 +440,12 @@ static int reinitTextures()
 		sy = a/a0;
 	}
 
-	matrixIdentity(&projection);
+	phl_matrix_identity(&projection);
 	if (screenRotated) {
-		matrixRotateZ(&projection, screenFlipped ? 270 : 90);
+		phl_matrix_rotate_z(&projection, screenFlipped ? 270 : 90);
 	}
-	matrixOrtho(&projection, -0.5f, +0.5f, +0.5f, -0.5f, -1.0f, 1.0f);
-	matrixScale(&projection, sx * zoom, sy * zoom, 0);
+	phl_matrix_ortho(&projection, -0.5f, +0.5f, +0.5f, -0.5f, -1.0f, 1.0f);
+	phl_matrix_scale(&projection, sx * zoom, sy * zoom, 0);
 
 	fprintf(stderr, "Setting up screen...\n");
 
@@ -507,12 +504,11 @@ static int FbInit()
 		if (!screenRotated) {
 			nVidImageWidth = virtualWidth;
 			nVidImageHeight = virtualHeight;
-			nVidImagePitch = nVidImageWidth * nVidImageBPP;
 		} else {
 			nVidImageWidth = virtualHeight;
 			nVidImageHeight = virtualWidth;
-			nVidImagePitch = nVidImageHeight * nVidImageBPP;
 		}
+		nVidImagePitch = nVidImageWidth * nVidImageBPP;
 		
 		SetBurnHighCol(nVidImageDepth);
 		

@@ -14,16 +14,16 @@
 ** limitations under the License.
 **/
 
-#ifndef PI_UDEV_H
-#define PI_UDEV_H
+#ifndef PHL_UDEV_H
+#define PHL_UDEV_H
 
-int udevInit();
-int udevShutdown();
+int phl_udev_init();
+int phl_udev_shutdown();
 
-int udevJoystickCount();
-int udevMouseCount();
+int phl_udev_joy_count();
+int phl_udev_mouse_count();
 
-const char* udevDeviceName(int index);
-const char* udevDeviceId(int index);
+const char* phl_udev_joy_name(int index);
+const char* phl_udev_joy_id(int index);
 
-#endif
+#endif // PHL_UDEV_H
