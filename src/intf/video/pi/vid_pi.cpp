@@ -11,6 +11,7 @@
 
 extern "C" {
 #include "matrix.h"
+#include "phl_gles.h"
 }
 
 typedef	struct ShaderInfo {
@@ -24,14 +25,6 @@ typedef	struct ShaderInfo {
 static void drawQuad(const ShaderInfo *sh);
 static GLuint createShader(GLenum type, const char *shaderSrc);
 static GLuint createProgram(const char *vertexShaderSrc, const char *fragmentShaderSrc);
-
-static EGL_DISPMANX_WINDOW_T nativeWindow;
-static EGLDisplay display = NULL;
-static EGLSurface surface = NULL;
-static EGLContext context = NULL;
-
-uint32_t physicalWidth = 0;
-uint32_t physicalHeight = 0;
 
 static int bufferWidth;
 static int bufferHeight;
@@ -90,102 +83,7 @@ static const GLfloat vertices[] = {
 
 static int piInitVideo()
 {
-	bcm_host_init();
-
-	// get an EGL display connection
-	display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-	if (display == EGL_NO_DISPLAY) {
-		fprintf(stderr, "eglGetDisplay() failed: EGL_NO_DISPLAY\n");
-		return 0;
-	}
-
-	// initialize the EGL display connection
-	EGLBoolean result = eglInitialize(display, NULL, NULL);
-	if (result == EGL_FALSE) {
-		fprintf(stderr, "eglInitialize() failed: EGL_FALSE\n");
-		return 0;
-	}
-
-	// get an appropriate EGL frame buffer configuration
-	EGLint numConfig;
-	EGLConfig config;
-	static const EGLint attributeList[] = {
-		EGL_RED_SIZE, 8,
-		EGL_GREEN_SIZE, 8,
-		EGL_BLUE_SIZE, 8,
-		EGL_ALPHA_SIZE, 8,
-		EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-		EGL_NONE
-	};
-	result = eglChooseConfig(display, attributeList, &config, 1, &numConfig);
-	if (result == EGL_FALSE) {
-		fprintf(stderr, "eglChooseConfig() failed: EGL_FALSE\n");
-		return 0;
-	}
-
-	result = eglBindAPI(EGL_OPENGL_ES_API);
-	if (result == EGL_FALSE) {
-		fprintf(stderr, "eglBindAPI() failed: EGL_FALSE\n");
-		return 0;
-	}
-
-	// create an EGL rendering context
-	static const EGLint contextAttributes[] = {
-		EGL_CONTEXT_CLIENT_VERSION, 2,
-		EGL_NONE
-	};
-	context = eglCreateContext(display, config, EGL_NO_CONTEXT, contextAttributes);
-	if (context == EGL_NO_CONTEXT) {
-		fprintf(stderr, "eglCreateContext() failed: EGL_NO_CONTEXT\n");
-		return 0;
-	}
-
-	// create an EGL window surface
-	int32_t success = graphics_get_display_size(0, &physicalWidth, &physicalHeight);
-	if (result < 0) {
-		fprintf(stderr, "graphics_get_display_size() failed: < 0\n");
-		return 0;
-	}
-
-	fprintf(stderr, "Width/height: %d/%d\n", physicalWidth, physicalHeight);
-
-	VC_RECT_T dstRect;
-	dstRect.x = 0;
-	dstRect.y = 0;
-	dstRect.width = physicalWidth;
-	dstRect.height = physicalHeight;
-
-	VC_RECT_T srcRect;
-	srcRect.x = 0;
-	srcRect.y = 0;
-	srcRect.width = physicalWidth << 16;
-	srcRect.height = physicalHeight << 16;
-
-	DISPMANX_DISPLAY_HANDLE_T dispManDisplay = vc_dispmanx_display_open(0);
-	DISPMANX_UPDATE_HANDLE_T dispmanUpdate = vc_dispmanx_update_start(0);
-	DISPMANX_ELEMENT_HANDLE_T dispmanElement = vc_dispmanx_element_add(dispmanUpdate,
-		dispManDisplay, 0, &dstRect, 0, &srcRect,
-		DISPMANX_PROTECTION_NONE, NULL, NULL, DISPMANX_NO_ROTATE);
-
-	nativeWindow.element = dispmanElement;
-	nativeWindow.width = physicalWidth;
-	nativeWindow.height = physicalHeight;
-	vc_dispmanx_update_submit_sync(dispmanUpdate);
-
-	fprintf(stderr, "Initializing window surface...\n");
-
-	surface = eglCreateWindowSurface(display, config, &nativeWindow, NULL);
-	if (surface == EGL_NO_SURFACE) {
-		fprintf(stderr, "eglCreateWindowSurface() failed: EGL_NO_SURFACE\n");
-		return 0;
-	}
-
-	fprintf(stderr, "Connecting context to surface...\n");
-
-	// connect the context to the surface
-	result = eglMakeCurrent(display, surface, surface, context);
-	if (result == EGL_FALSE) {
-		fprintf(stderr, "eglMakeCurrent() failed: EGL_FALSE\n");
+	if (!phl_gles_init()) {
 		return 0;
 	}
 
@@ -230,15 +128,7 @@ static void piDestroyVideo()
 		glDeleteProgram(shader.program);
 	}
 
-	// Release OpenGL resources
-	if (display) {
-		eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-		eglDestroySurface(display, surface);
-		eglDestroyContext(display, context);
-		eglTerminate(display);
-	}
-
-	bcm_host_deinit();
+	phl_gles_shutdown();
 }
 
 static void piUpdateEmuDisplay()
@@ -249,7 +139,7 @@ static void piUpdateEmuDisplay()
 	}
 
 	glClear(GL_COLOR_BUFFER_BIT);
-	glViewport(0, 0, physicalWidth, physicalHeight);
+	glViewport(0, 0, phl_gles_screen_width, phl_gles_screen_height);
 
 	ShaderInfo *sh = &shader;
 
@@ -277,7 +167,7 @@ static void piUpdateEmuDisplay()
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
-	eglSwapBuffers(display, surface);
+	phl_gles_swap_buffers();
 }
 
 static GLuint createShader(GLenum type, const char *shaderSrc)
@@ -432,7 +322,7 @@ static int reinitTextures()
 	float zoom = 1.0f;
 
 	// Screen aspect ratio adjustment
-	float a = (float)physicalWidth / (float)physicalHeight;
+	float a = (float)phl_gles_screen_width / (float)phl_gles_screen_height;
 	float a0 = (float)bufferWidth / (float)bufferHeight;
 	if (a > a0) {
 		sx = a0/a;

@@ -27,10 +27,14 @@ not really usable) on OS X.
 Compiling
 ---------
 
-To compile on a Raspberry Pi, run `make pi` and grab a :coffee: - it's
-going to be a while.
+To compile on a Raspberry Pi, install SDL and udev libraries:
 
-To compile on a Mac, run `make sdl`. You will also need the SDL libraries:
+`sudo apt-get install libsdl-dev`
+`sudo apt-get install libudev-dev`
+
+Run `make pi` to start the build - it will take a while.
+
+To compile on a Mac, run `make sdl`. You will need the SDL libraries:
 you can get them via [Homebrew](http://brew.sh/) by running `brew install sdl`.
 
 Quitting
@@ -46,8 +50,12 @@ See [gamelist.txt](gamelist.txt).
 License
 -------
 
-FBA's license is somewhat restrictive - see [license.txt](src/license.txt)
-for details.
+All auxiliary code by me (Akop Karapetyan) is released under the [Apache
+license](http://www.apache.org/licenses/LICENSE-2.0) and identified as
+such in the individual file headers.
+
+Core components of FBA are licensed under a more restrictive license -
+see [license.txt](src/license.txt) for details.
 
 Credits
 -------------

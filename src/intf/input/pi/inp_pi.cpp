@@ -14,6 +14,8 @@ extern "C" {
 #define MAX_JOYSTICKS   8
 #define MAX_JOY_BUTTONS 28
 
+// #define DEBUG_INPUT
+
 int nKioskTimeout = 0;
 
 static struct timeval lastInputEvent;
@@ -225,6 +227,11 @@ static void scanJoysticks()
 	if (joyCount > MAX_JOYSTICKS) {
 		joyCount = MAX_JOYSTICKS;
 	}
+
+#ifdef DEBUG_INPUT
+	static int oldButtonStates[MAX_JOYSTICKS];
+#endif
+
 	for (int joy = 0; joy < joyCount; joy++) {
 		joyButtonStates[joy] = 0;
 		SDL_Joystick *joystick = JoyList[joy];
@@ -265,6 +272,19 @@ static void scanJoysticks()
 		if (joyButtonStates[joy] != 0) {
 			inputEventOccurred = 1;
 		}
+
+#ifdef DEBUG_INPUT
+		if (oldButtonStates[joy] != joyButtonStates[joy]) {
+			static char temp[33];
+			char *ch = &temp[31-(buttonCount+4)];
+			for (int i = buttonCount + 4; i >= 0; i--,ch--) {
+				*ch = ((joyButtonStates[joy] >> i) & 1) + '0';
+			}
+
+			fprintf(stderr, "J%d: %s\n", joy + 1,  ch + 1);
+			oldButtonStates[joy] = joyButtonStates[joy];
+		}
+#endif
 	}
 }
 
