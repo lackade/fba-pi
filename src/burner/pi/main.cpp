@@ -1,5 +1,7 @@
 #include "burner.h"
 #include "config.h"
+#include <sys/stat.h>
+#include <unistd.h>
 
 int nAppVirtualFps = 6000;			// App fps * 100
 bool bRunPause = 0;
@@ -34,6 +36,13 @@ int main(int argc, char *argv[])
 	if (driverId < 0) {
 		fprintf(stderr, "%s is not supported by FB Alpha\n", argv[1]);
 		return 1;
+	}
+
+	// Create the nvram directory, if it doesn't exist
+	const char *nvramPath = "./nvram";
+	if (access(nvramPath, F_OK) == -1) {
+		fprintf(stderr, "Creating NVRAM directory at \"%s\"\n", nvramPath);
+        mkdir(nvramPath, 0777);
 	}
 
 	bBurnUseASMCPUEmulation = 0;
