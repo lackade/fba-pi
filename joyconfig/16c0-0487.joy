@@ -1,0 +1,23 @@
+{
+	"name": "Pijamma Controller",
+	"default": {
+		"button1":"UP",
+		"button2":"DOWN",
+		"button3":"LEFT",
+		"button4":"RIGHT",
+		"button5":"BUTTON 1",
+		"button6":"BUTTON 2",
+		"button7":"BUTTON 3",
+		"button8":"BUTTON 4",
+		"sfLayout": {
+			"button5":"JAB",
+			"button6":"STRONG",
+			"button7":"FIERCE",
+			"button8":"SHORT",
+			"button9":"FORWARD",
+			"button10":"ROUNDHOUSE"
+		},
+		"button11":"COIN",
+		"button12":"START"
+	}
+}
