@@ -1,23 +1,25 @@
 {
 	"name": "Pijamma Controller",
+	"labels": {
+		"button1": "a",
+		"button2": "b",
+		"button3": "c",
+		"button4": "d",
+		"button5": "coin",
+		"button6": "start"
+	},
 	"default": {
-		"button1":"UP",
-		"button2":"DOWN",
-		"button3":"LEFT",
-		"button4":"RIGHT",
-		"button5":"BUTTON 1",
-		"button6":"BUTTON 2",
-		"button7":"BUTTON 3",
-		"button8":"BUTTON 4",
+		"a":"BUTTON 1",
+		"b":"BUTTON 2",
+		"c":"BUTTON 3",
+		"d":"BUTTON 4",
 		"sfLayout": {
-			"button5":"JAB",
-			"button6":"STRONG",
-			"button7":"FIERCE",
-			"button8":"SHORT",
-			"button9":"FORWARD",
-			"button10":"ROUNDHOUSE"
+			"a":"JAB",
+			"b":"FIERCE",
+			"c":"SHORT",
+			"d":"ROUNDHOUSE"
 		},
-		"button11":"COIN",
-		"button12":"START"
+		"coin":"COIN",
+		"start":"START"
 	}
 }
