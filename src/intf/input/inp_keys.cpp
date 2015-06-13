@@ -18,7 +18,10 @@ static const Input allInputs[] = {
 	{ "P2 START", FBK_2, },
 	{ "P1 COIN", FBK_5, },
 	{ "P2 COIN", FBK_6, },
-	{ "DIAGNOSTICS", FBK_F2, },
+	{ "TEST", FBK_F2, },
+	{ "SERVICE", FBK_9, },
+	{ "SELECT1", FBK_3, },
+	{ "SELECT2", FBK_4, },
 	{ "RESET", FBK_F3, },
 	{ "QUIT", FBK_F12, },
 

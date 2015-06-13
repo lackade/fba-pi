@@ -6,7 +6,8 @@
 		"button3": "c",
 		"button4": "d",
 		"button5": "coin",
-		"button6": "start"
+		"button6": "start",
+		"button7": "select"
 	},
 	"default": {
 		"a":"BUTTON 1",
@@ -15,11 +16,18 @@
 		"d":"BUTTON 4",
 		"sfLayout": {
 			"a":"JAB",
-			"b":"FIERCE",
-			"c":"SHORT",
-			"d":"ROUNDHOUSE"
+			"b":"STRONG",
+			"c":"FIERCE"
 		},
 		"coin":"COIN",
 		"start":"START"
+	},
+	"joy1": {
+		"select":"SELECT1",
+		"button8": "SERVICE"
+	},
+	"joy2": {
+		"select":"SELECT2",
+		"button8": "TEST"
 	}
 }
