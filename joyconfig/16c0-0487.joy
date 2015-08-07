@@ -7,7 +7,10 @@
 		"button4": "d",
 		"button5": "coin",
 		"button6": "start",
-		"button7": "select"
+		"button7": "select",
+		"button9": "short",
+		"button10": "forward",
+		"button11": "roundhouse"
 	},
 	"default": {
 		"a":"BUTTON 1",
@@ -15,9 +18,12 @@
 		"c":"BUTTON 3",
 		"d":"BUTTON 4",
 		"sfLayout": {
-			"a":"JAB",
-			"b":"STRONG",
-			"c":"FIERCE"
+			"b":"JAB",
+			"c":"STRONG",
+			"d":"FIERCE",
+			"short":"SHORT",
+			"forward":"FORWARD",
+			"roundhouse":"ROUNDHOUSE"
 		},
 		"coin":"COIN",
 		"start":"START"

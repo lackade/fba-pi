@@ -7,29 +7,138 @@ int nAppVirtualFps = 6000;			// App fps * 100
 bool bRunPause = 0;
 bool bAlwaysProcessKeyboardInput=0;
 
+void formatBinary(int number, int sizeBytes, char *dest, int len)
+{
+	int size = sizeBytes * 8;
+	if (size + 1 > len) {
+		*dest = '\0';
+		return;
+	}
+
+	char *ch = dest + size;
+	*ch = '\0';
+	ch--;
+
+	for (int i = 0; i < size; i++, ch--) {
+		*ch = (number & 1) + '0';
+		number >>= 1;
+	}
+}
+
+const char * getFreeplayDipGroup()
+{
+	switch (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) {
+	case HARDWARE_SNK_NEOGEO | HARDWARE_PREFIX_CARTRIDGE:
+	case HARDWARE_CAPCOM_CPS1:
+	case HARDWARE_CAPCOM_CPS1_GENERIC:
+	case HARDWARE_CAPCOM_CPS1_QSOUND:
+		return "free play";
+	case HARDWARE_PACMAN:
+		return "coinage";
+	}
+
+	return NULL;
+}
+
+const char * getFreeplayDipSetting()
+{
+	switch (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) {
+	case HARDWARE_SNK_NEOGEO | HARDWARE_PREFIX_CARTRIDGE:
+	case HARDWARE_CAPCOM_CPS1:
+	case HARDWARE_CAPCOM_CPS1_GENERIC:
+	case HARDWARE_CAPCOM_CPS1_QSOUND:
+		return "on";
+	case HARDWARE_PACMAN:
+		return "free play";
+	}
+
+	return NULL;
+}
+
+int enableFreeplay()
+{
+	const char *dipGroup = getFreeplayDipGroup();
+	const char *dipSetting = getFreeplayDipSetting();
+
+	if (dipGroup == NULL || dipSetting == NULL) {
+		fprintf(stderr, "Don't know how to enable freeplay\n");
+		return 0;
+	}
+
+	int dipOffset = 0;
+	BurnDIPInfo bdi;
+
+	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
+		if (bdi.nFlags == 0xF0) {
+			dipOffset = bdi.nInput;
+			break;
+		}
+	}
+
+	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
+		// char flags[9], mask[9], setting[9];
+		// formatBinary(bdi.nFlags, sizeof(bdi.nFlags), flags, sizeof(flags));
+		// formatBinary(bdi.nMask, sizeof(bdi.nMask), mask, sizeof(mask));
+		// formatBinary(bdi.nSetting, sizeof(bdi.nSetting), setting, sizeof(setting));
+
+		// fprintf(stderr, "-- % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
+		// 	bdi.nInput,
+		// 	bdi.nFlags, flags,
+		// 	bdi.nMask, mask,
+		// 	bdi.nSetting, setting,
+		// 	bdi.szText);
+
+		if ((bdi.nFlags & 0x40) && bdi.szText) {
+			if (strcasecmp(bdi.szText, dipGroup) == 0) {
+				while (BurnDrvGetDIPInfo(&bdi, ++i) == 0 && !(bdi.nFlags & 0x40)) {
+					if (strcasecmp(bdi.szText, dipSetting) == 0) {
+						struct GameInp *pgi = GameInp + bdi.nInput + dipOffset;
+						pgi->Input.Constant.nConst = (pgi->Input.Constant.nConst & ~bdi.nMask) | (bdi.nSetting & bdi.nMask);
+						printf("Freeplay enabled\n");
+						break;
+					}
+				}
+
+				break;
+			}
+		}
+	}
+
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
-	piLoadConfig();
+	int freeplay = 0;
+	const char *romname = NULL;
 
-	SDL_Init(SDL_INIT_TIMER|SDL_INIT_VIDEO);
+	for (int i = 1; i < argc; i++) {
+		if (*argv[i] == '-') {
+			if (strcasecmp(argv[i] + 1, "f") == 0) {
+				freeplay = 1;
+			}
+		} else {
+			romname = argv[i];
+		}
+	}
 
-	BurnLibInit();
-
-	if (argc < 2) {
-		fprintf(stdout, "Usage: %s <romname>\n", argv[0]);
-		fprintf(stdout, "e.g.: %s mslug\n", argv[0]);
+	if (romname == NULL) {
+		printf("Usage: %s [-f] <romname>\n", argv[0]);
+		printf("e.g.: %s mslug\n", argv[0]);
 
 		return 0;
 	}
 
+	piLoadConfig();
+	SDL_Init(SDL_INIT_TIMER|SDL_INIT_VIDEO);
+	BurnLibInit();
+
 	int driverId = -1;
-	if (argc == 2) {
-		for (int i = 0; i < nBurnDrvCount; i++) {
-			nBurnDrvActive = i;
-			if (strcmp(BurnDrvGetTextA(0), argv[1]) == 0) {
-				driverId = i;
-				break;
-			}
+	for (int i = 0; i < nBurnDrvCount; i++) {
+		nBurnDrvActive = i;
+		if (strcmp(BurnDrvGetTextA(0), romname) == 0) {
+			driverId = i;
+			break;
 		}
 	}
 
@@ -37,6 +146,8 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "%s is not supported by FB Alpha\n", argv[1]);
 		return 1;
 	}
+
+	printf("Starting %s\n", romname);
 
 	// Create the nvram directory, if it doesn't exist
 	const char *nvramPath = "./nvram";
@@ -49,6 +160,10 @@ int main(int argc, char *argv[])
 	bCheatsAllowed = false;
 
 	DrvInit(driverId, 0);
+
+	if (freeplay) {
+		enableFreeplay();
+	}
 
 	RunMessageLoop();
 
