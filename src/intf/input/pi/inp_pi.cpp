@@ -1,3 +1,4 @@
+
 #include <SDL/SDL.h>
 #include <unistd.h>
 #include <sys/time.h>
@@ -14,7 +15,7 @@ extern "C" {
 #define MAX_JOYSTICKS   8
 #define MAX_JOY_BUTTONS 28
 
-// #define DEBUG_INPUT
+//#define DEBUG_INPUT
 
 int nKioskTimeout = 0;
 
@@ -25,7 +26,7 @@ static int *joyLookupTable = NULL;
 static int keyLookupTable[512];
 
 static int mouseScanned = 0;
-static int inputEventOccurred = 0;
+static int inputEventOccurred = 1;
 
 static void scanKeyboard();
 static void scanJoysticks();
@@ -48,7 +49,7 @@ static int checkMouseState(unsigned int nSubCode);
 
 #define JOY_DEADZONE 0x4000
 
-static unsigned char* keyState;
+static unsigned char* keyState = NULL;
 static struct {
 	unsigned char buttons;
 	int xdelta;
@@ -132,7 +133,6 @@ static int piInputStart()
 
 	// Mouse not read this frame
 	mouseScanned = 0;
-
 	if (nKioskTimeout > 0) {
 		struct timeval now;
 		gettimeofday(&now, NULL);
@@ -208,21 +208,26 @@ static void scanMouse()
 
 static void scanKeyboard()
 {
+	static int screenshotDown = 0;
 	static Uint8 emptyStates[512] = { 0 };
+
 	if ((keyState = SDL_GetKeyState(NULL)) == NULL) {
 		keyState = emptyStates;
 	}
 
-	// FIXME
 	if (keyState[SDLK_F12]) {
 		nExitEmulator = 1;
 	}
+	if (!screenshotDown && keyState[SDLK_F10]) {
+		MakeScreenShot();
+	}
+	screenshotDown = keyState[SDLK_F10];
 }
 
 static void scanJoysticks()
 {
 	SDL_JoystickUpdate();
-	
+
 	int joyCount = nJoystickCount;
 	if (joyCount > MAX_JOYSTICKS) {
 		joyCount = MAX_JOYSTICKS;
@@ -231,7 +236,6 @@ static void scanJoysticks()
 #ifdef DEBUG_INPUT
 	static int oldButtonStates[MAX_JOYSTICKS];
 #endif
-
 	for (int joy = 0; joy < joyCount; joy++) {
 		joyButtonStates[joy] = 0;
 		SDL_Joystick *joystick = JoyList[joy];

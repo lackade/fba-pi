@@ -1,8 +1,6 @@
 // Burner Config file module
 #include "burner.h"
 
-extern int nKioskTimeout;
-
 int piLoadConfig()
 {
 	FILE *f;
@@ -25,8 +23,6 @@ int piLoadConfig()
 			line[len - 1] = 0;
 			len--;
 		}
-
-		VAR(nKioskTimeout);
 
 		// Other
 		STR(szAppRomPaths[0]);
@@ -70,11 +66,6 @@ int piSaveConfig()
 #define VAR(x) fprintf(f, #x " %d\n", x)
 #define FLT(x) fprintf(f, #x " %f\n", x)
 #define STR(x) fprintf(f, #x " %s\n", x)
-
-	fprintf(f, "// Kiosk mode\n");
-	fprintf(f, "// When anything other than zero, specifies number of");
-	fprintf(f, " seconds of inactivity allowed before the emulator quits\n");
-	VAR(nKioskTimeout);
 
 	fprintf(f,"// ROM paths (include trailing slash)\n");
 	STR(szAppRomPaths[0]);

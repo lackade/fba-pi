@@ -178,6 +178,7 @@ INT32 create_datfile(TCHAR* szFilename, INT32 bType);
 
 // sshot.cpp
 INT32 MakeScreenShot();
+INT32 SaveScreenshot(const char *path);
 
 // state.cpp
 INT32 BurnStateLoadEmbed(FILE* fp, INT32 nOffset, INT32 bAll, INT32 (*pLoadGame)());

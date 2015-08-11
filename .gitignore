@@ -24,3 +24,6 @@ fbasdl
 fbapi.ini
 roms
 nvram
+screenshots
+log.txt
+*.save

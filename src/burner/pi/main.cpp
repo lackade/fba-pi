@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+extern int nKioskTimeout;
+
 int nAppVirtualFps = 6000;			// App fps * 100
 bool bRunPause = 0;
 bool bAlwaysProcessKeyboardInput=0;
@@ -35,6 +37,9 @@ const char * getFreeplayDipGroup()
 		return "free play";
 	case HARDWARE_PACMAN:
 		return "coinage";
+	case HARDWARE_PREFIX_KONAMI:
+	case HARDWARE_KONAMI_68K_Z80:
+		return "coin a";
 	}
 
 	return NULL;
@@ -49,6 +54,8 @@ const char * getFreeplayDipSetting()
 	case HARDWARE_CAPCOM_CPS1_QSOUND:
 		return "on";
 	case HARDWARE_PACMAN:
+	case HARDWARE_PREFIX_KONAMI:
+	case HARDWARE_KONAMI_68K_Z80:
 		return "free play";
 	}
 
@@ -60,14 +67,27 @@ int enableFreeplay()
 	const char *dipGroup = getFreeplayDipGroup();
 	const char *dipSetting = getFreeplayDipSetting();
 
+	BurnDIPInfo bdi;
 	if (dipGroup == NULL || dipSetting == NULL) {
-		fprintf(stderr, "Don't know how to enable freeplay\n");
+		fprintf(stderr, "Don't know how to enable freeplay.\n");
+		for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
+			char flags[9], mask[9], setting[9];
+			formatBinary(bdi.nFlags, sizeof(bdi.nFlags), flags, sizeof(flags));
+			formatBinary(bdi.nMask, sizeof(bdi.nMask), mask, sizeof(mask));
+			formatBinary(bdi.nSetting, sizeof(bdi.nSetting), setting, sizeof(setting));
+
+			printf("-- % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
+				bdi.nInput,
+				bdi.nFlags, flags,
+				bdi.nMask, mask,
+				bdi.nSetting, setting,
+				bdi.szText);
+		}
+
 		return 0;
 	}
 
 	int dipOffset = 0;
-	BurnDIPInfo bdi;
-
 	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
 		if (bdi.nFlags == 0xF0) {
 			dipOffset = bdi.nInput;
@@ -76,18 +96,6 @@ int enableFreeplay()
 	}
 
 	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
-		// char flags[9], mask[9], setting[9];
-		// formatBinary(bdi.nFlags, sizeof(bdi.nFlags), flags, sizeof(flags));
-		// formatBinary(bdi.nMask, sizeof(bdi.nMask), mask, sizeof(mask));
-		// formatBinary(bdi.nSetting, sizeof(bdi.nSetting), setting, sizeof(setting));
-
-		// fprintf(stderr, "-- % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
-		// 	bdi.nInput,
-		// 	bdi.nFlags, flags,
-		// 	bdi.nMask, mask,
-		// 	bdi.nSetting, setting,
-		// 	bdi.szText);
-
 		if ((bdi.nFlags & 0x40) && bdi.szText) {
 			if (strcasecmp(bdi.szText, dipGroup) == 0) {
 				while (BurnDrvGetDIPInfo(&bdi, ++i) == 0 && !(bdi.nFlags & 0x40)) {
@@ -116,6 +124,14 @@ int main(int argc, char *argv[])
 		if (*argv[i] == '-') {
 			if (strcasecmp(argv[i] + 1, "f") == 0) {
 				freeplay = 1;
+			} else if (strcasecmp(argv[i] + 1, "k") == 0) {
+				if (++i < argc) {
+					int secs = atoi(argv[i]);
+					if (secs > 0) {
+						nKioskTimeout = secs;
+						printf("Kiosk mode enabled (%d seconds)\n", secs);
+					}
+				}
 			}
 		} else {
 			romname = argv[i];
@@ -123,7 +139,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (romname == NULL) {
-		printf("Usage: %s [-f] <romname>\n", argv[0]);
+		printf("Usage: %s [-f] [-k seconds] <romname>\n", argv[0]);
 		printf("e.g.: %s mslug\n", argv[0]);
 
 		return 0;
