@@ -29,7 +29,7 @@
 		"start":"START"
 	},
 	"joy1": {
-		"select":"SELECT1",
+		"select":"QUIT",
 		"button8": "SERVICE"
 	},
 	"joy2": {

@@ -27,92 +27,59 @@ void formatBinary(int number, int sizeBytes, char *dest, int len)
 	}
 }
 
-const char * getFreeplayDipGroup()
+void dumpDipSwitches()
 {
-	switch (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) {
-	case HARDWARE_SNK_NEOGEO | HARDWARE_PREFIX_CARTRIDGE:
-	case HARDWARE_CAPCOM_CPS1:
-	case HARDWARE_CAPCOM_CPS1_GENERIC:
-	case HARDWARE_CAPCOM_CPS1_QSOUND:
-		return "free play";
-	case HARDWARE_PACMAN:
-		return "coinage";
-	case HARDWARE_PREFIX_KONAMI:
-	case HARDWARE_KONAMI_68K_Z80:
-		return "coin a";
+	BurnDIPInfo bdi;
+	char flags[9], mask[9], setting[9];
+
+	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
+		formatBinary(bdi.nFlags, sizeof(bdi.nFlags), flags, sizeof(flags));
+		formatBinary(bdi.nMask, sizeof(bdi.nMask), mask, sizeof(mask));
+		formatBinary(bdi.nSetting, sizeof(bdi.nSetting), setting, sizeof(setting));
+
+		printf("-- % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
+			bdi.nInput,
+			bdi.nFlags, flags,
+			bdi.nMask, mask,
+			bdi.nSetting, setting,
+			bdi.szText);
 	}
-
-	return NULL;
-}
-
-const char * getFreeplayDipSetting()
-{
-	switch (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) {
-	case HARDWARE_SNK_NEOGEO | HARDWARE_PREFIX_CARTRIDGE:
-	case HARDWARE_CAPCOM_CPS1:
-	case HARDWARE_CAPCOM_CPS1_GENERIC:
-	case HARDWARE_CAPCOM_CPS1_QSOUND:
-		return "on";
-	case HARDWARE_PACMAN:
-	case HARDWARE_PREFIX_KONAMI:
-	case HARDWARE_KONAMI_68K_Z80:
-		return "free play";
-	}
-
-	return NULL;
 }
 
 int enableFreeplay()
 {
-	const char *dipGroup = getFreeplayDipGroup();
-	const char *dipSetting = getFreeplayDipSetting();
-
-	BurnDIPInfo bdi;
-	if (dipGroup == NULL || dipSetting == NULL) {
-		fprintf(stderr, "Don't know how to enable freeplay.\n");
-		for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
-			char flags[9], mask[9], setting[9];
-			formatBinary(bdi.nFlags, sizeof(bdi.nFlags), flags, sizeof(flags));
-			formatBinary(bdi.nMask, sizeof(bdi.nMask), mask, sizeof(mask));
-			formatBinary(bdi.nSetting, sizeof(bdi.nSetting), setting, sizeof(setting));
-
-			printf("-- % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
-				bdi.nInput,
-				bdi.nFlags, flags,
-				bdi.nMask, mask,
-				bdi.nSetting, setting,
-				bdi.szText);
-		}
-
-		return 0;
-	}
-
 	int dipOffset = 0;
-	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
-		if (bdi.nFlags == 0xF0) {
-			dipOffset = bdi.nInput;
-			break;
-		}
-	}
+	int switchFound = 0;
+	BurnDIPInfo dipSwitch;
 
-	for (int i = 0; BurnDrvGetDIPInfo(&bdi, i) == 0; i++) {
-		if ((bdi.nFlags & 0x40) && bdi.szText) {
-			if (strcasecmp(bdi.szText, dipGroup) == 0) {
-				while (BurnDrvGetDIPInfo(&bdi, ++i) == 0 && !(bdi.nFlags & 0x40)) {
-					if (strcasecmp(bdi.szText, dipSetting) == 0) {
-						struct GameInp *pgi = GameInp + bdi.nInput + dipOffset;
-						pgi->Input.Constant.nConst = (pgi->Input.Constant.nConst & ~bdi.nMask) | (bdi.nSetting & bdi.nMask);
-						printf("Freeplay enabled\n");
-						break;
+	for (int i = 0; !switchFound && BurnDrvGetDIPInfo(&dipSwitch, i) == 0; i++) {
+		if (dipSwitch.nFlags == 0xF0) {
+			dipOffset = dipSwitch.nInput;
+		}
+		if (dipSwitch.szText && (strcasecmp(dipSwitch.szText, "freeplay") == 0
+			|| strcasecmp(dipSwitch.szText, "free play") == 0)) {
+			// Found freeplay. Is it a group or the actual switch?
+			if (dipSwitch.nFlags & 0x40) {
+				// It's a group. Find the switch
+				for (int j = i + 1; !switchFound && BurnDrvGetDIPInfo(&dipSwitch, j) == 0 && !(dipSwitch.nFlags & 0x40); j++) {
+					if (dipSwitch.szText && strcasecmp(dipSwitch.szText, "on") == 0) {
+						// Found the switch
+						switchFound = 1;
 					}
 				}
-
-				break;
+			} else {
+				// It's a switch
+				switchFound = 1;
 			}
 		}
 	}
 
-	return 1;
+	if (switchFound) {
+		struct GameInp *pgi = GameInp + dipSwitch.nInput + dipOffset;
+		pgi->Input.Constant.nConst = (pgi->Input.Constant.nConst & ~dipSwitch.nMask) | (dipSwitch.nSetting & dipSwitch.nMask);
+	}
+
+	return switchFound;
 }
 
 int main(int argc, char *argv[])
@@ -159,7 +126,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (driverId < 0) {
-		fprintf(stderr, "%s is not supported by FB Alpha\n", argv[1]);
+		fprintf(stderr, "%s is not supported by FB Alpha\n", romname);
 		return 1;
 	}
 
@@ -178,7 +145,12 @@ int main(int argc, char *argv[])
 	DrvInit(driverId, 0);
 
 	if (freeplay) {
-		enableFreeplay();
+		if (enableFreeplay()) {
+			printf("Freeplay enabled\n");
+		} else {
+			fprintf(stderr, "Don't know how to enable freeplay\n");
+			dumpDipSwitches();
+		}
 	}
 
 	RunMessageLoop();
