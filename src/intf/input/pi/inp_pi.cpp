@@ -140,7 +140,7 @@ static int piInputStart()
 			lastInputEvent = now;
 			inputEventOccurred = 0;
 		} else if (now.tv_sec - lastInputEvent.tv_sec > nKioskTimeout) {
-			nExitEmulator = 1;
+			nExitEmulator = 2;
 			fprintf(stderr, "Kiosk mode - %ds timeout exceeded\n", nKioskTimeout);
 		}
 	}

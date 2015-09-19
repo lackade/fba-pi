@@ -4,6 +4,7 @@
 #include <unistd.h>
 
 extern int nKioskTimeout;
+extern int nExitEmulator;
 
 int nAppVirtualFps = 6000;			// App fps * 100
 bool bRunPause = 0;
@@ -161,6 +162,10 @@ int main(int argc, char *argv[])
 	piSaveConfig();
 	BurnLibExit();
 	SDL_Quit();
+
+	if (nExitEmulator == 2) {
+		return 2; // timeout
+	}
 
 	return 0;
 }
