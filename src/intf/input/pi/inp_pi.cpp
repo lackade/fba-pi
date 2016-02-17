@@ -15,11 +15,15 @@ extern "C" {
 #define MAX_JOYSTICKS   8
 #define MAX_JOY_BUTTONS 28
 
+#define FREEPLAY_HACK_COIN_DURATION_MS 1e3 / 8
+
 //#define DEBUG_INPUT
 
 int nKioskTimeout = 0;
+int nEnableFreeplayHack = 0;
 
 static struct timeval lastInputEvent;
+static uint64_t startPressUsec[4];
 
 static unsigned int joyButtonStates[MAX_JOYSTICKS];
 static int *joyLookupTable = NULL;
@@ -35,6 +39,7 @@ static void scanMouse();
 static void resetJoystickMap();
 static bool usesStreetFighterLayout();
 static int checkMouseState(unsigned int nSubCode);
+static void handleFreeplayHack();
 
 #define JOY_DIR_LEFT  0x00
 #define JOY_DIR_RIGHT 0x01
@@ -131,11 +136,22 @@ static int piInputStart()
 	scanJoysticks();
 	scanKeyboard();
 
+	struct timeval now;
+	gettimeofday(&now, NULL);
+
+	if (nEnableFreeplayHack) {
+		for (int i = 0; i < 4; i++) {
+			if (!JOY_IS_DOWN(joyLookupTable[FBK_1 + i]) && !KEY_IS_DOWN(keyLookupTable[FBK_1 + i])) {
+				startPressUsec[i] = 0;
+			} else if (startPressUsec[i] == 0) {
+				startPressUsec[i] = now.tv_sec * 1e3 + now.tv_usec / 1e3;
+			}
+		}
+	}
+
 	// Mouse not read this frame
 	mouseScanned = 0;
 	if (nKioskTimeout > 0) {
-		struct timeval now;
-		gettimeofday(&now, NULL);
 		if (inputEventOccurred) {
 			lastInputEvent = now;
 			inputEventOccurred = 0;
@@ -148,14 +164,48 @@ static int piInputStart()
 	return 0;
 }
 
+// player - 0-4
+static int handleFreeplayHack(int player, int code)
+{
+	if (startPressUsec[player] != 0) {
+		struct timeval now;
+		gettimeofday(&now, NULL);
+		uint64_t now_usec = now.tv_sec * 1e3 + now.tv_usec / 1e3;
+		uint64_t diff = now_usec - startPressUsec[player];
+		if (diff < FREEPLAY_HACK_COIN_DURATION_MS) {
+			if (code == FBK_5 + player) {
+				return 1;
+			}
+		} else {
+			if (code == FBK_1 + player) {
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
 static int piInputState(int nCode)
 {
 	if (nCode < 0) {
 		return 0;
 	}
 
+	int player = -1;
+	if (nCode == FBK_1 || nCode == FBK_2 || nCode == FBK_3 || nCode == FBK_4) {
+		player = nCode - FBK_1;
+	} else if (nCode == FBK_5 || nCode == FBK_6 || nCode == FBK_7 || nCode == FBK_8) {
+		player = nCode - FBK_5;
+	}
+
 	if (nCode < 0x100) {
 		int mapped = keyLookupTable[nCode];
+		if (nEnableFreeplayHack && player != -1) {
+			if (handleFreeplayHack(player, nCode)) {
+				return 1;
+			}
+		}
 		if (KEY_IS_DOWN(mapped)) {
 			inputEventOccurred = 1;
 			return 1;
@@ -165,6 +215,9 @@ static int piInputState(int nCode)
 	if (/* nCode >= 0x4000 && */ nCode < 0x8000) {
 		int mapped = joyLookupTable[nCode];
 		if (mapped != -1) {
+			if (nEnableFreeplayHack && player != -1) {
+				handleFreeplayHack(player, nCode);
+			}
 			if (JOY_IS_DOWN(mapped)) {
 				JOY_CLEAR(mapped);
 				return 1;

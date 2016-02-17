@@ -5,6 +5,7 @@
 
 extern int nKioskTimeout;
 extern int nExitEmulator;
+extern int nEnableFreeplayHack;
 
 int nAppVirtualFps = 6000;			// App fps * 100
 bool bRunPause = 0;
@@ -87,12 +88,17 @@ int main(int argc, char *argv[])
 {
 	int freeplay = 0;
 	const char *romname = NULL;
+	nEnableFreeplayHack = 0;
 
 	for (int i = 1; i < argc; i++) {
+printf("----- %s\n", argv[i]);
 		if (*argv[i] == '-') {
-			if (strcasecmp(argv[i] + 1, "f") == 0) {
+			if (strcmp(argv[i] + 1, "f") == 0) {
 				freeplay = 1;
-			} else if (strcasecmp(argv[i] + 1, "k") == 0) {
+			} else if (strcmp(argv[i] + 1, "F") == 0) {
+				nEnableFreeplayHack = 1;
+				printf("Freeplay hack enabled\n");
+			} else if (strcmp(argv[i] + 1, "k") == 0) {
 				if (++i < argc) {
 					int secs = atoi(argv[i]);
 					if (secs > 0) {
@@ -107,7 +113,7 @@ int main(int argc, char *argv[])
 	}
 
 	if (romname == NULL) {
-		printf("Usage: %s [-f] [-k seconds] <romname>\n", argv[0]);
+		printf("Usage: %s [-f] [-F] [-k seconds] <romname>\n", argv[0]);
 		printf("e.g.: %s mslug\n", argv[0]);
 
 		return 0;
@@ -149,7 +155,7 @@ int main(int argc, char *argv[])
 		if (enableFreeplay()) {
 			printf("Freeplay enabled\n");
 		} else {
-			fprintf(stderr, "Don't know how to enable freeplay\n");
+			fprintf(stderr, "Don't know how to enable freeplay - try the hack\n");
 			dumpDipSwitches();
 		}
 	}
