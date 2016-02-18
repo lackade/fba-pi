@@ -91,7 +91,6 @@ int main(int argc, char *argv[])
 	nEnableFreeplayHack = 0;
 
 	for (int i = 1; i < argc; i++) {
-printf("----- %s\n", argv[i]);
 		if (*argv[i] == '-') {
 			if (strcmp(argv[i] + 1, "f") == 0) {
 				freeplay = 1;
