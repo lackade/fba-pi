@@ -344,8 +344,8 @@ LD	= $(CXX)
 AS	= nasm
 
 HOSTCFLAGS = $(incdir)
-CFLAGS = -O2 -fomit-frame-pointer -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
-CXXFLAGS = -O2 -fomit-frame-pointer -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
+CFLAGS = -O2 -fomit-frame-pointer -Wno-narrowing -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
+CXXFLAGS = -O2 -fomit-frame-pointer -Wno-narrowing -Wno-write-strings -DLSB_FIRST -DFASTCALL -DBUILD_M68K -DINCLUDE_LIB_PNGH
 DEF := -DCPUTYPE=$(CPUTYPE) -DUSE_SPEEDHACKS -DBUILD_PI
 
 CFLAGS += -U__cdecl -U__fastcall -D__cdecl="" -D__fastcall=""

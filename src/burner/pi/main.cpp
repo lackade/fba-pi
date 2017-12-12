@@ -39,7 +39,8 @@ void dumpDipSwitches()
 		formatBinary(bdi.nMask, sizeof(bdi.nMask), mask, sizeof(mask));
 		formatBinary(bdi.nSetting, sizeof(bdi.nSetting), setting, sizeof(setting));
 
-		printf("-- % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
+		printf("%d: % 3d - 0x%02x (%s) - 0x%02x (%s) - 0x%02x (%s) - %s\n",
+			i,
 			bdi.nInput,
 			bdi.nFlags, flags,
 			bdi.nMask, mask,
@@ -84,35 +85,98 @@ int enableFreeplay()
 	return switchFound;
 }
 
+int setDipSwitch(int switchNo)
+{
+	int dipOffset = 0;
+	int groupSet = 0;
+	BurnDIPInfo dipSwitch;
+	BurnDIPInfo group;
+
+	for (int i = 0; BurnDrvGetDIPInfo(&dipSwitch, i) == 0; i++) {
+		if (dipSwitch.nFlags == 0xF0) {
+			dipOffset = dipSwitch.nInput;
+		}
+		if (dipSwitch.nFlags & 0x40) {
+			groupSet = 1;
+			BurnDrvGetDIPInfo(&group, i);
+		}
+		if (i != switchNo) {
+			continue;
+		}
+		if (dipSwitch.nFlags & 0x40) {
+			// A group
+			fprintf(stderr, "Can't set dipswitch - group, not switch\n");
+			break;
+		}
+
+		struct GameInp *pgi = GameInp + dipSwitch.nInput + dipOffset;
+		pgi->Input.Constant.nConst = (pgi->Input.Constant.nConst & ~dipSwitch.nMask) | (dipSwitch.nSetting & dipSwitch.nMask);
+
+		if (groupSet) {
+			printf("Set '%s': %s\n", group.szText, dipSwitch.szText);
+		} else {
+			printf("Set %s\n", dipSwitch.szText);
+		}
+
+		return 1;
+	}
+
+	return 0;
+}
+
+int parseSwitches(int argc, char *argv[])
+{
+	int dipSwitchSet = 0;
+        for (int i = 1; i < argc; i++) {
+                if (*argv[i] != '-') {
+			continue;
+		}
+
+		if (strcmp(argv[i] + 1, "f") == 0) {
+			if (enableFreeplay()) {
+				printf("Freeplay enabled\n");
+			} else {
+				fprintf(stderr, "Don't know how to enable freeplay - try the hack\n");
+			}
+		} else if (strcmp(argv[i] + 1, "F") == 0) {
+			nEnableFreeplayHack = 1;
+			printf("Freeplay hack enabled\n");
+		} else if (strcmp(argv[i] + 1, "k") == 0) {
+			if (++i < argc) {
+				int secs = atoi(argv[i]);
+				if (secs > 0) {
+					nKioskTimeout = secs;
+					printf("Kiosk mode enabled (%d seconds)\n", secs);
+				}
+			}
+		} else if (strcmp(argv[i] + 1, "dumpswitches") == 0) {
+			dumpDipSwitches();
+		} else if (strncmp(argv[i] + 1, "ds=", 3) == 0) {
+			char format[16];
+			strncpy(format, argv[i] + 4, sizeof(format) - 1);
+			int switchNo = atoi(format);
+			if (switchNo != 0) {
+				dipSwitchSet |= setDipSwitch(switchNo);
+			}
+		}
+	}
+
+	return dipSwitchSet;
+}
+
 int main(int argc, char *argv[])
 {
-	int freeplay = 0;
 	const char *romname = NULL;
 	nEnableFreeplayHack = 0;
 
 	for (int i = 1; i < argc; i++) {
-		if (*argv[i] == '-') {
-			if (strcmp(argv[i] + 1, "f") == 0) {
-				freeplay = 1;
-			} else if (strcmp(argv[i] + 1, "F") == 0) {
-				nEnableFreeplayHack = 1;
-				printf("Freeplay hack enabled\n");
-			} else if (strcmp(argv[i] + 1, "k") == 0) {
-				if (++i < argc) {
-					int secs = atoi(argv[i]);
-					if (secs > 0) {
-						nKioskTimeout = secs;
-						printf("Kiosk mode enabled (%d seconds)\n", secs);
-					}
-				}
-			}
-		} else {
+		if (*argv[i] != '-') {
 			romname = argv[i];
 		}
 	}
 
 	if (romname == NULL) {
-		printf("Usage: %s [-f] [-F] [-k seconds] <romname>\n", argv[0]);
+		printf("Usage: %s [-f] [-F] [-dumpswitches] [-k seconds] <romname>\n", argv[0]);
 		printf("e.g.: %s mslug\n", argv[0]);
 
 		return 0;
@@ -142,23 +206,14 @@ int main(int argc, char *argv[])
 	const char *nvramPath = "./nvram";
 	if (access(nvramPath, F_OK) == -1) {
 		fprintf(stderr, "Creating NVRAM directory at \"%s\"\n", nvramPath);
-        mkdir(nvramPath, 0777);
+		mkdir(nvramPath, 0777);
 	}
 
 	bBurnUseASMCPUEmulation = 0;
 	bCheatsAllowed = false;
 
 	DrvInit(driverId, 0);
-
-	if (freeplay) {
-		if (enableFreeplay()) {
-			printf("Freeplay enabled\n");
-		} else {
-			fprintf(stderr, "Don't know how to enable freeplay - try the hack\n");
-			dumpDipSwitches();
-		}
-	}
-
+	parseSwitches(argc, argv);
 	RunMessageLoop();
 
 	DrvExit();

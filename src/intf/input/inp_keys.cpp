@@ -23,7 +23,7 @@ static const Input allInputs[] = {
 	{ "SELECT1", FBK_3, },
 	{ "SELECT2", FBK_4, },
 	{ "RESET", FBK_F3, },
-	{ "QUIT", FBK_F12, },
+	{ "QUIT", FBK_ESCAPE, },
 
 	// Keyboard
 	{ "P1 UP", FBK_UPARROW, },

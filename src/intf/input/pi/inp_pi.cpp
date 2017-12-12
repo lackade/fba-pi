@@ -268,7 +268,7 @@ static void scanKeyboard()
 		keyState = emptyStates;
 	}
 
-	if (keyState[SDLK_F12]) {
+	if (keyState[SDLK_ESCAPE]) {
 		nExitEmulator = 1;
 	}
 	if (!screenshotDown && keyState[SDLK_F10]) {
@@ -287,7 +287,7 @@ static void scanJoysticks()
 	}
 
 #ifdef DEBUG_INPUT
-	static int oldButtonStates[MAX_JOYSTICKS];
+	static unsigned int oldButtonStates[MAX_JOYSTICKS];
 #endif
 	for (int joy = 0; joy < joyCount; joy++) {
 		joyButtonStates[joy] = 0;
@@ -332,8 +332,8 @@ static void scanJoysticks()
 
 #ifdef DEBUG_INPUT
 		if (oldButtonStates[joy] != joyButtonStates[joy]) {
-			static char temp[33];
-			char *ch = &temp[31-(buttonCount+4)];
+			static char temp[33] = {'\0'};
+			char *ch = &temp[buttonCount+4]; //32-(buttonCount+4)];
 			for (int i = buttonCount + 4; i >= 0; i--,ch--) {
 				*ch = ((joyButtonStates[joy] >> i) & 1) + '0';
 			}
@@ -545,10 +545,13 @@ static int setupDefaults(int pindex)
 			fbButtons[buttonCount++] = FBK_X;
 			fbButtons[buttonCount++] = FBK_C;
 		} else {
+			fbButtons[buttonCount++] = FBK_A;
+			fbButtons[buttonCount++] = FBK_S;
+			fbButtons[buttonCount++] = FBK_D;
 			fbButtons[buttonCount++] = FBK_Z;
-			fbButtons[buttonCount++] = FBK_X;
-			fbButtons[buttonCount++] = FBK_C;
-			fbButtons[buttonCount++] = FBK_V;
+//			fbButtons[buttonCount++] = FBK_X;
+//			fbButtons[buttonCount++] = FBK_C;
+//			fbButtons[buttonCount++] = FBK_V;
 		}
 	} else if (pindex >= 1 && pindex <= 3) {
 		// P2 to P4

@@ -72,6 +72,11 @@ static const GLushort indices[] = {
 static const int kVertexCount = 4;
 static const int kIndexCount = 6;
 
+static const int vborder_thickness = 16;
+
+static int screen_width;
+static int screen_height;
+
 static struct phl_matrix projection;
 
 static const GLfloat vertices[] = {
@@ -86,6 +91,9 @@ static int piInitVideo()
 	if (!phl_gles_init()) {
 		return 0;
 	}
+
+	screen_width = phl_gles_screen_width;
+	screen_height = phl_gles_screen_height - vborder_thickness;
 
 	fprintf(stderr, "Initializing shaders...\n");
 
@@ -139,7 +147,7 @@ static void piUpdateEmuDisplay()
 	}
 
 	glClear(GL_COLOR_BUFFER_BIT);
-	glViewport(0, 0, phl_gles_screen_width, phl_gles_screen_height);
+	glViewport(0, phl_gles_screen_height - screen_height, screen_width, screen_height);
 
 	ShaderInfo *sh = &shader;
 
@@ -322,7 +330,7 @@ static int reinitTextures()
 	float zoom = 1.0f;
 
 	// Screen aspect ratio adjustment
-	float a = (float)phl_gles_screen_width / (float)phl_gles_screen_height;
+	float a = (float)screen_width / (float)screen_height;
 	float a0 = (float)bufferWidth / (float)bufferHeight;
 	if (a > a0) {
 		sx = a0/a;
