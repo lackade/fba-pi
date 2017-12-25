@@ -9,7 +9,7 @@
 #
 
 # Specify the name of the executable file, without ".exe"
-NAME		= fbapi
+NAME		= fba
 EXE		= $(NAME)
 INSTALLDIR	= /usr/local/games/fba/
 ROMDIR		= /usr/local/share/roms/

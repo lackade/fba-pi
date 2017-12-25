@@ -24,6 +24,8 @@ int piLoadConfig()
 			len--;
 		}
 
+		VAR(bVidScanlines);
+
 		// Other
 		STR(szAppRomPaths[0]);
 		STR(szAppRomPaths[1]);
@@ -66,6 +68,9 @@ int piSaveConfig()
 #define VAR(x) fprintf(f, #x " %d\n", x)
 #define FLT(x) fprintf(f, #x " %f\n", x)
 #define STR(x) fprintf(f, #x " %s\n", x)
+
+	fprintf(f,"\n// If non-zero, enable scanlines\n");
+	VAR(bVidScanlines);
 
 	fprintf(f,"// ROM paths (include trailing slash)\n");
 	STR(szAppRomPaths[0]);

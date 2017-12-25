@@ -15,7 +15,7 @@ src/dep/generated/*
 *.d
 *~.*
 fbasdl.ini
-fbapi
+fba
 fbasdl
 .DS_Store
 ._*

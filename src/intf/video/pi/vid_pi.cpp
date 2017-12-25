@@ -1,3 +1,6 @@
+// Based on piSNES by Squid
+// https://github.com/squidrpi/pisnes
+
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -57,11 +60,25 @@ static const char* vertexShaderSrc =
 	"	gl_Position = u_vp_matrix * a_position;\n"
 	"}\n";
 
-static const char* fragmentShaderSrc =
+static const char* fragmentShaderNone =
 	"varying mediump vec2 v_texcoord;\n"
 	"uniform sampler2D u_texture;\n"
 	"void main() {\n"
 	"	gl_FragColor = texture2D(u_texture, v_texcoord);\n"
+	"}\n";
+static const char *fragmentShaderScanline = 
+	"varying mediump vec2 v_texcoord;\n"
+	"uniform sampler2D u_texture;\n"
+	"void main()\n"
+	"{\n"
+	"	vec3 rgb = texture2D(u_texture, v_texcoord).rgb;\n"
+	"	vec3 intens;\n"
+	"	if (fract(gl_FragCoord.y * (0.5*4.0/3.0)) > 0.5)\n"
+	"		intens = vec3(0);\n"
+	"	else\n"
+	"		intens = smoothstep(0.2,0.8,rgb) + normalize(rgb);\n"
+	"	float level = (4.0-0.0) * 0.19;\n"
+	"	gl_FragColor = vec4(intens * (0.5-level) + rgb * 1.1, 1.0);\n"
 	"}\n";
 
 static const GLushort indices[] = {
@@ -99,6 +116,14 @@ static int piInitVideo()
 
 	// Init shader resources
 	memset(&shader, 0, sizeof(ShaderInfo));
+
+	const char *fragmentShaderSrc;
+	if (bVidScanlines) {
+		fragmentShaderSrc = fragmentShaderScanline;
+	} else {
+		fragmentShaderSrc = fragmentShaderNone;
+	}
+
 	shader.program = createProgram(vertexShaderSrc, fragmentShaderSrc);
 	if (!shader.program) {
 		fprintf(stderr, "createProgram() failed\n");
