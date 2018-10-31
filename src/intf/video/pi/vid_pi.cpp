@@ -424,6 +424,11 @@ static int FbInit()
 		nVidImageDepth = 16;
 		nVidImageBPP = 2;
 		
+		int xAspect;
+		int yAspect;
+		BurnDrvGetAspect(&xAspect, &yAspect);
+		float ratio = (float) yAspect / xAspect;
+
 		if (!screenRotated) {
 			nVidImageWidth = virtualWidth;
 			nVidImageHeight = virtualHeight;
@@ -431,6 +436,7 @@ static int FbInit()
 			nVidImageWidth = virtualHeight;
 			nVidImageHeight = virtualWidth;
 		}
+
 		nVidImagePitch = nVidImageWidth * nVidImageBPP;
 		
 		SetBurnHighCol(nVidImageDepth);
@@ -438,6 +444,13 @@ static int FbInit()
 		bufferWidth = virtualWidth;
 		bufferHeight = virtualHeight;
 		bufferBpp = nVidImageBPP;
+
+		if (!screenRotated) {
+			bufferHeight = bufferWidth * ratio;
+		} else {
+			bufferWidth = bufferHeight / ratio;
+		}
+		fprintf(stderr, "W: %d; H: %d (%f ratio)\n", bufferWidth, bufferHeight, ratio);
 		
 		if (!reinitTextures()) {
 			fprintf(stderr, "Error initializing textures\n");
