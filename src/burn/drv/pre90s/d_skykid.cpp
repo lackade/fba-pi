@@ -18,7 +18,6 @@ static UINT8 *DrvGfxROM2;
 static UINT8 *DrvColPROM;
 static UINT8 *DrvHD63701RAM1;
 static UINT8 *DrvHD63701RAM;
-static UINT8 *DrvWavRAM;
 static UINT8 *DrvVidRAM;
 static UINT8 *DrvTxtRAM;
 static UINT8 *DrvSprRAM;
@@ -44,6 +43,8 @@ static UINT8 DrvJoy4[8];
 static UINT8 DrvDips[3];
 static UINT8 DrvReset;
 static UINT8 DrvInputs[8];
+
+static INT32 drgnbstr = 0;
 
 static INT32 nCyclesDone[2];
 
@@ -512,12 +513,16 @@ static INT32 DrvDoReset(INT32 ClearRAM)
 	m6809Bankswitch(0);
 	M6809Close();
 
-//	HD63701Open(0);
+	HD63701Open(0);
 	HD63701Reset();
-//	HD63701Close();
+	HD63701Close();
+
+	NamcoSoundReset();
 
 	watchdog = 0;
 	hd63701_in_reset = 0;
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -541,9 +546,6 @@ static INT32 MemIndex()
 
 	DrvHD63701RAM1		= Next; Next += 0x000080;
 	DrvHD63701RAM		= Next; Next += 0x000800;
-
-	NamcoSoundProm		= Next;
-	DrvWavRAM		= Next; Next += 0x000500;
 
 	DrvVidRAM		= Next; Next += 0x001000;
 	DrvTxtRAM		= Next; Next += 0x000800;
@@ -600,7 +602,7 @@ static INT32 DrvInit()
 		DrvPaletteInit();
 	}
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvM6809ROM + 0x10000,		0x0000, 0x1fff, MAP_ROM);
 	M6809MapMemory(DrvVidRAM,			0x2000, 0x2fff, MAP_RAM);
@@ -611,8 +613,8 @@ static INT32 DrvInit()
 	M6809SetReadHandler(skykid_main_read);
 	M6809Close();
 
-	HD63701Init(1);
-//	HD63701Open(0);
+	HD63701Init(0);
+	HD63701Open(0);
 	HD63701MapMemory(DrvHD63701ROM + 0x8000,	0x8000, 0xbfff, MAP_ROM);
 	HD63701MapMemory(DrvHD63701RAM,			0xc000, 0xc7ff, MAP_RAM);
 	HD63701MapMemory(DrvHD63701ROM + 0xf000,	0xf000, 0xffff, MAP_ROM);
@@ -620,9 +622,9 @@ static INT32 DrvInit()
 	HD63701SetWriteHandler(skykid_mcu_write);
 	HD63701SetReadPortHandler(skykid_mcu_read_port);
 	HD63701SetWritePortHandler(skykid_mcu_write_port);
-//	HD63701Close();
+	HD63701Close();
 
-	NamcoSoundInit(49152000/2048, 8);
+	NamcoSoundInit(49152000/2048, 8, 0);
 	NacmoSoundSetAllRoutes(0.50, BURN_SND_ROUTE_BOTH); // MAME uses 1.00, which is way too loud
 
 	GenericTilesInit();
@@ -643,17 +645,19 @@ static INT32 DrvExit()
 
 	BurnFree (AllMem);
 
-	NamcoSoundProm = NULL;
+	drgnbstr = 0;
 
 	return 0;
 }
 
-static void draw_fg_layer()
+static void draw_fg_layer(INT32 drgnbstr_hud)
 {
 	INT32 bank = *flipscreen ? 0x100 : 0;
 
 	for (INT32 y = 0; y < 28; y++)
 	{
+		if (drgnbstr && drgnbstr_hud && y > 1) break; // re-draw hud to cover sprites
+
 		for (INT32 x = 0; x < 36; x++)
 		{
 			INT32 col = x - 2;
@@ -761,13 +765,19 @@ static INT32 DrvDraw()
 		DrvRecalc = 0;
 	}
 
-	draw_bg_layer();
+	BurnTransferClear();
 
-	if (*priority == 0) draw_sprites();
+	if (nBurnLayer & 1) draw_bg_layer();
 
-	draw_fg_layer();
+	if (nSpriteEnable & 1 && *priority == 0) draw_sprites();
 
-	if (*priority == 1) draw_sprites();
+	if (nBurnLayer & 2) draw_fg_layer(0);
+
+	if (nSpriteEnable & 2 && *priority == 1) {
+		draw_sprites();
+		// redraw the hud - dragon buster needs to keep sprites out of this area
+		if (drgnbstr && nBurnLayer & 4) draw_fg_layer(1);
+	}
 
 	BurnTransferCopy(DrvPalette);
 
@@ -805,24 +815,24 @@ static INT32 DrvFrame()
 	M6809NewFrame();
 	HD63701NewFrame();
 
-	INT32 nInterleave = 10;
+	INT32 nInterleave = 256;
 	INT32 nSoundBufferPos = 0;
 	INT32 nCyclesTotal[2] = { 1536000 / 60, 1536000 / 60 };
 	nCyclesDone[0] = nCyclesDone[1] = 0;
+
+	M6809Open(0);
+	HD63701Open(0);
 
 	for (INT32 i = 0; i < nInterleave; i++)
 	{
 		INT32 nNext;
 
-		M6809Open(0);
 		nNext = (i + 1) * nCyclesTotal[0] / nInterleave;
 		nCyclesDone[0] += M6809Run(nNext - nCyclesDone[0]);
 		if (i == (nInterleave - 1) && interrupt_enable[0]) {
 			M6809SetIRQLine(0, CPU_IRQSTATUS_ACK);
 		}
-		M6809Close();
 
-	//	HD63701Open(0);
 		if (hd63701_in_reset == 0) {
 			sync_HD63701(1);
 
@@ -832,8 +842,7 @@ static INT32 DrvFrame()
 		} else {
 			sync_HD63701(0);
 		}
-		//	HD63701Close();
-		
+
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
@@ -841,6 +850,9 @@ static INT32 DrvFrame()
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
+
+	HD63701Close();
+	M6809Close();
 
 	if (pBurnSoundOut) {
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
@@ -866,7 +878,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		*pnMin = 0x029707;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -923,8 +935,8 @@ struct BurnDriver BurnDrvSkykid = {
 	"skykid", NULL, NULL, NULL, "1985",
 	"Sky Kid (new version)\0", NULL, "Namco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
-	NULL, skykidRomInfo, skykidRomName, NULL, NULL, SkykidInputInfo, SkykidDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
+	NULL, skykidRomInfo, skykidRomName, NULL, NULL, NULL, NULL, SkykidInputInfo, SkykidDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	288, 224, 4, 3
 };
@@ -961,8 +973,8 @@ struct BurnDriver BurnDrvSkykido = {
 	"skykido", "skykid", NULL, NULL, "1985",
 	"Sky Kid (old version)\0", NULL, "Namco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
-	NULL, skykidoRomInfo, skykidoRomName, NULL, NULL, SkykidInputInfo, SkykidDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
+	NULL, skykidoRomInfo, skykidoRomName, NULL, NULL, NULL, NULL, SkykidInputInfo, SkykidDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	288, 224, 4, 3
 };
@@ -999,8 +1011,8 @@ struct BurnDriver BurnDrvSkykidd = {
 	"skykidd", "skykid", NULL, NULL, "1985",
 	"Sky Kid (CUS60 version)\0", NULL, "Namco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
-	NULL, skykiddRomInfo, skykiddRomName, NULL, NULL, SkykidInputInfo, SkykidDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
+	NULL, skykiddRomInfo, skykiddRomName, NULL, NULL, NULL, NULL, SkykidInputInfo, SkykidDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	288, 224, 4, 3
 };
@@ -1037,12 +1049,18 @@ struct BurnDriver BurnDrvSkykids = {
 	"skykids", "skykid", NULL, NULL, "1985",
 	"Sky Kid (Sipem)\0", NULL, "Namco [Sipem license]", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
-	NULL, skykidsRomInfo, skykidsRomName, NULL, NULL, SkykidInputInfo, SkykidsDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
+	NULL, skykidsRomInfo, skykidsRomName, NULL, NULL, NULL, NULL, SkykidInputInfo, SkykidsDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	288, 224, 4, 3
 };
 
+static INT32 DrgnbstrInit()
+{
+	drgnbstr = 1;
+
+	return DrvInit();
+}
 
 // Dragon Buster
 
@@ -1075,8 +1093,8 @@ struct BurnDriver BurnDrvDrgnbstr = {
 	"drgnbstr", NULL, NULL, NULL, "1984",
 	"Dragon Buster\0", "Missing sounds", "Namco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_SCRFIGHT, 0,
-	NULL, drgnbstrRomInfo, drgnbstrRomName, NULL, NULL, SkykidInputInfo, DrgnbstrDIPInfo,
-	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SCRFIGHT, 0,
+	NULL, drgnbstrRomInfo, drgnbstrRomName, NULL, NULL, NULL, NULL, SkykidInputInfo, DrgnbstrDIPInfo,
+	DrgnbstrInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	288, 224, 4, 3
 };

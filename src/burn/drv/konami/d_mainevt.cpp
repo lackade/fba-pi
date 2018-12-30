@@ -1,8 +1,6 @@
 // FB Alpha The Main Event / Devastators driver module
 // Based on MAME driver by Bryan McPhail
 
-// Why is The Main Event messed up? Very strange...
-
 #include "tiles_generic.h"
 #include "z80_intf.h"
 #include "hd6309_intf.h"
@@ -567,7 +565,7 @@ UINT8 __fastcall mainevt_sound_read(UINT16 address)
 
 		case 0xc000:
 		case 0xc001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 
 		case 0xd000:
 			return UPD7759BusyRead(0);
@@ -581,7 +579,7 @@ UINT8 __fastcall mainevt_sound_read(UINT16 address)
 	return 0;
 }
 
-static void K052109Callback(INT32 layer, INT32 , INT32 *code, INT32 *color, INT32 *flipx, INT32 *priority)
+static void K052109Callback(INT32 layer, INT32 /*bank*/, INT32 *code, INT32 *color, INT32 *flipx, INT32 *priority)
 {
 	INT32 colorbase[3] = { 0, 8, 4 };
 
@@ -625,12 +623,14 @@ static INT32 DrvDoReset()
 
 	HD6309Open(0);
 	HD6309Reset();
+	bankswitch(0);
 	HD6309Close();
 
 	ZetOpen(0);
 	ZetReset();
 	ZetClose();
 
+	K007232Reset(0);
 	BurnYM2151Reset();
 
 	UPD7759Reset();
@@ -707,8 +707,8 @@ static INT32 DrvInit(INT32 type)
 		if (BurnLoadRom(DrvSndROM1 + 0x020000,  9, 1)) return 1;
 		memcpy (DrvSndROM1, DrvSndROM1 + 0x20000, 0x20000);
 
-		K052109GfxDecode(DrvGfxROM0, DrvGfxROMExp0, 0x040000);
-		K051960GfxDecode(DrvGfxROM1, DrvGfxROMExp1, 0x080000);
+		K052109GfxDecode(DrvGfxROM0, DrvGfxROMExp0, 0x020000 << nGame);
+		K051960GfxDecode(DrvGfxROM1, DrvGfxROMExp1, 0x100000);
 	}
 
 	HD6309Init(0);
@@ -777,6 +777,7 @@ static INT32 DrvDraw()
 	KonamiRecalcPalette(DrvHD6309RAM + 0x1e00, DrvPalette, 0x200);
 
 	K052109UpdateScroll();
+	KonamiClearBitmaps(0);
 
 	if (nGame)
 	{
@@ -787,8 +788,6 @@ static INT32 DrvDraw()
 	}
 	else
 	{
-		KonamiClearBitmaps(0);
-
 		if (nBurnLayer & 1) K052109RenderLayer(1, K052109_OPAQUE, 1);
 		if (nBurnLayer & 4) K052109RenderLayer(2, K052109_CATEGORY(1), 2);
 		if (nBurnLayer & 2) K052109RenderLayer(2, K052109_CATEGORY(0), 4);
@@ -913,8 +912,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		HD6309Scan(nAction);
 		ZetScan(nAction);
 
-		UPD7759Scan(0, nAction, pnMin);
-		BurnYM2151Scan(nAction);
+		UPD7759Scan(nAction, pnMin);
+		BurnYM2151Scan(nAction, pnMin);
 		K007232Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
@@ -962,12 +961,12 @@ static INT32 mainevtInit()
 	return DrvInit(0);
 }
 
-struct BurnDriverD BurnDrvMainevt = {
+struct BurnDriver BurnDrvMainevt = {
 	"mainevt", NULL, NULL, NULL, "1988",
 	"The Main Event (4 Players ver. Y)\0", NULL, "Konami", "GX799",
 	NULL, NULL, NULL, NULL,
-	0, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, mainevtRomInfo, mainevtRomName, NULL, NULL, MainevtInputInfo, MainevtDIPInfo,
+	BDF_GAME_WORKING, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, mainevtRomInfo, mainevtRomName, NULL, NULL, NULL, NULL, MainevtInputInfo, MainevtDIPInfo,
 	mainevtInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	288, 224, 4, 3
 };
@@ -998,12 +997,12 @@ static struct BurnRomInfo mainevtoRomDesc[] = {
 STD_ROM_PICK(mainevto)
 STD_ROM_FN(mainevto)
 
-struct BurnDriverD BurnDrvMainevto = {
+struct BurnDriver BurnDrvMainevto = {
 	"mainevto", "mainevt", NULL, NULL, "1988",
 	"The Main Event (4 Players ver. F)\0", NULL, "Konami", "GX799",
 	NULL, NULL, NULL, NULL,
-	BDF_CLONE, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, mainevtoRomInfo, mainevtoRomName, NULL, NULL, MainevtInputInfo, MainevtDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, mainevtoRomInfo, mainevtoRomName, NULL, NULL, NULL, NULL, MainevtInputInfo, MainevtDIPInfo,
 	mainevtInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	288, 224, 4, 3
 };
@@ -1034,12 +1033,12 @@ static struct BurnRomInfo mainevt2pRomDesc[] = {
 STD_ROM_PICK(mainevt2p)
 STD_ROM_FN(mainevt2p)
 
-struct BurnDriverD BurnDrvMainevt2p = {
+struct BurnDriver BurnDrvMainevt2p = {
 	"mainevt2p", "mainevt", NULL, NULL, "1988",
 	"The Main Event (2 Players ver. X)\0", NULL, "Konami", "GX799",
 	NULL, NULL, NULL, NULL,
-	BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, mainevt2pRomInfo, mainevt2pRomName, NULL, NULL, Mainevt2pInputInfo, Mainevt2pDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, mainevt2pRomInfo, mainevt2pRomName, NULL, NULL, NULL, NULL, Mainevt2pInputInfo, Mainevt2pDIPInfo,
 	mainevtInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	288, 224, 4, 3
 };
@@ -1070,12 +1069,12 @@ static struct BurnRomInfo ringohjaRomDesc[] = {
 STD_ROM_PICK(ringohja)
 STD_ROM_FN(ringohja)
 
-struct BurnDriverD BurnDrvRingohja = {
+struct BurnDriver BurnDrvRingohja = {
 	"ringohja", "mainevt", NULL, NULL, "1988",
 	"Ring no Ohja (Japan 2 Players ver. N)\0", NULL, "Konami", "GX799",
 	L"\u30EA\u30F3\u30B0\u306E \u738B\u8005 (Japan 2 Players ver. N)\0Ring no Ohja\0", NULL, NULL, NULL,
-	BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, ringohjaRomInfo, ringohjaRomName, NULL, NULL, Mainevt2pInputInfo, Mainevt2pDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, ringohjaRomInfo, ringohjaRomName, NULL, NULL, NULL, NULL, Mainevt2pInputInfo, Mainevt2pDIPInfo,
 	mainevtInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	288, 224, 4, 3
 };
@@ -1111,10 +1110,10 @@ static INT32 devstorsInit()
 
 struct BurnDriver BurnDrvDevstors = {
 	"devstors", NULL, NULL, NULL, "1988",
-	"Devastators (ver. Z)\0", NULL, "Konami", "GX890",
+	"Devastators (ver. Z)\0", "Minor Video glitches in level 2.", "Konami", "GX890",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, devstorsRomInfo, devstorsRomName, NULL, NULL, DevstorsInputInfo, DevstorsDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, devstorsRomInfo, devstorsRomName, NULL, NULL, NULL, NULL, DevstorsInputInfo, DevstorsDIPInfo,
 	devstorsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	224, 304, 3, 4
 };
@@ -1122,8 +1121,76 @@ struct BurnDriver BurnDrvDevstors = {
 
 // Devastators (ver. X)
 
-static struct BurnRomInfo devstors2RomDesc[] = {
+static struct BurnRomInfo devstorsxRomDesc[] = {
 	{ "890x02.k11",		0x10000, 0xe58ebb35, 1 | BRF_PRG | BRF_ESS }, //  0 HD6309 Code
+
+	{ "890k01.f7",		0x08000, 0xd44b3eb0, 2 | BRF_PRG | BRF_ESS }, //  1 Z80 Code
+
+	{ "890f06.f22",		0x10000, 0x26592155, 3 | BRF_GRA },           //  2 K052109 Tiles
+	{ "890f07.h22",		0x10000, 0x6c74fa2e, 3 | BRF_GRA },           //  3
+	{ "890f08.j22",		0x10000, 0x29e12e80, 3 | BRF_GRA },           //  4
+	{ "890f09.k22",		0x10000, 0x67ca40d5, 3 | BRF_GRA },           //  5
+
+	{ "890f04.h4",		0x80000, 0xf16cd1fa, 4 | BRF_GRA },           //  6 K051960 Tiles
+	{ "890f05.k4",		0x80000, 0xda37db05, 4 | BRF_GRA },           //  7
+
+	{ "890f03.d4",		0x80000, 0x19065031, 6 | BRF_GRA },           //  8 K007232 Samples
+
+	{ "63s141n.k14",	0x00100, 0xd3620106, 5 | BRF_OPT },           //  9 Priority Prom
+};
+
+STD_ROM_PICK(devstorsx)
+STD_ROM_FN(devstorsx)
+
+struct BurnDriver BurnDrvDevstorsx = {
+	"devstorsx", "devstors", NULL, NULL, "1988",
+	"Devastators (ver. X)\0", "Minor Video glitches in level 2.", "Konami", "GX890",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, devstorsxRomInfo, devstorsxRomName, NULL, NULL, NULL, NULL, DevstorsInputInfo, Devstors2DIPInfo,
+	devstorsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
+	224, 304, 3, 4
+};
+
+
+// Devastators (ver. V)
+
+static struct BurnRomInfo devstorsvRomDesc[] = {
+	{ "890v02.k11",		0x10000, 0x52f4ccdd, 1 | BRF_PRG | BRF_ESS }, //  0 HD6309 Code
+
+	{ "890k01.f7",		0x08000, 0xd44b3eb0, 2 | BRF_PRG | BRF_ESS }, //  1 Z80 Code
+
+	{ "890f06.f22",		0x10000, 0x26592155, 3 | BRF_GRA },           //  2 K052109 Tiles
+	{ "890f07.h22",		0x10000, 0x6c74fa2e, 3 | BRF_GRA },           //  3
+	{ "890f08.j22",		0x10000, 0x29e12e80, 3 | BRF_GRA },           //  4
+	{ "890f09.k22",		0x10000, 0x67ca40d5, 3 | BRF_GRA },           //  5
+
+	{ "890f04.h4",		0x80000, 0xf16cd1fa, 4 | BRF_GRA },           //  6 K051960 Tiles
+	{ "890f05.k4",		0x80000, 0xda37db05, 4 | BRF_GRA },           //  7
+
+	{ "890f03.d4",		0x80000, 0x19065031, 6 | BRF_GRA },           //  8 K007232 Samples
+
+	{ "63s141n.k14",	0x00100, 0xd3620106, 5 | BRF_OPT },           //  9 Priority Prom
+};
+
+STD_ROM_PICK(devstorsv)
+STD_ROM_FN(devstorsv)
+
+struct BurnDriver BurnDrvDevstorsv = {
+	"devstorsv", "devstors", NULL, NULL, "1988",
+	"Devastators (ver. V)\0", "Minor Video glitches in level 2.", "Konami", "GX890",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, devstorsvRomInfo, devstorsvRomName, NULL, NULL, NULL, NULL, DevstorsInputInfo, DevstorsDIPInfo,
+	devstorsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
+	224, 304, 3, 4
+};
+
+
+// Devastators (ver. 2)
+
+static struct BurnRomInfo devstors2RomDesc[] = {
+	{ "890_202.k11",	0x10000, 0xafbf0951, 1 | BRF_PRG | BRF_ESS }, //  0 HD6309 Code
 
 	{ "890k01.f7",		0x08000, 0xd44b3eb0, 2 | BRF_PRG | BRF_ESS }, //  1 Z80 Code
 
@@ -1145,44 +1212,10 @@ STD_ROM_FN(devstors2)
 
 struct BurnDriver BurnDrvDevstors2 = {
 	"devstors2", "devstors", NULL, NULL, "1988",
-	"Devastators (ver. X)\0", NULL, "Konami", "GX890",
+	"Devastators (ver. 2)\0", "Minor Video glitches in level 2.", "Konami", "GX890",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, devstors2RomInfo, devstors2RomName, NULL, NULL, DevstorsInputInfo, Devstors2DIPInfo,
-	devstorsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
-	224, 304, 3, 4
-};
-
-
-// Devastators (ver. V)
-
-static struct BurnRomInfo devstors3RomDesc[] = {
-	{ "890v02.k11",		0x10000, 0x52f4ccdd, 1 | BRF_PRG | BRF_ESS }, //  0 HD6309 Code
-
-	{ "890k01.f7",		0x08000, 0xd44b3eb0, 2 | BRF_PRG | BRF_ESS }, //  1 Z80 Code
-
-	{ "890f06.f22",		0x10000, 0x26592155, 3 | BRF_GRA },           //  2 K052109 Tiles
-	{ "890f07.h22",		0x10000, 0x6c74fa2e, 3 | BRF_GRA },           //  3
-	{ "890f08.j22",		0x10000, 0x29e12e80, 3 | BRF_GRA },           //  4
-	{ "890f09.k22",		0x10000, 0x67ca40d5, 3 | BRF_GRA },           //  5
-
-	{ "890f04.h4",		0x80000, 0xf16cd1fa, 4 | BRF_GRA },           //  6 K051960 Tiles
-	{ "890f05.k4",		0x80000, 0xda37db05, 4 | BRF_GRA },           //  7
-
-	{ "890f03.d4",		0x80000, 0x19065031, 6 | BRF_GRA },           //  8 K007232 Samples
-
-	{ "63s141n.k14",	0x00100, 0xd3620106, 5 | BRF_OPT },           //  9 Priority Prom
-};
-
-STD_ROM_PICK(devstors3)
-STD_ROM_FN(devstors3)
-
-struct BurnDriver BurnDrvDevstors3 = {
-	"devstors3", "devstors", NULL, NULL, "1988",
-	"Devastators (ver. V)\0", NULL, "Konami", "GX890",
-	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, devstors3RomInfo, devstors3RomName, NULL, NULL, DevstorsInputInfo, DevstorsDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, devstors2RomInfo, devstors2RomName, NULL, NULL, NULL, NULL, DevstorsInputInfo, Devstors2DIPInfo,
 	devstorsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	224, 304, 3, 4
 };
@@ -1213,10 +1246,10 @@ STD_ROM_FN(garuka)
 
 struct BurnDriver BurnDrvGaruka = {
 	"garuka", "devstors", NULL, NULL, "1988",
-	"Garuka (Japan ver. W)\0", NULL, "Konami", "GX890",
+	"Garuka (Japan ver. W)\0", "Minor Video glitches in level 2.", "Konami", "GX890",
 	L"\u9913\u6D41\u798D (Japan ver. W)\0Garuka\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, garukaRomInfo, garukaRomName, NULL, NULL, DevstorsInputInfo, Devstors2DIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, garukaRomInfo, garukaRomName, NULL, NULL, NULL, NULL, DevstorsInputInfo, Devstors2DIPInfo,
 	devstorsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	224, 304, 3, 4
 };

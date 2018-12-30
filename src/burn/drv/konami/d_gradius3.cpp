@@ -440,7 +440,7 @@ static UINT8 __fastcall gradius3_sound_read(UINT16 address)
 			return *soundlatch;
 
 		case 0xf031:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 	}
 
 	return 0;
@@ -490,6 +490,7 @@ static INT32 DrvDoReset()
 	ZetReset();
 	ZetClose();
 
+	K007232Reset(0);
 	BurnYM2151Reset();
 
 	KonamiICReset();
@@ -578,10 +579,10 @@ static INT32 DrvInit()
 
 		if (BurnLoadRomExt(DrvGfxROM1 + 0x000000, 11, 4, LD_GROUP(2))) return 1;
 		if (BurnLoadRomExt(DrvGfxROM1 + 0x000002, 12, 4, LD_GROUP(2))) return 1;
-		if (BurnLoadRom(DrvGfxROM1 + 0x100000, 12, 4)) return 1;
-		if (BurnLoadRom(DrvGfxROM1 + 0x100001, 13, 4)) return 1;
-		if (BurnLoadRom(DrvGfxROM1 + 0x100002, 14, 4)) return 1;
-		if (BurnLoadRom(DrvGfxROM1 + 0x100003, 15, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100000, 13, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100001, 14, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100002, 15, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100003, 16, 4)) return 1;
 		if (BurnLoadRom(DrvGfxROM1 + 0x180000, 17, 4)) return 1;
 		if (BurnLoadRom(DrvGfxROM1 + 0x180001, 18, 4)) return 1;
 		if (BurnLoadRom(DrvGfxROM1 + 0x180002, 19, 4)) return 1;
@@ -590,6 +591,115 @@ static INT32 DrvInit()
 		if (BurnLoadRom(DrvSndROM  + 0x000000, 21, 1)) return 1;
 		if (BurnLoadRom(DrvSndROM  + 0x040000, 22, 1)) return 1;
 		if (BurnLoadRom(DrvSndROM  + 0x060000, 23, 1)) return 1;
+
+		DrvGfxDecode();
+	}
+
+	SekInit(0, 0x68000);
+	SekOpen(0);
+	SekMapMemory(Drv68KROM0,		0x000000, 0x03ffff, MAP_ROM);
+	SekMapMemory(Drv68KRAM0,		0x040000, 0x043fff, MAP_RAM);
+	SekMapMemory(DrvPalRAM,			0x080000, 0x080fff, MAP_RAM);
+	SekMapMemory(DrvShareRAM,		0x100000, 0x103fff, MAP_RAM);
+	SekMapMemory(DrvShareRAM2,		0x180000, 0x19ffff, MAP_ROM);
+	SekSetWriteWordHandler(0,		gradius3_main_write_word);
+	SekSetWriteByteHandler(0,		gradius3_main_write_byte);
+	SekSetReadWordHandler(0,		gradius3_main_read_word);
+	SekSetReadByteHandler(0,		gradius3_main_read_byte);
+	SekClose();
+
+	SekInit(1, 0x68000);
+	SekOpen(1);
+	SekMapMemory(Drv68KROM1,		0x000000, 0x0fffff, MAP_ROM);
+	SekMapMemory(Drv68KRAM1,		0x100000, 0x103fff, MAP_RAM);
+	SekMapMemory(DrvShareRAM,		0x200000, 0x203fff, MAP_RAM);
+	SekMapMemory(DrvShareRAM2,		0x280000, 0x29ffff, MAP_ROM);
+	SekMapMemory(DrvGfxROM1,		0x400000, 0x5fffff, MAP_ROM);
+	SekSetWriteWordHandler(0,		gradius3_sub_write_word);
+	SekSetWriteByteHandler(0,		gradius3_sub_write_byte);
+	SekSetReadWordHandler(0,		gradius3_sub_read_word);
+	SekSetReadByteHandler(0,		gradius3_sub_read_byte);
+	SekClose();
+
+	ZetInit(0);
+	ZetOpen(0);
+	ZetMapArea(0x0000, 0xefff, 0, DrvZ80ROM);
+	ZetMapArea(0x0000, 0xefff, 2, DrvZ80ROM);
+	ZetMapArea(0xf800, 0xffff, 0, DrvZ80RAM);
+	ZetMapArea(0xf800, 0xffff, 1, DrvZ80RAM);
+	ZetMapArea(0xf800, 0xffff, 2, DrvZ80RAM);
+	ZetSetWriteHandler(gradius3_sound_write);
+	ZetSetReadHandler(gradius3_sound_read);
+	ZetClose();
+
+	BurnYM2151Init(3579545);
+	BurnYM2151SetRoute(BURN_SND_YM2151_YM2151_ROUTE_1, 1.00, BURN_SND_ROUTE_LEFT);
+	BurnYM2151SetRoute(BURN_SND_YM2151_YM2151_ROUTE_2, 1.00, BURN_SND_ROUTE_RIGHT);
+
+	K007232Init(0, 3579545, DrvSndROM, 0x80000);
+	K007232SetPortWriteHandler(0, DrvK007232VolCallback);
+	K007232PCMSetAllRoutes(0, 0.20, BURN_SND_ROUTE_BOTH);
+
+	K052109Init(DrvShareRAM2, DrvGfxROMExp0, 0x1ffff);
+	K052109SetCallback(K052109Callback);
+	K052109AdjustScroll(-8, 0);
+
+	K051960Init(DrvGfxROM1, DrvGfxROMExp1, 0x1fffff);
+	K051960SetCallback(K051960Callback);
+	K051960SetSpriteOffset(-8, 0);
+
+	DrvDoReset();
+
+	return 0;
+}
+
+static INT32 DrvbInit()
+{
+	GenericTilesInit();
+
+	AllMem = NULL;
+	MemIndex();
+	INT32 nLen = MemEnd - (UINT8 *)0;
+	if ((AllMem = (UINT8 *)BurnMalloc(nLen)) == NULL) return 1;
+	memset(AllMem, 0, nLen);
+	MemIndex();
+
+	{
+		if (BurnLoadRom(Drv68KROM0 + 0x000001,  0, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM0 + 0x000000,  1, 2)) return 1;
+
+		if (BurnLoadRom(Drv68KROM1 + 0x000001,  2, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x000000,  3, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x040001,  4, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x040000,  5, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x080001,  6, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x080000,  7, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x0c0001,  8, 2)) return 1;
+		if (BurnLoadRom(Drv68KROM1 + 0x0c0000,  9, 2)) return 1;
+
+		if (BurnLoadRom(DrvZ80ROM  + 0x000000, 10, 1)) return 1;
+
+		if (BurnLoadRom(DrvGfxROM1 + 0x000000, 11, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x000001, 12, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x000002, 13, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x000003, 14, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x080000, 15, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x080001, 16, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x080002, 17, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x080003, 18, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100000, 19, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100001, 20, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100002, 21, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x100003, 22, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x180000, 23, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x180001, 24, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x180002, 25, 4)) return 1;
+		if (BurnLoadRom(DrvGfxROM1 + 0x180003, 26, 4)) return 1;
+
+		if (BurnLoadRom(DrvSndROM  + 0x000000, 27, 1)) return 1;
+		if (BurnLoadRom(DrvSndROM  + 0x020000, 28, 1)) return 1;
+		if (BurnLoadRom(DrvSndROM  + 0x040000, 29, 1)) return 1;
+		if (BurnLoadRom(DrvSndROM  + 0x060000, 30, 1)) return 1;
 
 		DrvGfxDecode();
 	}
@@ -764,7 +874,7 @@ static INT32 DrvFrame()
 		SekOpen(0);
 		nCycleSegment = (nCyclesTotal[0] / nInterleave) * (i + 1);
 		nCyclesDone[0] += SekRun(nCycleSegment - nCyclesDone[0]);
-		if (i == nInterleave - 1 && irqA_enable) SekSetIRQLine(2, CPU_IRQSTATUS_AUTO);
+		if (i == 240 && irqA_enable) SekSetIRQLine(2, CPU_IRQSTATUS_AUTO);
 		SekClose();
 
 		if (gradius3_cpub_enable) {
@@ -786,7 +896,6 @@ static INT32 DrvFrame()
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 			BurnYM2151Render(pSoundBuf, nSegmentLength);
-			//K007232Update(0, pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 
@@ -798,9 +907,8 @@ static INT32 DrvFrame()
 		if (nSegmentLength) {
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 			BurnYM2151Render(pSoundBuf, nSegmentLength);
-			//K007232Update(0, pSoundBuf, nSegmentLength);
 		}
-		K007232Update(0, pBurnSoundOut, nBurnSoundLen);
+		K007232Update(0, pBurnSoundOut, nBurnSoundLen); // only update K007232 once per frame
 	}
 
 	ZetClose();
@@ -831,7 +939,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
+		BurnYM2151Scan(nAction, pnMin);
 		K007232Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
@@ -850,7 +958,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 }
 
 
-// Gradius III (World)
+// Gradius III (World, program code R)
 
 static struct BurnRomInfo grdius3RomDesc[] = {
 	{ "945_r13.f15",	0x20000, 0xcffd103f, 1 | BRF_PRG | BRF_ESS }, //  0 68k #0 Code
@@ -890,16 +998,16 @@ STD_ROM_FN(grdius3)
 
 struct BurnDriver BurnDrvGrdius3 = {
 	"gradius3", NULL, NULL, NULL, "1989",
-	"Gradius III (World)\0", NULL, "Konami", "GX945",
+	"Gradius III (World, program code R)\0", NULL, "Konami", "GX945",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT, 0,
-	NULL, grdius3RomInfo, grdius3RomName, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
+	NULL, grdius3RomInfo, grdius3RomName, NULL, NULL, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };
 
 
-// Gradius III (Japan)
+// Gradius III (Japan, program code S)
 
 static struct BurnRomInfo gradius3jRomDesc[] = {
 	{ "945_s13.f15",	0x20000, 0x70c240a2, 1 | BRF_PRG | BRF_ESS }, //  0 68k #0 Code
@@ -939,11 +1047,68 @@ STD_ROM_FN(gradius3j)
 
 struct BurnDriver BurnDrvGradius3j = {
 	"gradius3j", "gradius3", NULL, NULL, "1989",
-	"Gradius III (Japan)\0", NULL, "Konami", "GX945",
-	L"Gradius III \u4F1D\u8AAC\u304B\u3089\u795E\u8A71\u3078 (Japan)\0", NULL, NULL, NULL,
+	"Gradius III (Japan, program code S)\0", NULL, "Konami", "GX945",
+	L"Gradius III \u4F1D\u8AAC\u304B\u3089\u795E\u8A71\u3078 (Japan, program code S)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT, 0,
-	NULL, gradius3jRomInfo, gradius3jRomName, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
+	NULL, gradius3jRomInfo, gradius3jRomName, NULL, NULL, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
+	320, 224, 4, 3
+};
+
+
+// Gradius III (Japan, program code S, split)
+// same as normal gradius3j set in content but with some ROMs split and populated differently.
+
+static struct BurnRomInfo gradius3jsRomDesc[] = {
+	{ "945_s13.f15",	0x20000, 0x70c240a2, 1 | BRF_PRG | BRF_ESS }, //  0 68k #0 Code
+	{ "945_s12.e15",	0x20000, 0xbbc300d4, 1 | BRF_PRG | BRF_ESS }, //  1
+
+	{ "945_m09.r17",	0x20000, 0xb4a6df25, 2 | BRF_PRG | BRF_ESS }, //  2 68k #1 Code
+	{ "945_m08.n17",	0x20000, 0x74e981d2, 2 | BRF_PRG | BRF_ESS }, //  3
+	{ "945_l06b.r11",	0x20000, 0x83772304, 2 | BRF_PRG | BRF_ESS }, //  4
+	{ "945_l06a.n11",	0x20000, 0xe1fd75b6, 2 | BRF_PRG | BRF_ESS }, //  5
+	{ "945_l07c.r15",	0x20000, 0xc1e399b6, 2 | BRF_PRG | BRF_ESS }, //  6
+	{ "945_l07a.n15",	0x20000, 0x96222d04, 2 | BRF_PRG | BRF_ESS }, //  7
+	{ "945_l07d.r13",	0x20000, 0x4c16d4bd, 2 | BRF_PRG | BRF_ESS }, //  8
+	{ "945_l07b.n13",	0x20000, 0x5e209d01, 2 | BRF_PRG | BRF_ESS }, //  9
+
+	{ "945_m05.d9",		0x10000, 0xc8c45365, 3 | BRF_PRG | BRF_ESS }, // 10 Z80 Code
+
+	{ "945_a02a.k2",	0x20000, 0xfbb81511, 4 | BRF_GRA },           // 11 Sprites
+	{ "945_a02c.m2",	0x20000, 0x031b55e8, 4 | BRF_GRA },           // 12
+	{ "945_a01a.e2",	0x20000, 0xbace5abb, 4 | BRF_GRA },           // 13
+	{ "945_a01c.h2",	0x20000, 0xd91b29a6, 4 | BRF_GRA },           // 14
+	{ "945_a02b.k4",	0x20000, 0xc0fed4ab, 4 | BRF_GRA },           // 15
+	{ "945_a02d.m4",	0x20000, 0xd462817c, 4 | BRF_GRA },           // 16
+	{ "945_a01b.e4",	0x20000, 0xb426090e, 4 | BRF_GRA },           // 17
+	{ "945_a01d.h4",	0x20000, 0x3990c09a, 4 | BRF_GRA },           // 18
+	{ "945_l04a.k6",	0x20000, 0x884e21ee, 4 | BRF_GRA },           // 19
+	{ "945_l04c.m6",	0x20000, 0x45bcd921, 4 | BRF_GRA },           // 20
+	{ "945_l03a.e6",	0x20000, 0xa67ef087, 4 | BRF_GRA },           // 21
+	{ "945_l03c.h6",	0x20000, 0xa56be17a, 4 | BRF_GRA },           // 22
+	{ "945_l04b.k8",	0x20000, 0x843bc67d, 4 | BRF_GRA },           // 23
+	{ "945_l04d.m8",	0x20000, 0x0a98d08e, 4 | BRF_GRA },           // 24
+	{ "945_l03b.e8",	0x20000, 0x933e68b9, 4 | BRF_GRA },           // 25
+	{ "945_l03d.h8",	0x20000, 0xf375e87b, 4 | BRF_GRA },           // 26
+
+	{ "945_a10a.c14",	0x20000, 0xec717414, 5 | BRF_SND },           // 27 K007232
+	{ "945_a10b.c16",	0x20000, 0x709e30e4, 5 | BRF_SND },           // 28
+	{ "945_l11a.c18",	0x20000, 0x6043f4eb, 5 | BRF_SND },           // 29
+	{ "945_l11b.c20",	0x20000, 0x89ea3baf, 5 | BRF_SND },           // 30
+
+	{ "945l14.j28",		0x00100, 0xc778c189, 6 | BRF_OPT },           // 31 Prom
+};
+
+STD_ROM_PICK(gradius3js)
+STD_ROM_FN(gradius3js)
+
+struct BurnDriver BurnDrvGradius3js = {
+	"gradius3js", "gradius3", NULL, NULL, "1989",
+	"Gradius III (Japan, program code S, split)\0", NULL, "Konami", "GX945",
+	L"Gradius III \u4F1D\u8AAC\u304B\u3089\u795E\u8A71\u3078 (Japan, program code S, split)\0", NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT, 0,
+	NULL, gradius3jsRomInfo, gradius3jsRomName, NULL, NULL, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
+	DrvbInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };
 
@@ -991,7 +1156,7 @@ struct BurnDriver BurnDrvGrdius3a = {
 	"Gradius III (Asia)\0", NULL, "Konami", "GX945",
 	L"Gradius III \u4F1D\u8AAC\u304B\u3089\u795E\u8A71\u3078 (Asia)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT, 0,
-	NULL, grdius3aRomInfo, grdius3aRomName, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
+	NULL, grdius3aRomInfo, grdius3aRomName, NULL, NULL, NULL, NULL, Gradius3InputInfo, Gradius3DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };

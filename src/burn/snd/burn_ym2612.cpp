@@ -1,5 +1,4 @@
 #include "burnint.h"
-#include "burn_sound.h"
 #include "burn_ym2612.h"
 
 #define MAX_YM2612	2
@@ -293,14 +292,13 @@ void BurnYM2612Exit()
 	if (!DebugSnd_YM2612Initted) bprintf(PRINT_ERROR, _T("BurnYM2612Exit called without init\n"));
 #endif
 
+	if (!DebugSnd_YM2612Initted) return;
+
 	YM2612Shutdown();
 
 	BurnTimerExit();
 
-	if (pBuffer) {
-		free(pBuffer);
-		pBuffer = NULL;
-	}
+	BurnFree(pBuffer);
 	
 	nNumChips = 0;
 	bYM2612AddSignal = 0;
@@ -309,6 +307,11 @@ void BurnYM2612Exit()
 }
 
 void BurnStateExit();
+
+INT32 BurnYM2612Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback, INT32 bAddSignal)
+{
+	return BurnYM2612Init(num, nClockFrequency, IRQCallback, BurnSynchroniseStream, BurnGetTime, bAddSignal);
+}
 
 INT32 BurnYM2612Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback, INT32 (*StreamCallback)(INT32), double (*GetTimeCallback)(), INT32 bAddSignal)
 {
@@ -350,7 +353,7 @@ INT32 BurnYM2612Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback
 	
 	YM2612Init(num, nClockFrequency, nBurnYM2612SoundRate, &BurnOPNTimerCallback, IRQCallback);
 
-	pBuffer = (INT16*)malloc(4096 * 2 * num * sizeof(INT16));
+	pBuffer = (INT16*)BurnMalloc(4096 * 2 * num * sizeof(INT16));
 	memset(pBuffer, 0, 4096 * 2 * num * sizeof(INT16));
 	
 	nYM2612Position = 0;

@@ -411,7 +411,7 @@ static INT32 DrvInit()
 	K051316SetOffset(0, -90, -15);
 
 	BurnYM3812Init(1, 3579545, NULL, DrvSynchroniseStream, 0);
-	BurnTimerAttachZetYM3812(3579545);
+	BurnTimerAttachYM3812(&ZetConfig, 3579545);
 	BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 1.00, BURN_SND_ROUTE_BOTH);
 
 	K053260Init(0, 3579545, DrvSndROM, 0x80000);
@@ -534,7 +534,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM3812Scan(nAction, pnMin);
-		K053260Scan(nAction);
+		K053260Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
 
@@ -575,7 +575,7 @@ struct BurnDriver BurnDrvRollerg = {
 	"Rollergames (US)\0", NULL, "Konami", "GX999",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, rollergRomInfo, rollergRomName, NULL, NULL, RollergInputInfo, RollergDIPInfo,
+	NULL, rollergRomInfo, rollergRomName, NULL, NULL, NULL, NULL, RollergInputInfo, RollergDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };
@@ -605,7 +605,7 @@ struct BurnDriver BurnDrvRollergj = {
 	"Rollergames (Japan)\0", NULL, "Konami", "GX999",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, rollergjRomInfo, rollergjRomName, NULL, NULL, RollergInputInfo, RollergDIPInfo,
+	NULL, rollergjRomInfo, rollergjRomName, NULL, NULL, NULL, NULL, RollergInputInfo, RollergDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };

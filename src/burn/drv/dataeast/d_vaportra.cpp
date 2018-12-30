@@ -30,8 +30,6 @@ static UINT8 *DrvSprBuf;
 static UINT32 *DrvPalette;
 static UINT8 DrvRecalc;
 
-static INT16 *SoundBuffer;
-
 static UINT8 *flipscreen;
 static UINT16 *priority;
 
@@ -129,10 +127,16 @@ static struct BurnDIPInfo VaportraDIPList[]=
 
 STDDIPINFO(Vaportra)
 
-void __fastcall vaportra_main_write_word(UINT32 address, UINT16 data)
+static void __fastcall vaportra_main_write_word(UINT32 address, UINT16 data)
 {
 	deco16_write_control_word(1, address, 0x240000, data)
 	deco16_write_control_word(0, address, 0x2c0000, data)
+
+	if ((address & ~0xce0000) >= 0x318000 && (address & ~0xce0000) <= 0x3187ff)
+	{
+		*((UINT16*)(DrvSprRAM + (address & 0x7fe))) = data;
+		return;
+	}
 
 	switch (address)
 	{
@@ -152,8 +156,14 @@ void __fastcall vaportra_main_write_word(UINT32 address, UINT16 data)
 	}
 }
 
-void __fastcall vaportra_main_write_byte(UINT32 address, UINT8 data)
+static void __fastcall vaportra_main_write_byte(UINT32 address, UINT8 data)
 {
+	if ((address & ~0xce0000) >= 0x318000 && (address & ~0xce0000) <= 0x3187ff)
+	{
+		DrvSprRAM[(address & 0x7ff) ^ 1] = data;
+		return;
+	}
+
 	switch (address)
 	{
 		case 0x100000:
@@ -175,8 +185,13 @@ void __fastcall vaportra_main_write_byte(UINT32 address, UINT8 data)
 	}
 }
 
-UINT16 __fastcall vaportra_main_read_word(UINT32 address)
+static UINT16 __fastcall vaportra_main_read_word(UINT32 address)
 {
+	if ((address & ~0xce0000) >= 0x318000 && (address & ~0xce0000) <= 0x3187ff)
+	{
+		return *((UINT16*)(DrvSprRAM + (address & 0x7fe)));
+	}
+
 	switch (address)
 	{
 		case 0x100000:
@@ -199,8 +214,13 @@ UINT16 __fastcall vaportra_main_read_word(UINT32 address)
 	return 0;
 }
 
-UINT8 __fastcall vaportra_main_read_byte(UINT32 address)
+static UINT8 __fastcall vaportra_main_read_byte(UINT32 address)
 {
+	if ((address & ~0xce0000) >= 0x318000 && (address & ~0xce0000) <= 0x3187ff)
+	{
+		return DrvSprRAM[(address & 0x7ff) ^ 1];
+	}
+
 	switch (address)
 	{
 		case 0x100000:
@@ -251,7 +271,6 @@ static INT32 DrvDoReset()
 	deco16SoundReset();
 
 	deco16Reset();
-	deco16_y_skew = 8; // HACK! the background is skewed by 8, causing sprite:layer misalignment (spider mini-boss/level 2, etc.)
 
 	return 0;
 }
@@ -287,9 +306,6 @@ static INT32 MemIndex()
 	priority	= (UINT16*)Next; Next += 0x000002 * sizeof(UINT16);
 
 	RamEnd		= Next;
-	
-	SoundBuffer = (INT16*)Next; Next += nBurnSoundLen * 2 * sizeof(INT16);
-
 	MemEnd		= Next;
 
 	return 0;
@@ -362,6 +378,7 @@ static INT32 DrvInit(INT32 type)
 
 	deco16Init(0, 0, 1);
 	deco16_set_graphics(DrvGfxROM0, 0x100000, DrvGfxROM1, 0x100000, DrvGfxROM2, 0x200000);
+	deco16_set_global_offsets(0, 8);
 	deco16_set_color_base(0, 0x000);
 	deco16_set_color_base(1, 0x200);
 	deco16_set_color_base(2, 0x300);
@@ -380,7 +397,7 @@ static INT32 DrvInit(INT32 type)
 	SekMapMemory(deco16_pf_ram[1],		0x282000, 0x283fff, MAP_RAM);
 	SekMapMemory(DrvPalRAM0,		0x300000, 0x3009ff, MAP_RAM);
 	SekMapMemory(DrvPalRAM1,		0x304000, 0x3049ff, MAP_RAM);
-	SekMapMemory(DrvSprRAM,			0xff8000, 0xff87ff, MAP_RAM);
+//	SekMapMemory(DrvSprRAM,			0xff8000, 0xff87ff, MAP_RAM); // in handler w/mirroring (fixes gameover animation)
 	SekMapMemory(Drv68KRAM,			0xffc000, 0xffffff, MAP_RAM);
 	SekSetWriteWordHandler(0,		vaportra_main_write_word);
 	SekSetWriteByteHandler(0,		vaportra_main_write_byte);
@@ -388,8 +405,10 @@ static INT32 DrvInit(INT32 type)
 	SekSetReadByteHandler(0,		vaportra_main_read_byte);
 	SekClose();
 
-	deco16SoundInit(DrvHucROM, DrvHucRAM, 8055000 / 3, 1, NULL, 0.60, 1006875, 0.75, 2013750, 0.60);
+	deco16SoundInit(DrvHucROM, DrvHucRAM, 8055000, 1, NULL, 0.60, 1006875, 0.75, 2013750, 0.60);
 	BurnYM2203SetAllRoutes(0, 0.60, BURN_SND_ROUTE_BOTH);
+
+	deco16_music_tempofix = 1;
 
 	GenericTilesInit();
 
@@ -402,7 +421,6 @@ static INT32 DrvExit()
 {
 	GenericTilesExit();
 	deco16Exit();
-	deco16_y_skew = 0;
 
 	SekExit();
 	
@@ -541,11 +559,11 @@ static INT32 DrvFrame()
 
 	INT32 nInterleave = 232;
 	INT32 nSoundBufferPos = 0;
-	INT32 nCyclesTotal[2] = { 12000000 / 58, 8055000 / 3 / 58 };
+	INT32 nCyclesTotal[2] = { 12000000 / 58, 8055000 / 58 };
 	INT32 nCyclesDone[2] = { 0, 0 };
 
 	h6280NewFrame();
-	
+
 	SekOpen(0);
 	h6280Open(0);
 
@@ -554,35 +572,32 @@ static INT32 DrvFrame()
 	for (INT32 i = 0; i < nInterleave; i++)
 	{
 		nCyclesDone[0] += SekRun(nCyclesTotal[0] / nInterleave);
-		nCyclesDone[1] += h6280Run(nCyclesTotal[1] / nInterleave);
+		BurnTimerUpdate((i + 1) * nCyclesTotal[1] / nInterleave);
 
 		if (i == 206) {
 			deco16_vblank = 0x08;
 			SekSetIRQLine(6, CPU_IRQSTATUS_AUTO);
 		}
-		
-		INT32 nSegmentLength = nBurnSoundLen / nInterleave;
-		INT16* pSoundBuf = SoundBuffer + (nSoundBufferPos << 1);
-		deco16SoundUpdate(pSoundBuf, nSegmentLength);
-		nSoundBufferPos += nSegmentLength;
+
+		if (pBurnSoundOut) {
+			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+			deco16SoundUpdate(pSoundBuf, nSegmentLength);
+			nSoundBufferPos += nSegmentLength;
+		}
 	}
 
 	BurnTimerEndFrame(nCyclesTotal[1]);
 
 	if (pBurnSoundOut) {
-		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
-		
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
-		INT16* pSoundBuf = SoundBuffer + (nSoundBufferPos << 1);
+		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 
 		if (nSegmentLength) {
 			deco16SoundUpdate(pSoundBuf, nSegmentLength);
 		}
-		
-		for (INT32 i = 0; i < nBurnSoundLen; i++) {
-			pBurnSoundOut[(i << 1) + 0] = BURN_SND_CLIP(pBurnSoundOut[(i << 1) + 0] + SoundBuffer[(i << 1) + 0]);
-			pBurnSoundOut[(i << 1) + 1] = BURN_SND_CLIP(pBurnSoundOut[(i << 1) + 1] + SoundBuffer[(i << 1) + 1]);
-		}
+
+		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
 	}
 
 	h6280Close();
@@ -598,7 +613,7 @@ static INT32 DrvFrame()
 static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
-	
+
 	if (pnMin != NULL) {
 		*pnMin = 0x029722;
 	}
@@ -613,7 +628,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
-	
+
 		deco16SoundScan(nAction, pnMin);
 
 		deco16Scan();
@@ -667,7 +682,7 @@ struct BurnDriver BurnDrvVaportra = {
 	"Vapor Trail - Hyper Offence Formation (World revision 1)\0", NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_DATAEAST, GBF_VERSHOOT, 0,
-	NULL, vaportraRomInfo, vaportraRomName, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
+	NULL, vaportraRomInfo, vaportraRomName, NULL, NULL, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
 	VaportraInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	240, 256, 3, 4
 };
@@ -720,7 +735,7 @@ struct BurnDriver BurnDrvVaportraw3 = {
 	"Vapor Trail - Hyper Offence Formation (World revision 3)\0", NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_DATAEAST, GBF_VERSHOOT, 0,
-	NULL, vaportraw3RomInfo, vaportraw3RomName, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
+	NULL, vaportraw3RomInfo, vaportraw3RomName, NULL, NULL, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
 	Vaportraw3Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	240, 256, 3, 4
 };
@@ -765,7 +780,7 @@ struct BurnDriver BurnDrvVaportrau = {
 	"Vapor Trail - Hyper Offence Formation (US)\0", NULL, "Data East USA", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_DATAEAST, GBF_VERSHOOT, 0,
-	NULL, vaportrauRomInfo, vaportrauRomName, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
+	NULL, vaportrauRomInfo, vaportrauRomName, NULL, NULL, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
 	VaportraInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	240, 256, 3, 4
 };
@@ -804,7 +819,7 @@ struct BurnDriver BurnDrvKuhga = {
 	"Kuhga - Operation Code 'Vapor Trail' (Japan revision 3)\0", NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_DATAEAST, GBF_VERSHOOT, 0,
-	NULL, kuhgaRomInfo, kuhgaRomName, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
+	NULL, kuhgaRomInfo, kuhgaRomName, NULL, NULL, NULL, NULL, VaportraInputInfo, VaportraDIPInfo,
 	VaportraInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x500,
 	240, 256, 3, 4
 };

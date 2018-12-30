@@ -5,10 +5,7 @@
 #include "m6809_intf.h"
 #include "z80_intf.h"
 #include "i8039.h"
-#include "driver.h"
-extern "C" {
 #include "ay8910.h"
-}
 #include "dac.h"
 
 static UINT8 *AllMem;
@@ -27,8 +24,6 @@ static UINT8 *DrvColRAM;
 static UINT8 *DrvShareRAM;
 static UINT8 *DrvZ80RAM;
 static UINT8 *DrvSprRAM;
-
-static INT16 *pAY8910Buffer[6];
 
 static UINT32 *DrvPalette;
 static UINT8  DrvRecalc;
@@ -396,7 +391,9 @@ static INT32 DrvDoReset(INT32 clear_ram)
 	AY8910Reset(0);
 	ZetClose();
 
+	I8039Open(0);
 	I8039Reset();
+	I8039Close();
 
 	DACReset();
 
@@ -413,6 +410,8 @@ static INT32 DrvDoReset(INT32 clear_ram)
 	i8039_status = 0;
 
 	watchdog = 0;
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -442,13 +441,6 @@ static INT32 MemIndex()
 	DrvZ80RAM		= Next; Next += 0x000400;
 
 	RamEnd			= Next;
-
-	pAY8910Buffer[0]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[1]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[2]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[3]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[4]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[5]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
 
 	MemEnd			= Next;
 
@@ -528,7 +520,7 @@ static INT32 DrvInit()
 		DrvPaletteInit();
 	}
 
-	M6809Init(2);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvSprRAM,		0x0000, 0x0fff, MAP_RAM);
 	M6809MapMemory(DrvColRAM,		0x1000, 0x13ff, MAP_RAM);
@@ -540,6 +532,7 @@ static INT32 DrvInit()
 //	M6809SetReadHandler(pandoras_main_read);
 	M6809Close();
 
+	M6809Init(1);
 	M6809Open(1);
 	M6809MapMemory(DrvSprRAM,		0x0000, 0x0fff, MAP_RAM);
 	M6809MapMemory(DrvColRAM,		0x1000, 0x13ff, MAP_RAM);
@@ -558,14 +551,17 @@ static INT32 DrvInit()
 	ZetSetReadHandler(pandoras_sound_read);
 	ZetClose();
 
-	I8039Init(NULL);
+	I8039Init(0);
+	I8039Open(0);
 	I8039SetProgramReadHandler(pandoras_i8039_read);
 	I8039SetCPUOpReadHandler(pandoras_i8039_read);
 	I8039SetCPUOpReadArgHandler(pandoras_i8039_read);
 	I8039SetIOReadHandler(pandoras_i8039_read_port);
 	I8039SetIOWriteHandler(pandoras_i8039_write_port);
+	I8039Close();
 
-	AY8910Init(0, 1789772, nBurnSoundRate, &AY8910_0_port_A_Read, &AY8910_0_port_B_Read, NULL, NULL);
+	AY8910Init(0, 1789772, 0);
+	AY8910SetPorts(0, &AY8910_0_port_A_Read, &AY8910_0_port_B_Read, NULL, NULL);
 	AY8910SetAllRoutes(0, 0.40, BURN_SND_ROUTE_BOTH);
 
 	DACInit(0, 0, 1, DrvSyncDAC);
@@ -698,6 +694,7 @@ static INT32 DrvFrame()
 	INT32 nCyclesDone[4] = { 0, 0, 0, 0 };
 
 	ZetOpen(0);
+	I8039Open(0);
 
 	for (INT32 i = 0; i < nInterleave; i++)
 	{
@@ -722,7 +719,7 @@ static INT32 DrvFrame()
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			AY8910Render(&pAY8910Buffer[0], pSoundBuf, nSegmentLength, 0);
+			AY8910Render(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -731,12 +728,13 @@ static INT32 DrvFrame()
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 		if (nSegmentLength) {
-			AY8910Render(&pAY8910Buffer[0], pSoundBuf, nSegmentLength, 0);
+			AY8910Render(pSoundBuf, nSegmentLength);
 		}
 
 		DACUpdate(pBurnSoundOut, nBurnSoundLen);
 	}
 
+	I8039Close();
 	ZetClose();
 
 	if (pBurnDraw) {
@@ -818,8 +816,8 @@ struct BurnDriver BurnDrvPandoras = {
 	"pandoras", NULL, NULL, NULL, "1984",
 	"Pandora's Palace\0", NULL, "Konami / Interlogic", "GX328",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
-	NULL, pandorasRomInfo, pandorasRomName, NULL, NULL, PandorasInputInfo, PandorasDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
+	NULL, pandorasRomInfo, pandorasRomName, NULL, NULL, NULL, NULL, PandorasInputInfo, PandorasDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };

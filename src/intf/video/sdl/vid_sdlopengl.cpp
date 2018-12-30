@@ -3,15 +3,9 @@
 #include "vid_support.h"
 #include "vid_softfx.h"
 
-#ifdef OSX
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-#include <OpenGL/glext.h>
-#else
 #include <GL/gl.h>
 #include <GL/glu.h>
 #include <GL/glext.h>
-#endif
 
 #ifdef frame_timer
 #include <sys/time.h>
@@ -295,6 +289,9 @@ static int Frame(bool bRedraw) // bRedraw = 0
 		} else {
 			BurnDrvFrame(); // Run one frame and draw the screen
 		}
+
+		if ((BurnDrvGetFlags() & BDF_16BIT_ONLY) && pVidTransCallback)
+			pVidTransCallback();
 	}
 
 	return 0;

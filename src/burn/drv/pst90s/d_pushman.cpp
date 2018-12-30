@@ -383,16 +383,6 @@ static void DrvIRQHandler(INT32, INT32 nStatus)
 	}
 }
 
-inline static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 4000000;
-}
-
-inline static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 4000000.0;
-}
-
 static INT32 DrvDoReset()
 {
 	DrvReset = 0;
@@ -560,7 +550,7 @@ static INT32 DrvInit()
 	m6805SetReadHandler(pushman_mcu_read);
 //	m6805Close();
 
-	BurnYM2203Init(2, 2000000, &DrvIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(2, 2000000, &DrvIRQHandler, 0);
 	BurnTimerAttachZet(4000000);
 	BurnYM2203SetAllRoutes(0, 0.40, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetAllRoutes(1, 0.40, BURN_SND_ROUTE_BOTH);
@@ -843,7 +833,7 @@ struct BurnDriver BurnDrvPushman = {
 	"Pushman (Korea, set 1)\0", NULL, "Comad", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, pushmanRomInfo, pushmanRomName, NULL, NULL, PushmanInputInfo, PushmanDIPInfo,
+	NULL, pushmanRomInfo, pushmanRomName, NULL, NULL, NULL, NULL, PushmanInputInfo, PushmanDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -884,7 +874,7 @@ struct BurnDriver BurnDrvPushmana = {
 	"Pushman (Korea, set 2)\0", NULL, "Comad", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, pushmanaRomInfo, pushmanaRomName, NULL, NULL, PushmanInputInfo, PushmanDIPInfo,
+	NULL, pushmanaRomInfo, pushmanaRomName, NULL, NULL, NULL, NULL, PushmanInputInfo, PushmanDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -925,7 +915,7 @@ struct BurnDriver BurnDrvPushmans = {
 	"Pushman (American Sammy license)\0", NULL, "Comad (American Sammy license)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, pushmansRomInfo, pushmansRomName, NULL, NULL, PushmanInputInfo, PushmanDIPInfo,
+	NULL, pushmansRomInfo, pushmansRomName, NULL, NULL, NULL, NULL, PushmanInputInfo, PushmanDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -939,7 +929,7 @@ static struct BurnRomInfo bballsRomDesc[] = {
 
 	{ "bb13.n4",		0x08000, 0x1ef78175, 2 | BRF_PRG | BRF_ESS }, //  2 Z80 Code
 
-	{ "68705.uc",		0x01000, 0x00000000, 3 | BRF_PRG | BRF_NODUMP }, //  3 M68705 MCU Code
+	{ "mc68705r3.bin",	0x01000, 0x4b37b853, 3 | BRF_PRG }, //  3 M68705 MCU Code
 
 	{ "bb1.g20",		0x08000, 0xb62dbcb8, 4 | BRF_GRA },           //  4 Characters
 
@@ -973,7 +963,7 @@ struct BurnDriver BurnDrvBballs = {
 	"Bouncing Balls\0", NULL, "Comad", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, bballsRomInfo, bballsRomName, NULL, NULL, BballsInputInfo, BballsDIPInfo,
+	NULL, bballsRomInfo, bballsRomName, NULL, NULL, NULL, NULL, BballsInputInfo, BballsDIPInfo,
 	bballsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -987,7 +977,7 @@ static struct BurnRomInfo bballsaRomDesc[] = {
 
 	{ "13.ic216",		0x08000, 0x1ef78175, 2 | BRF_PRG | BRF_ESS }, //  2 Z80 Code
 
-	{ "68705.uc",		0x01000, 0x00000000, 3 | BRF_PRG | BRF_NODUMP }, //  3 M68705 MCU Code
+	{ "mc68705r3.bin",	0x01000, 0x4b37b853, 3 | BRF_PRG }, //  3 M68705 MCU Code
 
 	{ "1.ic130",		0x08000, 0x67672444, 4 | BRF_GRA },           //  4 Characters
 
@@ -1014,7 +1004,7 @@ struct BurnDriver BurnDrvBballsa = {
 	"Bouncing Balls (Adult)\0", NULL, "Comad", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, bballsaRomInfo, bballsaRomName, NULL, NULL, BballsInputInfo, BballsDIPInfo,
+	NULL, bballsaRomInfo, bballsaRomName, NULL, NULL, NULL, NULL, BballsInputInfo, BballsDIPInfo,
 	bballsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };

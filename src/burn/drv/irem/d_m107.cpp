@@ -7,6 +7,7 @@
 #include "nec_intf.h"
 #include "irem_cpu.h"
 #include "iremga20.h"
+#include "stddef.h"
 
 static UINT8 *Mem;
 static UINT8 *MemEnd;
@@ -530,7 +531,7 @@ static UINT8 __fastcall m107SndReadByte(UINT32 address)
 	switch (address)
 	{
 		case 0xa8042:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 
 		case 0xa8044:
 			return sound_latch[0];
@@ -633,20 +634,21 @@ static INT32 MemIndex(INT32 gfxlen1, INT32 gfxlen2)
 	DrvV30RAM	= Next; Next += 0x004000;
 	DrvPalRAM	= Next; Next += 0x001000;
 
-	sound_status	= Next; Next += 0x000002;
-	sound_latch	= Next; Next += 0x000001;
+	sound_status	= Next; Next += 0x000004; // 2
+	sound_latch	= Next; Next += 0x000004; // 1
 
 	pf_control[0]	= Next; Next += 0x000008;
 	pf_control[1]	= Next; Next += 0x000008;
 	pf_control[2]	= Next; Next += 0x000008;
 	pf_control[3]	= Next; Next += 0x000008;
 
+	RamEnd		= Next;
+
+	// scanned separately from ram due to pointers in structs
 	m107_layers[0]	= (struct _m107_layer*)Next; Next += sizeof(struct _m107_layer);
 	m107_layers[1]	= (struct _m107_layer*)Next; Next += sizeof(struct _m107_layer);
 	m107_layers[2]	= (struct _m107_layer*)Next; Next += sizeof(struct _m107_layer);
 	m107_layers[3]	= (struct _m107_layer*)Next; Next += sizeof(struct _m107_layer);
-
-	RamEnd		= Next;
 
 	DrvPalette	= (UINT32 *) Next; Next += 0x0800 * sizeof(UINT32);
 
@@ -1078,7 +1080,7 @@ static INT32 DrvFrame()
 	nCyclesTotal[1] = (INT32)((INT64)(7159090 / 60) * nBurnCPUSpeedAdjust / 0x0100);
 
 	if (pBurnSoundOut) {
-		memset (pBurnSoundOut, 0, nBurnSoundLen * 2 * sizeof(INT16));
+		BurnSoundClear();
 	}
 
 	nInterleave = 256 * 8; // * 8 for tight sync
@@ -1151,14 +1153,19 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		ba.nLen	  = RamEnd-RamStart;
 		ba.szName = "All Ram";
 		BurnAcb(&ba);
+
+		ScanVar(m107_layers[0], STRUCT_SIZE_HELPER(_m107_layer, scrolly), "m107 pf0");
+		ScanVar(m107_layers[1], STRUCT_SIZE_HELPER(_m107_layer, scrolly), "m107 pf1");
+		ScanVar(m107_layers[2], STRUCT_SIZE_HELPER(_m107_layer, scrolly), "m107 pf2");
+		ScanVar(m107_layers[3], STRUCT_SIZE_HELPER(_m107_layer, scrolly), "m107 pf3");
 	}
 
 	if (nAction & ACB_DRIVER_DATA)
 	{
 		VezScan(nAction);
 
-		iremga20_scan(0, nAction, pnMin);
-		BurnYM2151Scan(nAction);
+		iremga20_scan(nAction, pnMin);
+		BurnYM2151Scan(nAction, pnMin);
 
 		SCAN_VAR(raster_irq_position);
 		SCAN_VAR(sound_cpu_reset);
@@ -1167,8 +1174,6 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 	}
 
 	if (nAction & ACB_WRITE) {
-		bRecalcPalette = 1;
-
 		for (INT32 i = 0; i < 4; i++) {
 			set_pf_scroll(i);
 			set_pf_info(i);
@@ -1254,10 +1259,10 @@ static INT32 airassInit()
 
 struct BurnDriver BurnDrvAirass = {
 	"airass", NULL, NULL, NULL, "1993",
-	"Air Assault (World)\0", NULL, "Irem", "M107",
+	"Air Assault (World)\0", NULL, "Irem", "Irem M107",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_IREM_MISC, GBF_VERSHOOT, 0,
-	NULL, airassRomInfo, airassRomName, NULL, NULL, FirebarrInputInfo, FirebarrDIPInfo,
+	NULL, airassRomInfo, airassRomName, NULL, NULL, NULL, NULL, FirebarrInputInfo, FirebarrDIPInfo,
 	airassInit, DrvExit, DrvFrame, DrvReDraw, DrvScan, &bRecalcPalette, 0x800,
 	240, 320, 3, 4
 };
@@ -1338,10 +1343,10 @@ static INT32 firebarrInit()
 
 struct BurnDriver BurnDrvFirebarr = {
 	"firebarr", "airass", NULL, NULL, "1993",
-	"Fire Barrel (Japan)\0", NULL, "Irem", "M107",
+	"Fire Barrel (Japan)\0", NULL, "Irem", "Irem M107",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_IREM_MISC, GBF_VERSHOOT, 0,
-	NULL, firebarrRomInfo, firebarrRomName, NULL, NULL, FirebarrInputInfo, FirebarrDIPInfo,
+	NULL, firebarrRomInfo, firebarrRomName, NULL, NULL, NULL, NULL, FirebarrInputInfo, FirebarrDIPInfo,
 	firebarrInit, DrvExit, DrvFrame, DrvReDraw, DrvScan, &bRecalcPalette, 0x800,
 	240, 320, 3, 4
 };
@@ -1352,23 +1357,23 @@ struct BurnDriver BurnDrvFirebarr = {
 static struct BurnRomInfo dsoccr94RomDesc[] = {
 	{ "a3-4p_h0-c-0.ic59",	0x040000, 0xd01d3fd7, 1 | BRF_PRG | BRF_ESS }, //  0 V33 Code
 	{ "a3-4p_l0-c-0.ic61",	0x040000, 0x8af0afe2, 1 | BRF_PRG | BRF_ESS }, //  1
-	{ "a3_h1-c-0.ic60",	0x040000, 0x6109041b, 1 | BRF_PRG | BRF_ESS }, //  2
-	{ "a3_l1-c-0.ic62",	0x040000, 0x97a01f6b, 1 | BRF_PRG | BRF_ESS }, //  3
+	{ "a3_h1-c-0.ic60",		0x040000, 0x6109041b, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "a3_l1-c-0.ic62",		0x040000, 0x97a01f6b, 1 | BRF_PRG | BRF_ESS }, //  3
 
 	{ "a3-sh0-c-0.ic31",	0x010000, 0x23fe6ffc, 2 | BRF_PRG | BRF_ESS }, //  4 V35 Code
 	{ "a3-sl0-c-0.ic37",	0x010000, 0x768132e5, 2 | BRF_PRG | BRF_ESS }, //  5
 
-	{ "ds_c00.ic29",	0x100000, 0x2d31d418, 3 | BRF_GRA },           //  6 Background Tiles
-	{ "ds_c10.ic28",	0x100000, 0x57f7bcd3, 3 | BRF_GRA },           //  7
-	{ "ds_c01.ic21",	0x100000, 0x9d31a464, 3 | BRF_GRA },           //  8
-	{ "ds_c11.ic20",	0x100000, 0xa372e79f, 3 | BRF_GRA },           //  9
+	{ "ds_c00.ic29",		0x100000, 0x2d31d418, 3 | BRF_GRA },           //  6 Background Tiles
+	{ "ds_c10.ic28",		0x100000, 0x57f7bcd3, 3 | BRF_GRA },           //  7
+	{ "ds_c01.ic21",		0x100000, 0x9d31a464, 3 | BRF_GRA },           //  8
+	{ "ds_c11.ic20",		0x100000, 0xa372e79f, 3 | BRF_GRA },           //  9
 
-	{ "ds_000.ic11",	0x100000, 0x366b3e29, 4 | BRF_GRA },           // 10 Sprite Tiles
-	{ "ds_010.ic12",	0x100000, 0x28a4cc40, 4 | BRF_GRA },           // 11
-	{ "ds_020.ic13",	0x100000, 0x5a310f7f, 4 | BRF_GRA },           // 12
-	{ "ds_030.ic14",	0x100000, 0x328b1f45, 4 | BRF_GRA },           // 13
+	{ "ds_000.ic11",		0x100000, 0x366b3e29, 4 | BRF_GRA },           // 10 Sprite Tiles
+	{ "ds_010.ic12",		0x100000, 0x28a4cc40, 4 | BRF_GRA },           // 11
+	{ "ds_020.ic13",		0x100000, 0x5a310f7f, 4 | BRF_GRA },           // 12
+	{ "ds_030.ic14",		0x100000, 0x328b1f45, 4 | BRF_GRA },           // 13
 
-	{ "ds_da0.ic24",	0x100000, 0x67fc52fd, 5 | BRF_SND },           // 14 Irem GA20 Samples
+	{ "ds_da0.ic24",		0x100000, 0x67fc52fd, 5 | BRF_SND },           // 14 Irem GA20 Samples
 };
 
 STD_ROM_PICK(dsoccr94)
@@ -1409,10 +1414,49 @@ static INT32 dsoccr94Init()
 
 struct BurnDriver BurnDrvDsoccr94 = {
 	"dsoccr94", NULL, NULL, NULL, "1994",
-	"Dream Soccer '94 (World, M107 hardware)\0", NULL, "Irem (Data East Corporation license)", "M107",
+	"Dream Soccer '94 (World, M107 hardware)\0", NULL, "Irem (Data East Corporation license)", "Irem M107",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 4, HARDWARE_IREM_MISC, GBF_SPORTSFOOTBALL, 0,
-	NULL, dsoccr94RomInfo, dsoccr94RomName, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
+	NULL, dsoccr94RomInfo, dsoccr94RomName, NULL, NULL, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
+	dsoccr94Init, DrvExit, DrvFrame, DrvReDraw, DrvScan, &bRecalcPalette, 0x800,
+	320, 240, 4, 3
+};
+
+
+// Dream Soccer '94 (Korea, M107 hardware)
+// default team selected is Korea, so likely a Korean set
+
+static struct BurnRomInfo dsoccr94kRomDesc[] = {
+	{ "ic59_h0.bin",		0x040000, 0x7b26d8a3, 1 | BRF_PRG | BRF_ESS }, //  0 V33 Code
+	{ "ic61_l0.bin",		0x040000, 0xb13f0ff4, 1 | BRF_PRG | BRF_ESS }, //  1
+	{ "ic60_h1.bin",		0x040000, 0x6109041b, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "ic62_l1.bin",		0x040000, 0x97a01f6b, 1 | BRF_PRG | BRF_ESS }, //  3
+
+	{ "a3-sh0-c-0.ic31",	0x010000, 0x23fe6ffc, 2 | BRF_PRG | BRF_ESS }, //  4 V35 Code
+	{ "a3-sl0-c-0.ic37",	0x010000, 0x768132e5, 2 | BRF_PRG | BRF_ESS }, //  5
+
+	{ "ds_c00.ic29",		0x100000, 0x2d31d418, 3 | BRF_GRA },           //  6 Background Tiles
+	{ "ds_c10.ic28",		0x100000, 0x57f7bcd3, 3 | BRF_GRA },           //  7
+	{ "ds_c01.ic21",		0x100000, 0x9d31a464, 3 | BRF_GRA },           //  8
+	{ "ds_c11.ic20",		0x100000, 0xa372e79f, 3 | BRF_GRA },           //  9
+
+	{ "ds_000.ic11",		0x100000, 0x366b3e29, 4 | BRF_GRA },           // 10 Sprite Tiles
+	{ "ds_010.ic12",		0x100000, 0x28a4cc40, 4 | BRF_GRA },           // 11
+	{ "ds_020.ic13",		0x100000, 0x5a310f7f, 4 | BRF_GRA },           // 12
+	{ "ds_030.ic14",		0x100000, 0x328b1f45, 4 | BRF_GRA },           // 13
+
+	{ "ds_da0.ic24",		0x100000, 0x67fc52fd, 5 | BRF_SND },           // 14 Irem GA20 Samples
+};
+
+STD_ROM_PICK(dsoccr94k)
+STD_ROM_FN(dsoccr94k)
+
+struct BurnDriver BurnDrvDsoccr94k = {
+	"dsoccr94k", "dsoccr94", NULL, NULL, "1994",
+	"Dream Soccer '94 (Korea, M107 hardware)\0", NULL, "Irem (Data East Corporation license)", "Irem M107",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 4, HARDWARE_IREM_MISC, GBF_SPORTSFOOTBALL, 0,
+	NULL, dsoccr94kRomInfo, dsoccr94kRomName, NULL, NULL, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
 	dsoccr94Init, DrvExit, DrvFrame, DrvReDraw, DrvScan, &bRecalcPalette, 0x800,
 	320, 240, 4, 3
 };
@@ -1484,10 +1528,10 @@ static INT32 wpksocInit()
 
 struct BurnDriverD BurnDrvWpksoc = {
 	"wpksoc", NULL, NULL, NULL, "1995",
-	"World PK Soccer\0", NULL, "Jaleco", "M107",
+	"World PK Soccer\0", NULL, "Jaleco", "Irem M107",
 	NULL, NULL, NULL, NULL,
 	0, 4, HARDWARE_IREM_MISC, GBF_SPORTSFOOTBALL, 0,
-	NULL, wpksocRomInfo, wpksocRomName, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
+	NULL, wpksocRomInfo, wpksocRomName, NULL, NULL, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
 	wpksocInit, DrvExit, DrvFrame, DrvReDraw, DrvScan, &bRecalcPalette, 0x800,
 	320, 240, 4, 3
 };
@@ -1525,10 +1569,10 @@ STD_ROM_FN(kftgoal)
 
 struct BurnDriverD BurnDrvKftgoal = {
 	"kftgoal", "wpksoc", NULL, NULL, "1995",
-	"Kick for the Goal\0", NULL, "Jaleco", "M107",
+	"Kick for the Goal\0", NULL, "Jaleco", "Irem M107",
 	NULL, NULL, NULL, NULL,
 	BDF_CLONE, 4, HARDWARE_IREM_MISC, GBF_SPORTSFOOTBALL, 0,
-	NULL, kftgoalRomInfo, kftgoalRomName, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
+	NULL, kftgoalRomInfo, kftgoalRomName, NULL, NULL, NULL, NULL, Dsoccr94InputInfo, Dsoccr94DIPInfo,
 	wpksocInit, DrvExit, DrvFrame, DrvReDraw, DrvScan, &bRecalcPalette, 0x800,
 	320, 240, 4, 3
 };

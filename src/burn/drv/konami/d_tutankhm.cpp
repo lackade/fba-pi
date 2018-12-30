@@ -17,8 +17,6 @@ static UINT8 *DrvM6809RAM;
 static UINT8 *DrvZ80RAM;
 static UINT8 *DrvPalRAM;
 
-static INT16 *pAY8910Buffer[6];
-
 static UINT32 *DrvPalette;
 static UINT8  DrvRecalc;
 
@@ -272,13 +270,6 @@ static INT32 MemIndex()
 
 	RamEnd			= Next;
 
-	pAY8910Buffer[0]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[1]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[2]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[3]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[4]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[5]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-
 	MemEnd			= Next;
 
 	return 0;
@@ -314,7 +305,7 @@ static INT32 DrvInit()
 		if (BurnLoadRom(DrvZ80ROM   + 0x01000, 16, 1)) return 1;
 	}
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvVidRAM,		0x0000, 0x7fff, MAP_RAM);
 	M6809MapMemory(DrvM6809RAM,		0x8800, 0x8fff, MAP_RAM);
@@ -324,6 +315,7 @@ static INT32 DrvInit()
 	M6809Close();
 
 	TimepltSndInit(DrvZ80ROM, DrvZ80RAM, 0);
+	TimepltSndSrcGain(0.55); // quench distortion when enemy spawns
 
 	GenericTilesInit();
 
@@ -443,7 +435,7 @@ static INT32 DrvFrame()
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			if (!sound_mute) TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+			if (!sound_mute) TimepltSndUpdate(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -456,9 +448,9 @@ static INT32 DrvFrame()
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 
 		if (sound_mute) {
-			memset (pBurnSoundOut, 0, nBurnSoundLen * sizeof(INT16) * 2);
+			BurnSoundClear();
 		} else {
-			TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+			TimepltSndUpdate(pSoundBuf, nSegmentLength);
 		}
 	}
 
@@ -537,7 +529,7 @@ struct BurnDriver BurnDrvTutankhm = {
 	"Tutankham\0", NULL, "Konami", "GX350",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 4, HARDWARE_PREFIX_KONAMI, GBF_MAZE, 0,
-	NULL, tutankhmRomInfo, tutankhmRomName, NULL, NULL, TutankhmInputInfo, TutankhmDIPInfo,
+	NULL, tutankhmRomInfo, tutankhmRomName, NULL, NULL, NULL, NULL, TutankhmInputInfo, TutankhmDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x10,
 	224, 256, 3, 4
 };
@@ -574,7 +566,7 @@ struct BurnDriver BurnDrvTutankhms = {
 	"Tutankham (Stern Electronics)\0", NULL, "Konami (Stern Electronics license)", "GX350",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 4, HARDWARE_PREFIX_KONAMI, GBF_MAZE, 0,
-	NULL, tutankhmsRomInfo, tutankhmsRomName, NULL, NULL, TutankhmInputInfo, TutankhmDIPInfo,
+	NULL, tutankhmsRomInfo, tutankhmsRomName, NULL, NULL, NULL, NULL, TutankhmInputInfo, TutankhmDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x10,
 	224, 256, 3, 4
 };

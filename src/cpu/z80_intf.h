@@ -40,6 +40,7 @@ INT32 ZetBc(INT32 n);
 INT32 ZetDe(INT32 n);
 INT32 ZetHL(INT32 n);
 INT32 ZetI(INT32 n);
+INT32 ZetSP(INT32 n);
 INT32 ZetScan(INT32 nAction);
 INT32 ZetRun(INT32 nCycles);
 void ZetRunEnd();
@@ -50,7 +51,23 @@ INT32 ZetNmi();
 INT32 ZetIdle(INT32 nCycles);
 INT32 ZetSegmentCycles();
 INT32 ZetTotalCycles();
+void ZetSetAF(INT32 n, UINT16 value);
+void ZetSetAF2(INT32 n, UINT16 value);
+void ZetSetBC(INT32 n, UINT16 value);
+void ZetSetBC2(INT32 n, UINT16 value);
+void ZetSetDE(INT32 n, UINT16 value);
+void ZetSetDE2(INT32 n, UINT16 value);
 void ZetSetHL(INT32 n, UINT16 value);
+void ZetSetHL2(INT32 n, UINT16 value);
+void ZetSetI(INT32 n, UINT16 value);
+void ZetSetIFF1(INT32 n, UINT16 value);
+void ZetSetIFF2(INT32 n, UINT16 value);
+void ZetSetIM(INT32 n, UINT16 value);
+void ZetSetIX(INT32 n, UINT16 value);
+void ZetSetIY(INT32 n, UINT16 value);
+void ZetSetPC(INT32 n, UINT16 value);
+void ZetSetR(INT32 n, UINT16 value);
+void ZetSetSP(INT32 n, UINT16 value);
 
 //#define ZetRaiseIrq(n) ZetSetIRQLine(n, ZET_IRQSTATUS_AUTO)
 //#define ZetLowerIrq() ZetSetIRQLine(0, Z80_CLEAR_LINE)
@@ -59,5 +76,15 @@ void ZetSetReadHandler(UINT8 (__fastcall *pHandler)(UINT16));
 void ZetSetWriteHandler(void (__fastcall *pHandler)(UINT16, UINT8));
 void ZetSetInHandler(UINT8 (__fastcall *pHandler)(UINT16));
 void ZetSetOutHandler(void (__fastcall *pHandler)(UINT16, UINT8));
+void ZetSetEDFECallback(void (*pCallback)(Z80_Regs*));
 
 void ZetSetBUSREQLine(INT32 nStatus);
+
+void ZetCheatWriteROM(UINT32 a, UINT8 d); // cheat core
+UINT8 ZetCheatRead(UINT32 a);
+
+extern struct cpu_core_config ZetConfig;
+
+// depreciate this and use BurnTimerAttach directly!
+#define BurnTimerAttachZet(clock)	\
+	BurnTimerAttach(&ZetConfig, clock)

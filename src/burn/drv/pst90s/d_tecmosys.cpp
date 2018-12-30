@@ -395,7 +395,7 @@ void __fastcall tecmosys_sound_out(UINT16 port, UINT8 data)
 		return;
 
 		case 0x10:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 
 		case 0x20:
@@ -431,7 +431,7 @@ UINT8 __fastcall tecmosys_sound_in(UINT16 port)
 			return 0; // ymf262_r
 
 		case 0x10:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0x40:
 			return *soundlatch;
@@ -1064,7 +1064,7 @@ static INT32 DrvFrame()
 	{
 		if (i == 240) {
 			vblank = 0;
-			SekSetIRQLine(1, CPU_IRQSTATUS_ACK);
+			SekSetIRQLine(1, CPU_IRQSTATUS_AUTO);
 		}
 
 		nSegment = nCyclesTotal[0] / nInterleave;
@@ -1083,7 +1083,7 @@ static INT32 DrvFrame()
 #endif
 	}
 
-	SekSetIRQLine(1, CPU_IRQSTATUS_NONE);
+	//SekSetIRQLine(1, CPU_IRQSTATUS_NONE);
 
 #ifdef ENABLE_SOUND_HARDWARE
 	if (pBurnSoundOut) {
@@ -1236,8 +1236,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		ZetScan(nAction);
 
 		// ymf262
-		YMZ280BScan();
-		MSM6295Scan(0, nAction);
+		YMZ280BScan(nAction, pnMin);
+		MSM6295Scan(nAction, pnMin);
 #endif
 
 		EEPROMScan(nAction, pnMin);
@@ -1337,7 +1337,49 @@ struct BurnDriver BurnDrvDeroon = {
 	"Deroon DeroDero\0", "No sound", "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, deroonRomInfo, deroonRomName, NULL, NULL, DrvInputInfo, NULL,
+	NULL, deroonRomInfo, deroonRomName, NULL, NULL, NULL, NULL, DrvInputInfo, NULL,
+	DeroonInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x4800,
+	320, 240, 4, 3
+};
+
+
+// Deroon DeroDero (alt set)
+// maybe a bad dump - this set needs to be confirmed
+
+static struct BurnRomInfo deroonaRomDesc[] = {
+	{ "t.01",				0x080000, 0x7ad6c740, 1 | BRF_PRG | BRF_ESS }, //  0 68K Code
+	{ "t.02",				0x080000, 0xe44f4430, 1 | BRF_PRG | BRF_ESS }, //  1
+
+	{ "t003.bin",			0x040000, 0x8bdfafa0, 2 | BRF_PRG | BRF_ESS }, //  2 Z80 Code
+
+	{ "t101.uah1",			0x200000, 0x74baf845, 3 | BRF_GRA },           //  3 Sprites
+	{ "t102.ual1",			0x200000, 0x1a02c4a3, 3 | BRF_GRA },           //  4
+	{ "t103.ubl1",			0x400000, 0x84e7da88, 3 | BRF_GRA },           //  5
+	{ "t104.ucl1",			0x200000, 0x66eb611a, 3 | BRF_GRA },           //  6
+
+	{ "t301.ubd1",			0x100000, 0x8b026177, 4 | BRF_GRA },           //  7 Character Tiles
+
+	{ "t201.ubb1",			0x100000, 0xd5a087ac, 6 | BRF_GRA },           //  8 Midground Layer
+
+	{ "t202.ubc1",			0x100000, 0xf051dae1, 7 | BRF_GRA },           //  9 Foreground Layer
+
+	{ "t401.uya1",			0x200000, 0x92111992, 8 | BRF_SND },           // 10 YMZ280B Samples
+
+	{ "t501.uad1",			0x080000, 0x2fbcfe27, 9 | BRF_SND },           // 11 OKI6295 Samples
+
+	{ "deroon_68hc11a8.rom",	0x002000, 0x00000000, 0 | BRF_NODUMP },        // 12 68HC11A8 Code
+	{ "deroon_68hc11a8.eeprom",	0x000200, 0x00000000, 0 | BRF_NODUMP },        // 13 68HC11A8 EEPROM
+};
+
+STD_ROM_PICK(deroona)
+STD_ROM_FN(deroona)
+
+struct BurnDriver BurnDrvDeroona = {
+	"deroona", "deroon", NULL, NULL, "1995",
+	"Deroon DeroDero (alt set)\0", "No sound", "Tecmo", "Miscellaneous",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
+	NULL, deroonaRomInfo, deroonaRomName, NULL, NULL, NULL, NULL, DrvInputInfo, NULL,
 	DeroonInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x4800,
 	320, 240, 4, 3
 };
@@ -1430,7 +1472,7 @@ struct BurnDriver BurnDrvTkdensho = {
 	"Toukidenshou - Angel Eyes (VER. 960614)\0", "No sound", "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, 0,
-	NULL, tkdenshoRomInfo, tkdenshoRomName, NULL, NULL, DrvInputInfo, NULL,
+	NULL, tkdenshoRomInfo, tkdenshoRomName, NULL, NULL, NULL, NULL, DrvInputInfo, NULL,
 	TkdenshoInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x4800,
 	320, 240, 4, 3
 };
@@ -1484,7 +1526,7 @@ struct BurnDriver BurnDrvTkdenshoa = {
 	"Toukidenshou - Angel Eyes (VER. 960427)\0", "No sound", "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, 0,
-	NULL, tkdenshoaRomInfo, tkdenshoaRomName, NULL, NULL, DrvInputInfo, NULL,
+	NULL, tkdenshoaRomInfo, tkdenshoaRomName, NULL, NULL, NULL, NULL, DrvInputInfo, NULL,
 	TkdenshoaInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x4800,
 	320, 240, 4, 3
 };

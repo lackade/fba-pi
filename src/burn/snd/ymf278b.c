@@ -1,4 +1,5 @@
 /*
+   Based on MAME sources by R. Belmont, Olivier Galibert, hap
 
    YMF278B  FM + Wave table Synthesizer (OPL4)
 
@@ -106,13 +107,13 @@
 		UINT32 loopaddr;
 		UINT32 endaddr;
 
-		int env_step;
+		INT32 env_step;
 		UINT32 env_vol;
 		UINT32 env_vol_step;
 		UINT32 env_vol_lim;
 		INT8 env_preverb;
 
-		int num;        /* slot number (for debug only) */
+		INT32 num;        /* slot number (for debug only) */
 	} YMF278BSlot;
 
 	// internal state
@@ -146,7 +147,7 @@
 
 	void *m_timer_a, *m_timer_b;
 	const UINT8 *m_rom;
-	UINT32 m_romsize, m_sample_rate;
+	UINT32 m_romsize;
 	int m_clock;
 
 	//sound_stream * m_stream;
@@ -164,11 +165,11 @@ void write_memory(UINT32 offset, UINT8 data)
 
 UINT8 read_memory(UINT32 offset)
 {
-	/*if (offset >= m_romsize)
+	if (offset >= m_romsize)
 	{
-		LOG(("YMF278B:  Memory read overflow %x\n", offset));
+	//	LOG(("YMF278B:  Memory read overflow %x\n", offset));
 		return 0xff;
-	}*/
+	}
 	return m_rom[offset];
 }
 
@@ -1108,12 +1109,12 @@ static void precompute_rate_tables()
 //  device_start - device-specific startup
 //-------------------------------------------------
 
-int ymf278b_start(int num, UINT8 *rom, void (*irq_cb)(INT32, INT32), void (*timer_cb)(INT32, INT32, double), int clock, int rate)
+int ymf278b_start(int num, UINT8 *rom, INT32 romsize, void (*irq_cb)(INT32, INT32), void (*timer_cb)(INT32, INT32, double), int clock)
 {
 	int i;
 
 	m_rom = rom;
-	m_romsize = 0xffffffff; //romsize;
+	m_romsize = romsize;
 	m_clock = clock;
 	m_irq_handler = irq_cb;
 	timer_callback = timer_cb;
@@ -1125,7 +1126,6 @@ int ymf278b_start(int num, UINT8 *rom, void (*irq_cb)(INT32, INT32), void (*time
 	m_timer_ld = timer_alloc(TIMER_LD_CLEAR); */
 
 	m_clock_ratio = (float)clock / (float)YMF278B_STD_CLOCK;
-	m_sample_rate = rate;
 
 	for (i = 0; i < 24; i++)
 	{

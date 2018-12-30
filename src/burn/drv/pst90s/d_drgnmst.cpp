@@ -340,8 +340,8 @@ static UINT8 drgnmst_snd_command_r()
 
 	switch (drgnmst_oki_control & 0x1f)
 	{
-		case 0x12:	data = MSM6295ReadStatus(1) & 0x0f; break;//(okim6295_status_1_r(machine, 0) & 0x0f); break;
-		case 0x16:	data = MSM6295ReadStatus(0) & 0x0f; break;//(okim6295_status_0_r(machine, 0) & 0x0f); break;
+		case 0x12:	data = MSM6295Read(1) & 0x0f; break;//(okim6295_status_1_r(machine, 0) & 0x0f); break;
+		case 0x16:	data = MSM6295Read(0) & 0x0f; break;//(okim6295_status_0_r(machine, 0) & 0x0f); break;
 		case 0x0b:
 		case 0x0f:      data = drgnmst_snd_command; break;
 		default:	break;
@@ -373,12 +373,12 @@ static void drgnmst_snd_control_w(INT32 data)
 	{
 		case 0x15:
 			bprintf (PRINT_NORMAL, _T("0, %2.2x\n"), drgnmst_oki_command);
-			MSM6295Command(0, drgnmst_oki_command);
+			MSM6295Write(0, drgnmst_oki_command);
 			break;
 
 		case 0x11:
 			bprintf (PRINT_NORMAL, _T("1, %2.2x\n"), drgnmst_oki_command);
-			MSM6295Command(1, drgnmst_oki_command);
+			MSM6295Write(1, drgnmst_oki_command);
 			break;
 	}
 }
@@ -485,8 +485,7 @@ static INT32 DrvDoReset()
 	set_oki_bank0(0);
 	set_oki_bank1(0);
 
-	MSM6295Reset(0);
-	MSM6295Reset(1);
+	MSM6295Reset();
 
 	return 0;
 }
@@ -522,9 +521,9 @@ static INT32 MemIndex()
 	DrvRowScroll	= Next; Next += 0x004000;
 
 	DrvVidRegs	= Next; Next += 0x000020;
-	priority_control= (UINT16*)Next; Next += 0x0001 * sizeof(UINT16);
+	priority_control= (UINT16*)Next; Next += 0x0002 /*1*/ * sizeof(UINT16);
 
-	coin_lockout	= Next; Next += 0x000001;
+	coin_lockout	= Next; Next += 0x000004; // 1
 
 	Palette		= (UINT32*)Next; Next += 0x2000 * sizeof(UINT32);
 
@@ -614,8 +613,7 @@ static INT32 DrvExit()
 
 	SekExit();
 	pic16c5xExit();
-	MSM6295Exit(0);
-	MSM6295Exit(1);
+	MSM6295Exit();
 
 	BurnFree (AllMem);
 
@@ -925,8 +923,7 @@ static INT32 DrvFrame()
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 		//	memset (pSoundBuf, 0, nSegmentLength);
-			MSM6295Render(0, pSoundBuf, nSegmentLength);
-			MSM6295Render(1, pSoundBuf, nSegmentLength);
+			MSM6295Render(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -940,8 +937,7 @@ static INT32 DrvFrame()
 
 		if (nSegmentLength) {
 		//	memset (pSoundBuf, 0, nSegmentLength);
-			MSM6295Render(0, pSoundBuf, nSegmentLength);
-			MSM6295Render(1, pSoundBuf, nSegmentLength);
+			MSM6295Render(pSoundBuf, nSegmentLength);
 		}
 	}
 
@@ -973,8 +969,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SekScan(nAction);
 		pic16c5xScan(nAction);
 
-		MSM6295Scan(0, nAction);
-		MSM6295Scan(1, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(pic16c5x_port0);
 		SCAN_VAR(drgnmst_oki_control);
@@ -1019,8 +1014,8 @@ struct BurnDriver BurnDrvDrgnmst = {
 	"drgnmst", NULL, NULL, NULL, "1994",
 	"Dragon Master\0", NULL, "Unico", "Misc",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_MISC, 0,
-	NULL, drgnmstRomInfo, drgnmstRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, 0,
+	NULL, drgnmstRomInfo, drgnmstRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc,	0x2000, 384, 224, 4, 3
 };

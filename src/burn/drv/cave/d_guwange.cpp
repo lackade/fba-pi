@@ -28,6 +28,7 @@ static INT32 nCurrentCPU;
 static INT32 nCyclesDone[2];
 static INT32 nCyclesTotal[2];
 static INT32 nCyclesSegment;
+static INT32 nCyclesExtra;
 
 static struct BurnInputInfo guwangeInputList[] = {
 	{"P1 Coin",		BIT_DIGITAL, DrvJoy2 + 0,	"p1 coin"},
@@ -286,6 +287,9 @@ static INT32 DrvDoReset()
 	nUnknownIRQ = 1;
 
 	nIRQPending = 0;
+	nCyclesExtra = 0;
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -389,7 +393,8 @@ static INT32 DrvFrame()
 
 		nCyclesSegment = nNext - nCyclesDone[nCurrentCPU];
 		if (!CheckSleep(nCurrentCPU)) {									// See if this CPU is busywaiting
-			nCyclesDone[nCurrentCPU] += SekRun(nCyclesSegment);
+			nCyclesDone[nCurrentCPU] += SekRun(nCyclesSegment+nCyclesExtra);
+			nCyclesExtra = 0;
 		} else {
 			nCyclesDone[nCurrentCPU] += SekIdle(nCyclesSegment);
 		}
@@ -407,6 +412,7 @@ static INT32 DrvFrame()
 			}
 		}
 	}
+	nCyclesExtra = SekTotalCycles() - nCyclesTotal[0];
 
 	SekClose();
 
@@ -477,7 +483,10 @@ static INT32 LoadRoms()
 	BurnLoadRom(CaveSpriteROM + 0x1000001, 5, 2);
 	NibbleSwap3(CaveSpriteROM, 0xC00000);
 
-#if 1
+#if 0
+	// I don't think this is needed anymore, dink aug 14 2016.
+	// note: if enabled-this causes the screen fade-in effect after starting
+	// a game @ the character selection screen to display garbage sprite data.
 	for (INT32 i = 0; i < 0x100000; i++) {
 		UINT16 nValue = rand() & 0x0101;
 		if (nValue & 0x0001) {
@@ -531,7 +540,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 
 		SekScan(nAction);				// scan 68000 states
 
-		YMZ280BScan();
+		YMZ280BScan(nAction, pnMin);
 
 		SCAN_VAR(nVideoIRQ);
 		SCAN_VAR(nSoundIRQ);
@@ -653,8 +662,8 @@ struct BurnDriver BurnDrvGuwange = {
 	"guwange", NULL, NULL, NULL, "1999",
 	"Guwange (Japan, Master Ver. 99/06/24)\0", NULL, "Atlus / Cave", "Cave",
 	L"\u3050\u308F\u3093\u3052 (Japan, Master Ver. 99/06/24)\0Guwange\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
-	NULL, guwangeRomInfo, guwangeRomName, NULL, NULL, guwangeInputInfo, NULL,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY | BDF_HISCORE_SUPPORTED, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
+	NULL, guwangeRomInfo, guwangeRomName, NULL, NULL, NULL, NULL, guwangeInputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 240, 320, 3, 4
 };
@@ -692,8 +701,8 @@ struct BurnDriver BurnDrvGuwanges = {
 	"guwanges", "guwange", NULL, NULL, "1999",
 	"Guwange (Japan, Special Ver. 00/01/01)\0", NULL, "Atlus / Cave", "Cave",
 	L"\u3050\u308F\u3093\u3052 (Japan, Special Ver. 00/07/07)\0Guwange\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
-	NULL, guwangesRomInfo, guwangesRomName, NULL, NULL, guwangeInputInfo, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY | BDF_HISCORE_SUPPORTED, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
+	NULL, guwangesRomInfo, guwangesRomName, NULL, NULL, NULL, NULL, guwangeInputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 240, 320, 3, 4
 };

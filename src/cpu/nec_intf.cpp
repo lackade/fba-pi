@@ -8,6 +8,22 @@
 
 #define MAX_VEZ		4
 
+cpu_core_config VezConfig =
+{
+	VezOpen,
+	VezClose,
+	cpu_readmem20,
+	VezCheatWrite,
+	VezGetActive,
+	VezTotalCycles,
+	VezNewFrame,
+	VezRun,
+	VezRunEnd,
+	VezReset,
+	0x100000,
+	0
+};
+
 //----------------------------------------------------------------------------------
 // nec.cpp
 void necInit(INT32 cpu, INT32 type);
@@ -53,10 +69,10 @@ struct VezContext {
 	void (*runend)();
 	void (*idle)(INT32);
 
-	UINT8 * ppMemRead[512];
-	UINT8 * ppMemWrite[512];
-	UINT8 * ppMemFetch[512];
-	UINT8 * ppMemFetchData[512];
+	UINT8 * ppMemRead[2048];
+	UINT8 * ppMemWrite[2048];
+	UINT8 * ppMemFetch[2048];
+	UINT8 * ppMemFetchData[2048];
 
 	// Handlers
  #ifdef FASTCALL
@@ -75,7 +91,7 @@ struct VezContext {
 static struct VezContext *VezCPUContext[MAX_VEZ] = { NULL, NULL, NULL, NULL };
 struct VezContext *VezCurrentCPU = 0;
 
-#define VEZ_MEM_SHIFT	11
+#define VEZ_MEM_SHIFT	9
 #define VEZ_MEM_MASK	((1 << VEZ_MEM_SHIFT) - 1)
 
 static INT32 nCPUCount = 0;
@@ -89,8 +105,6 @@ void __fastcall VezDummyWritePort(UINT32, UINT8) { }
 
 UINT8 cpu_readport(UINT32 p)
 {
-	p &= 0x100ff; // ?
-
 	return VezCurrentCPU->ReadPort(p);
 }
 
@@ -160,7 +174,7 @@ void VezWriteWord(UINT32 a, UINT16 d)
 	
 	UINT16 * p = (UINT16*)VezCurrentCPU->ppMemWrite[ a >> VEZ_MEM_SHIFT ];
 	if ( p )
-		*(p + (a / 2)) = d;
+		*(p + (a / 2)) = BURN_ENDIAN_SWAP_INT16(d);
 	else {
 		VezCurrentCPU->WriteHandler(a, d);
 		VezCurrentCPU->WriteHandler(a+1, d >> 8);
@@ -173,7 +187,7 @@ void VezWriteLong(UINT32 a, UINT32 d)
 	
 	UINT32 * p = (UINT32*)VezCurrentCPU->ppMemWrite[ a >> VEZ_MEM_SHIFT ];
 	if ( p )
-		*(p + (a / 4)) = d;
+		*(p + (a / 4)) = BURN_ENDIAN_SWAP_INT32(d);
 	else {
 		VezCurrentCPU->WriteHandler(a, d);
 		VezCurrentCPU->WriteHandler(a+1, d >> 8);
@@ -200,7 +214,7 @@ UINT16 VezReadWord(UINT32 a)
 	
 	UINT16 * p = (UINT16*)VezCurrentCPU->ppMemRead[ a >> VEZ_MEM_SHIFT ];
 	if ( p )
-		return *(p + (a / 2));
+		return BURN_ENDIAN_SWAP_INT16(*(p + (a / 2)));
 	else
 		return VezCurrentCPU->ReadHandler(a) + (VezCurrentCPU->ReadHandler(a+1) * 0x100);
 }
@@ -211,13 +225,13 @@ UINT32 VezReadLong(UINT32 a)
 	
 	UINT32 * p = (UINT32*)VezCurrentCPU->ppMemRead[ a >> VEZ_MEM_SHIFT ];
 	if ( p )
-		return *(p + (a / 4));
+		return BURN_ENDIAN_SWAP_INT32(*(p + (a / 4)));
 	else
-		return VezCurrentCPU->ReadHandler(a) + (VezCurrentCPU->ReadHandler(a+1) * 0x100) + 
-			(VezCurrentCPU->ReadHandler(a+2) * 0x10000) + (VezCurrentCPU->ReadHandler(a+3) * 0x1000000);
+		return VezCurrentCPU->ReadHandler(a) + (VezCurrentCPU->ReadHandler(a+1) << 8) +
+			(VezCurrentCPU->ReadHandler(a+2) << 16) + (VezCurrentCPU->ReadHandler(a+3) << 24);
 }
 
-static void VezCheatWrite(UINT32 a, UINT8 d)
+void VezCheatWrite(UINT32 a, UINT8 d)
 {
 	a &= 0xfffff;
 
@@ -290,22 +304,6 @@ void VezSetDecode(UINT8 *table)
 	}
 }
 
-static cpu_core_config VezCheatCpuConfig =
-{
-	VezOpen,
-	VezClose,
-	cpu_readmem20,
-	VezCheatWrite,
-	VezGetActive,
-	VezTotalCycles,
-	VezNewFrame,
-	VezRun,
-	VezRunEnd,
-	VezReset,
-	1<<20,
-	0
-};
-
 INT32 VezInit(INT32 cpu, INT32 type, INT32 clock)
 {
 	DebugCPU_VezInitted = 1;
@@ -372,7 +370,7 @@ INT32 VezInit(INT32 cpu, INT32 type, INT32 clock)
 
 	nVezCount = nCPUCount = nCount;
 
-	CpuCheatRegister(cpu, &VezCheatCpuConfig);
+	CpuCheatRegister(cpu, &VezConfig);
 
 	return 0;
 }
@@ -391,6 +389,7 @@ void VezExit()
 	for (INT32 i = 0; i < MAX_VEZ; i++) {
 		if (VezCPUContext[i]) {
 			BurnFree(VezCPUContext[i]);
+			VezCPUContext[i] = NULL;
 		}
 	}
 
@@ -552,6 +551,22 @@ INT32 VezMapArea(INT32 nStart, INT32 nEnd, INT32 nMode, UINT8 *Mem1, UINT8 *Mem2
 	for (INT32 i = s; i < e; i++) {
 		VezCurrentCPU->ppMemFetch[i] = Mem1 - nStart;
 		VezCurrentCPU->ppMemFetchData[i] = Mem2 - nStart;
+	}
+
+	return 0;
+}
+
+INT32 VezMapMemory(UINT8 *Mem, INT32 nStart, INT32 nEnd, INT32 nMode)
+{
+#if defined FBA_DEBUG
+	if (!DebugCPU_VezInitted) bprintf(PRINT_ERROR, _T("VezMapMemory called without init\n"));
+	if (nOpenedCPU == -1) bprintf(PRINT_ERROR, _T("VezMapMemory called when no CPU open\n"));
+#endif
+
+	for (INT32 i = 0; i < 3; i++) {
+		if (nMode & (1 << i)) {
+			VezMapArea(nStart, nEnd, i, Mem);
+		}
 	}
 
 	return 0;

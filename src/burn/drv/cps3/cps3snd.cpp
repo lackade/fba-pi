@@ -1,5 +1,7 @@
 #include "cps3.h"
 
+// CPS-3 sound emulation by Philip Bennett
+
 #define CPS3_VOICES		16
 
 #define CPS3_SND_INT_RATE		(nBurnFPS / 100)
@@ -89,6 +91,7 @@ void __fastcall cps3SndWriteWord(UINT32 addr, UINT16 data)
 void __fastcall cps3SndWriteLong(UINT32 addr, UINT32 data)
 {
 	//addr &= 0x000003ff;
+	if (addr == 0x240e0210) return; // NOP (jojoba*)
 	bprintf(PRINT_NORMAL, _T("SND Attempt to write long value %8x to location %8x\n"), data, addr);
 }
 
@@ -143,7 +146,7 @@ void cps3SndUpdate()
 		return;	
 	}
 	
-	memset(pBurnSoundOut, 0, nBurnSoundLen * 2 * sizeof(INT16));
+	BurnSoundClear();
 	INT8 * base = (INT8 *)chip->rombase;
 	cps3_voice *vptr = &chip->voice[0];
 

@@ -38,6 +38,7 @@ static UINT16 i8751_needs_ack;
 static UINT16 i8751_coin_pending;
 static UINT16 i8751_command_queue;
 static INT32 i8751_level;
+static INT32 i8751_reset;
 
 static UINT8 DrvJoy1[16];
 static UINT8 DrvJoy2[16];
@@ -46,7 +47,9 @@ static UINT16 DrvInput[3];
 static UINT8 DrvDip[2];
 static UINT8 DrvReset;
 
+#ifdef BUILD_A68K
 static bool bUseAsm68KCoreOldValue = false;
+#endif
 
 enum { KARNOV=0, KARNOVJ, CHELNOV, CHELNOVJ, CHELNOVW, WNDRPLNT };
 static INT32 microcontroller_id;
@@ -359,7 +362,7 @@ static void wndrplnt_i8751_w(INT32 data)
 	if (data==0x100) i8751_return=0x67a;
 	if (data==0x200) i8751_return=0x214;
 	if (data==0x300) i8751_return=0x17; /* Copyright text on title screen */
-//  if (data==0x300) i8751_return=0x1; /* (USA) Copyright text on title screen */
+// 	if (data==0x300) i8751_return=0x1; /* (USA) Copyright text on title screen */
 
 	if ((data&0x600)==0x600)
 	{
@@ -398,10 +401,8 @@ static void wndrplnt_i8751_w(INT32 data)
 	i8751_needs_ack=1;
 }
 
-
 static void chelnov_i8751_w(INT32 data)
 {
-
 	if (i8751_needs_ack)
 	{
 		i8751_command_queue=data;
@@ -416,7 +417,14 @@ static void chelnov_i8751_w(INT32 data)
 	if (data==0x100 && microcontroller_id==CHELNOV)  i8751_return=0x71b; /* USA version */
 	if (data==0x100 && microcontroller_id==CHELNOVW)  i8751_return=0x71c; /* World version */
 
-	if (data>=0x6000 && data<0x8000) i8751_return=1;  /* patched */
+	if ((data & 0xe000) == 0x6000) {
+		if (data & 0x1000) {
+			i8751_return = ((data & 0x0f) + ((data >> 4) & 0x0f)) * ((data >> 8) & 0x0f);
+		} else {
+			i8751_return = (data & 0x0f) * (((data >> 8) & 0x0f) + ((data >> 4) & 0x0f));
+		}
+	}
+
 	if ((data&0xf000)==0x1000) i8751_level=1; /* Level 1 */
 	if ((data&0xf000)==0x2000) i8751_level++; /* Level Increment */
 
@@ -596,7 +604,7 @@ static UINT16 karnov_control_r(INT32 offset)
 
 //------------------------------------------------------------------------------------------
 
-void __fastcall karnov_main_write_word(UINT32 address, UINT16 data)
+static void __fastcall karnov_main_write_word(UINT32 address, UINT16 data)
 {
 	if ((address & 0xfff800) == 0x0a1800) {
 		UINT16 *ptr = (UINT16*)DrvPfRAM;
@@ -614,7 +622,7 @@ void __fastcall karnov_main_write_word(UINT32 address, UINT16 data)
 	}
 }
 
-void __fastcall karnov_main_write_byte(UINT32 address, UINT8 data)
+static void __fastcall karnov_main_write_byte(UINT32 address, UINT8 data)
 {
 	if ((address & 0xfff800) == 0x0a1800) {
 		INT32 offset = (address >> 1) & 0x3ff;
@@ -630,7 +638,7 @@ void __fastcall karnov_main_write_byte(UINT32 address, UINT8 data)
 	}
 }
 
-UINT16 __fastcall karnov_main_read_word(UINT32 address)
+static UINT16 __fastcall karnov_main_read_word(UINT32 address)
 {
 	if ((address & 0xfffff0) == 0x0c0000) {
 		return karnov_control_r((address >> 1) & 7);
@@ -639,7 +647,7 @@ UINT16 __fastcall karnov_main_read_word(UINT32 address)
 	return 0;
 }
 
-UINT8 __fastcall karnov_main_read_byte(UINT32 address)
+static UINT8 __fastcall karnov_main_read_byte(UINT32 address)
 {
 	if ((address & 0xfffff0) == 0x0c0000) {
 		return karnov_control_r((address >> 1) & 7) >> ((~address & 1) << 3);
@@ -648,7 +656,7 @@ UINT8 __fastcall karnov_main_read_byte(UINT32 address)
 	return 0;
 }
 
-void karnov_sound_write(UINT16 address, UINT8 data)
+static void karnov_sound_write(UINT16 address, UINT8 data)
 {
 	switch (address)
 	{
@@ -685,21 +693,6 @@ static void DrvYM3526FMIRQHandler(INT32, INT32 nStatus)
 	}
 }
 
-static INT32 DrvYM3526SynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)M6502TotalCycles() * nSoundRate / 1500000;
-}
-
-static INT32 DrvYM2203SynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)SekTotalCycles() * nSoundRate / 10000000;
-}
-
-static double DrvYM2203GetTime()
-{
-	return (double)SekTotalCycles() / 10000000;
-}
-
 static INT32 DrvDoReset()
 {
 	DrvReset = 0;
@@ -718,11 +711,14 @@ static INT32 DrvDoReset()
 	M6502Close();
 	SekClose();
 
+	HiscoreReset();
+
 	i8751_return = 0;
 	i8751_needs_ack = 0;
 	i8751_coin_pending = 0;
 	i8751_command_queue = 0;
 	i8751_level = 0;
+	i8751_reset = 0;
 
 	return 0;
 }
@@ -855,6 +851,9 @@ static INT32 DrvInit()
 	
 			if (BurnLoadRom(DrvColPROM + 0x00000, 16, 1)) return 1;
 			if (BurnLoadRom(DrvColPROM + 0x00400, 17, 1)) return 1;
+
+			// hack to bypass infinite loop waiting for mcu response
+		//	*((UINT16*)(Drv68KROM + 0x062a)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
 		} else {
 			if (BurnLoadRom(DrvGfxROM2 + 0x00000, 12, 1)) return 1;
 			if (BurnLoadRom(DrvGfxROM2 + 0x10000, 13, 1)) return 1;
@@ -873,12 +872,14 @@ static INT32 DrvInit()
 		DrvGfxDecode();
 	}
 
+#ifdef BUILD_A68K
 	// These games really don't like the ASM core, so disable it for now
 	// and restore it on exit.
 	if (bBurnUseASMCPUEmulation) {
 		bUseAsm68KCoreOldValue = bBurnUseASMCPUEmulation;
 		bBurnUseASMCPUEmulation = false;
 	}
+#endif
 
 	SekInit(0, 0x68000);
 	SekOpen(0);
@@ -902,11 +903,11 @@ static INT32 DrvInit()
 	M6502SetWriteHandler(karnov_sound_write);
 	M6502Close();
 
-	BurnYM3526Init(3000000, &DrvYM3526FMIRQHandler, &DrvYM3526SynchroniseStream, 0);
-	BurnTimerAttachM6502YM3526(1500000);
+	BurnYM3526Init(3000000, &DrvYM3526FMIRQHandler, 0);
+	BurnTimerAttachYM3526(&M6502Config, 1500000);
 	BurnYM3526SetRoute(BURN_SND_YM3526_ROUTE, 1.00, BURN_SND_ROUTE_BOTH);
 
-	BurnYM2203Init(1, 1500000, NULL, DrvYM2203SynchroniseStream, DrvYM2203GetTime, 1);
+	BurnYM2203Init(1, 1500000, NULL, 1);
 	BurnTimerAttachSek(10000000);
 	BurnYM2203SetAllRoutes(0, 0.25, BURN_SND_ROUTE_BOTH);
 
@@ -929,9 +930,11 @@ static INT32 DrvExit()
 
 	BurnFree (AllMem);
 
+#ifdef BUILD_A68K
 	if (bUseAsm68KCoreOldValue) {
 		bBurnUseASMCPUEmulation = true;
 	}
+#endif
 
 	return 0;
 }
@@ -1162,6 +1165,11 @@ static INT32 DrvFrame()
 		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
 	}
 
+	if (i8751_reset == 0) {
+		chelnov_i8751_w(0);
+		i8751_reset = 1;
+	}
+
 	SekClose();
 	M6502Close();
 
@@ -1208,6 +1216,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		SCAN_VAR(i8751_coin_pending);
 		SCAN_VAR(i8751_command_queue);
 		SCAN_VAR(i8751_level);
+		SCAN_VAR(i8751_reset);
 	}
 
 	return 0;
@@ -1263,8 +1272,8 @@ struct BurnDriver BurnDrvKarnov = {
 	"karnov", NULL, NULL, NULL, "1987",
 	"Karnov (US, rev 6)\0", NULL, "Data East USA", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_HORSHOOT, 0,
-	NULL, karnovRomInfo, karnovRomName, NULL, NULL, KarnovInputInfo, KarnovDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_RUNGUN, 0,
+	NULL, karnovRomInfo, karnovRomName, NULL, NULL, NULL, NULL, KarnovInputInfo, KarnovDIPInfo,
 	KarnovInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 256, 248, 4, 3
 };
@@ -1311,8 +1320,8 @@ struct BurnDriver BurnDrvKarnova = {
 	"karnova", "karnov", NULL, NULL, "1987",
 	"Karnov (US, rev 5)\0", NULL, "Data East USA", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_HORSHOOT, 0,
-	NULL, karnovaRomInfo, karnovaRomName, NULL, NULL, KarnovInputInfo, KarnovDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_RUNGUN, 0,
+	NULL, karnovaRomInfo, karnovaRomName, NULL, NULL, NULL, NULL, KarnovInputInfo, KarnovDIPInfo,
 	KarnovInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 256, 248, 4, 3
 };
@@ -1367,8 +1376,8 @@ struct BurnDriver BurnDrvKarnovj = {
 	"karnovj", "karnov", NULL, NULL, "1987",
 	"Karnov (Japan)\0", NULL, "Data East Corporation", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_HORSHOOT, 0,
-	NULL, karnovjRomInfo, karnovjRomName, NULL, NULL, KarnovInputInfo, KarnovDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_RUNGUN, 0,
+	NULL, karnovjRomInfo, karnovjRomName, NULL, NULL, NULL, NULL, KarnovInputInfo, KarnovDIPInfo,
 	KarnovjInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 256, 248, 4, 3
 };
@@ -1423,8 +1432,8 @@ struct BurnDriver BurnDrvWndrplnt = {
 	"wndrplnt", NULL, NULL, NULL, "1987",
 	"Wonder Planet (Japan)\0", NULL, "Data East Corporation", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_DATAEAST, GBF_VERSHOOT, 0,
-	NULL, wndrplntRomInfo, wndrplntRomName, NULL, NULL, KarnovInputInfo, WndrplntDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_VERSHOOT, 0,
+	NULL, wndrplntRomInfo, wndrplntRomName, NULL, NULL, NULL, NULL, KarnovInputInfo, WndrplntDIPInfo,
 	WndrplntInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 248, 256, 3, 4
 };
@@ -1468,22 +1477,15 @@ static INT32 ChelnovInit()
 	microcontroller_id = CHELNOVW;
 	coin_mask = 0xe0;
 
-	INT32 nRet = DrvInit();
-
-	if (nRet == 0) {
-		*((UINT16*)(Drv68KROM + 0x0A26)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
-		*((UINT16*)(Drv68KROM + 0x062a)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
-	}
-
-	return nRet;
+	return DrvInit();
 }
 
 struct BurnDriver BurnDrvChelnov = {
 	"chelnov", NULL, NULL, NULL, "1988",
 	"Chelnov - Atomic Runner (World)\0", NULL, "Data East Corporation", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_HORSHOOT, 0,
-	NULL, chelnovRomInfo, chelnovRomName, NULL, NULL, ChelnovInputInfo, ChelnovDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_RUNGUN, 0,
+	NULL, chelnovRomInfo, chelnovRomName, NULL, NULL, NULL, NULL, ChelnovInputInfo, ChelnovDIPInfo,
 	ChelnovInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 256, 248, 4, 3
 };
@@ -1527,22 +1529,15 @@ static INT32 ChelnovuInit()
 	microcontroller_id = CHELNOV;
 	coin_mask = 0xe0;
 
-	INT32 nRet = DrvInit();
-
-	if (nRet == 0) {
-		*((UINT16*)(Drv68KROM + 0x0A26)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
-		*((UINT16*)(Drv68KROM + 0x062a)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
-	}
-
-	return nRet;
+	return DrvInit();
 }
 
 struct BurnDriver BurnDrvChelnovu = {
 	"chelnovu", "chelnov", NULL, NULL, "1988",
 	"Chelnov - Atomic Runner (US)\0", NULL, "Data East USA", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_HORSHOOT, 0,
-	NULL, chelnovuRomInfo, chelnovuRomName, NULL, NULL, ChelnovInputInfo, ChelnovuDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_RUNGUN, 0,
+	NULL, chelnovuRomInfo, chelnovuRomName, NULL, NULL, NULL, NULL, ChelnovInputInfo, ChelnovuDIPInfo,
 	ChelnovuInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 256, 248, 4, 3
 };
@@ -1586,22 +1581,15 @@ static INT32 ChelnovjInit()
 	microcontroller_id = CHELNOVJ;
 	coin_mask = 0xe0;
 
-	INT32 nRet = DrvInit();
-
-	if (nRet == 0) {
-		*((UINT16*)(Drv68KROM + 0x0A2e)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
-		*((UINT16*)(Drv68KROM + 0x062a)) = BURN_ENDIAN_SWAP_INT16(0x4E71);
-	}
-
-	return nRet;
+	return DrvInit();
 }
 
 struct BurnDriver BurnDrvChelnovj = {
 	"chelnovj", "chelnov", NULL, NULL, "1988",
 	"Chelnov - Atomic Runner (Japan)\0", NULL, "Data East Corporation", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_HORSHOOT, 0,
-	NULL, chelnovjRomInfo, chelnovjRomName, NULL, NULL, ChelnovInputInfo, ChelnovuDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_DATAEAST, GBF_RUNGUN, 0,
+	NULL, chelnovjRomInfo, chelnovjRomName, NULL, NULL, NULL, NULL, ChelnovInputInfo, ChelnovuDIPInfo,
 	ChelnovjInit, DrvExit, DrvFrame, DrvDraw, DrvScan, 
 	&DrvRecalc, 0x300, 256, 248, 4, 3
 };

@@ -1,12 +1,5 @@
 #include "burnint.h"
-#include "burn_sound.h"
 #include "burn_ym3526.h"
-#include "m68000_intf.h"
-#include "z80_intf.h"
-#include "m6809_intf.h"
-#include "hd6309_intf.h"
-#include "m6800_intf.h"
-#include "m6502_intf.h"
 
 // Timer Related
 
@@ -182,101 +175,23 @@ INT32 BurnTimerInitYM3526(INT32 (*pOverCallback)(INT32, INT32), double (*pTimeCa
 	return 0;
 }
 
-INT32 BurnTimerAttachSekYM3526(INT32 nClockspeed)
+INT32 BurnTimerAttachYM3526(cpu_core_config *ptr, INT32 nClockspeed)
 {
 	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = SekTotalCycles;
-	pCPURun = SekRun;
-	pCPURunEnd = SekRunEnd;
+	pCPUTotalCycles = ptr->totalcycles;
+	pCPURun = ptr->run;
+	pCPURunEnd = ptr->runend;
 
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
+	nTicksExtra = MAKE_TIMER_TICKS(1, nClockspeed) - 1;
 
 	return 0;
 }
 
-INT32 BurnTimerAttachZetYM3526(INT32 nClockspeed)
+static INT32 YM3526SynchroniseStream(INT32 nSoundRate)
 {
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = ZetTotalCycles;
-	pCPURun = ZetRun;
-	pCPURunEnd = ZetRunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
+	return (INT64)(pCPUTotalCycles() * nSoundRate / nCPUClockspeed);
 }
 
-INT32 BurnTimerAttachM6809YM3526(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6809TotalCycles;
-	pCPURun = M6809Run;
-	pCPURunEnd = M6809RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachHD6309YM3526(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = HD6309TotalCycles;
-	pCPURun = HD6309Run;
-	pCPURunEnd = HD6309RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6800YM3526(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6800TotalCycles;
-	pCPURun = M6800Run;
-	pCPURunEnd = M6800RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachHD63701YM3526(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6800TotalCycles;
-	pCPURun = HD63701Run;
-	pCPURunEnd = HD63701RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6803YM3526(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6800TotalCycles;
-	pCPURun = M6803Run;
-	pCPURunEnd = M6803RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6502YM3526(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6502TotalCycles;
-	pCPURun = M6502Run;
-	pCPURunEnd = M6502RunEnd; // doesn't do anything...
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
 
 // Sound Related
 
@@ -493,18 +408,22 @@ void BurnYM3526Exit()
 	if (!DebugSnd_YM3526Initted) bprintf(PRINT_ERROR, _T("BurnYM3526Exit called without init\n"));
 #endif
 
+	if (!DebugSnd_YM3526Initted) return;
+
 	YM3526Shutdown();
 
 	BurnTimerExitYM3526();
 
-	if (pBuffer) {
-		free(pBuffer);
-		pBuffer = NULL;
-	}
+	BurnFree(pBuffer);
 	
 	bYM3526AddSignal = 0;
 	
 	DebugSnd_YM3526Initted = 0;
+}
+
+INT32 BurnYM3526Init(INT32 nClockFrequency, OPL_IRQHANDLER IRQCallback, INT32 bAddSignal)
+{
+	return BurnYM3526Init(nClockFrequency, IRQCallback, YM3526SynchroniseStream, bAddSignal);
 }
 
 INT32 BurnYM3526Init(INT32 nClockFrequency, OPL_IRQHANDLER IRQCallback, INT32 (*StreamCallback)(INT32), INT32 bAddSignal)
@@ -547,7 +466,7 @@ INT32 BurnYM3526Init(INT32 nClockFrequency, OPL_IRQHANDLER IRQCallback, INT32 (*
 	YM3526SetTimerHandler(0, &BurnOPLTimerCallbackYM3526, 0);
 	YM3526SetUpdateHandler(0, &BurnYM3526UpdateRequest, 0);
 
-	pBuffer = (INT16*)malloc(4096 * sizeof(INT16));
+	pBuffer = (INT16*)BurnMalloc(4096 * sizeof(INT16));
 	memset(pBuffer, 0, 4096 * sizeof(INT16));
 
 	nYM3526Position = 0;

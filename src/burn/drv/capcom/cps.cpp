@@ -17,6 +17,7 @@ UINT8 *CpsZRom=NULL; UINT32 nCpsZRomLen=0; // Z80 Roms
 INT8 *CpsQSam=NULL; UINT32 nCpsQSamLen=0;	// QSound Sample Roms
 UINT8 *CpsAd  =NULL; UINT32 nCpsAdLen  =0; // ADPCM Data
 UINT8 *CpsStar=NULL;
+UINT8 *CpsKey=NULL; UINT32 nCpsKeyLen = 0;
 UINT32 nCpsGfxScroll[4]={0,0,0,0}; // Offset to Scroll tiles
 UINT32 nCpsGfxMask=0;	  // Address mask
 
@@ -494,6 +495,46 @@ static INT32 CpsLoadOneBootlegType3Swap(UINT8 *Tile, INT32 nNum, INT32 nWord, IN
 	return 0;
 }
 
+static INT32 CpsLoadOneBootlegSwap(UINT8* Tile, INT32 nNum, INT32 nWord, INT32 nShift)
+{
+	UINT8 *Rom = NULL; INT32 nRomLen=0;
+	UINT8 *pt = NULL, *pr = NULL;
+	INT32 i;
+
+	LoadUp(&Rom, &nRomLen, nNum);
+	if (Rom == NULL) {
+		return 1;
+	}
+	nRomLen &= ~1;								// make sure even
+
+	for (i = 0, pt = Tile + 4, pr = Rom; i < 0x40000; pt += 8) {
+		UINT32 Pix;						// Eight pixels
+		UINT8 b;
+		b = *pr++; i++; Pix = SepTable[b];
+		if (nWord) {
+			b = *pr++; i++; Pix |= SepTable[b] << 1;
+		}
+
+		Pix <<= nShift;
+		*((UINT32 *)pt) |= Pix;
+	}
+
+	for (i = 0, pt = Tile + 0, pr = Rom + 0x40000; i < 0x40000; pt += 8) {
+		UINT32 Pix;						// Eight pixels
+		UINT8 b;
+		b = *pr++; i++; Pix = SepTable[b];
+		if (nWord) {
+			b = *pr++; i++; Pix |= SepTable[b] << 1;
+		}
+
+		Pix <<= nShift;
+		*((UINT32 *)pt) |= Pix;
+	}
+
+	BurnFree(Rom);
+	return 0;
+}
+
 static INT32 CpsLoadOneSf2ebbl(UINT8* Tile, INT32 nNum, INT32 nWord, INT32 nShift)
 {
 	UINT8 *Rom = NULL; INT32 nRomLen=0;
@@ -697,6 +738,84 @@ static INT32 CpsLoadOneWonder3b(UINT8* Tile, INT32 nNum, INT32 nWord, INT32 nShi
 		*((UINT32 *)pt) |= Pix;
 	}
 
+	BurnFree(Rom);
+	return 0;
+}
+
+static INT32 CpsLoadPunisherbTiles(UINT8* Tile, INT32 nNum)
+{
+	UINT8 *Rom = (UINT8*)BurnMalloc(0x400000 * sizeof(UINT8));
+	UINT8 *pt = NULL, *pr = NULL;
+	INT32 i, j;
+
+	if (Rom == NULL) {
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x000000, nNum + 0, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x000001, nNum + 1, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x100000, nNum + 2, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x100001, nNum + 3, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x200000, nNum + 4, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x200001, nNum + 5, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x300000, nNum + 6, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	if (BurnLoadRom(Rom + 0x300001, nNum + 7, 2)) {
+		BurnFree(Rom);
+		return 1;
+	}
+	
+	INT32 TileOffset[4] = { 0x000000, 0x200000, 0x000004, 0x200004 };
+	
+	for (j = 0; j < 4; j++) {
+		for (i = 0, pt = Tile + TileOffset[j], pr = Rom + (0x80000 * j); i < 0x80000; pt += 8) {
+			UINT32 Pix;		// Eight pixels
+			UINT8 b;
+			b = *pr++; i++; Pix = SepTable[b];
+			b = *pr++; i++; Pix |= SepTable[b] << 1;
+
+			Pix <<= 0;
+			*((UINT32 *)pt) |= Pix;
+		}
+
+		for (i = 0, pt = Tile + TileOffset[j], pr = Rom + 0x200000 +  (0x80000 * j); i < 0x80000; pt += 8) {
+			UINT32 Pix;		// Eight pixels
+			UINT8 b;
+			b = *pr++; i++; Pix = SepTable[b];
+			b = *pr++; i++; Pix |= SepTable[b] << 1;
+
+			Pix <<= 2;
+			*((UINT32 *)pt) |= Pix;
+		}
+	}
+	
 	BurnFree(Rom);
 	return 0;
 }
@@ -992,6 +1111,35 @@ INT32 CpsLoadTilesForgottn(INT32 nStart)
 	CpsLoadOne(CpsGfx + 0 + 0x000000, nStart +  0, 0, 0);
 	CpsLoadOne(CpsGfx + 0 + 0x000000, nStart +  1, 0, 1);
 	CpsLoadOne(CpsGfx + 0 + 0x000000, nStart +  2, 1, 2);
+	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  3, 0, 0);
+	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  4, 0, 1);
+	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  5, 0, 2);
+	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  6, 0, 3);
+	CpsLoadOne(CpsGfx + 0 + 0x100000, nStart +  7, 0, 0);
+	CpsLoadOne(CpsGfx + 0 + 0x100000, nStart +  8, 0, 1);
+	CpsLoadOne(CpsGfx + 4 + 0x100000, nStart +  9, 0, 0);
+	CpsLoadOne(CpsGfx + 4 + 0x100000, nStart + 10, 0, 1);
+	CpsLoadOne(CpsGfx + 4 + 0x100000, nStart + 11, 0, 2);
+	CpsLoadOne(CpsGfx + 4 + 0x100000, nStart + 12, 0, 3);
+	CpsLoadOne(CpsGfx + 0 + 0x200000, nStart + 13, 1, 0);
+	CpsLoadOne(CpsGfx + 0 + 0x200000, nStart + 14, 0, 2);
+	CpsLoadOne(CpsGfx + 0 + 0x200000, nStart + 15, 0, 3);
+	CpsLoadOne(CpsGfx + 4 + 0x200000, nStart + 16, 1, 0);
+	CpsLoadOne(CpsGfx + 4 + 0x200000, nStart + 17, 0, 2);
+	CpsLoadOne(CpsGfx + 4 + 0x200000, nStart + 18, 0, 3);
+	CpsLoadOne(CpsGfx + 0 + 0x300000, nStart + 19, 0, 2);
+	CpsLoadOne(CpsGfx + 0 + 0x300000, nStart + 20, 0, 3);
+	CpsLoadOne(CpsGfx + 4 + 0x300000, nStart + 21, 0, 2);
+	CpsLoadOne(CpsGfx + 4 + 0x300000, nStart + 22, 0, 3);
+	
+	return 0;
+}
+
+INT32 CpsLoadTilesForgottna(INT32 nStart)
+{
+	CpsLoadOne(CpsGfx + 0 + 0x000000, nStart +  0, 0, 0);
+	CpsLoadOne(CpsGfx + 0 + 0x000000, nStart +  1, 0, 1);
+	CpsLoadOne(CpsGfx + 0 + 0x000000, nStart +  2, 1, 2);
 	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  3, 1, 0);
 	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  4, 0, 2);
 	CpsLoadOne(CpsGfx + 4 + 0x000000, nStart +  5, 0, 3);
@@ -1052,6 +1200,16 @@ static INT32 CpsLoadTilesBootleg(UINT8 *Tile, INT32 nStart)
 	CpsLoadOneBootleg(Tile, nStart + 1, 0, 1);
 	CpsLoadOneBootleg(Tile, nStart + 2, 0, 2);
 	CpsLoadOneBootleg(Tile, nStart + 3, 0, 3);
+	
+	return 0;
+}
+
+static INT32 CpsLoadTilesBootlegSwap(UINT8 *Tile, INT32 nStart)
+{
+	CpsLoadOneBootlegSwap(Tile, nStart + 0, 0, 0);
+	CpsLoadOneBootlegSwap(Tile, nStart + 1, 0, 1);
+	CpsLoadOneBootlegSwap(Tile, nStart + 2, 0, 2);
+	CpsLoadOneBootlegSwap(Tile, nStart + 3, 0, 3);
 	
 	return 0;
 }
@@ -1325,6 +1483,38 @@ INT32 CpsLoadTilesPang3r1a(INT32 nStart)
 	CpsLoadOne(CpsGfx + 0x200000, nStart + 5, 1, 2);
 	CpsLoadOne(CpsGfx + 0x000004, nStart + 6, 1, 2);
 	CpsLoadOne(CpsGfx + 0x200004, nStart + 7, 1, 2);
+	
+	return 0;
+}
+
+INT32 CpsLoadTilesPunisherb(INT32 nStart)
+{
+	CpsLoadPunisherbTiles(CpsGfx, nStart);
+	
+	return 0;
+}
+
+INT32 CpsLoadTilesKnightsb2(INT32 nStart)
+{
+	CpsLoadOneBootlegType2(CpsGfx + 0x000000, nStart + 0, 0, 0);
+	CpsLoadOneBootlegType2(CpsGfx + 0x000000, nStart + 1, 0, 1);
+	CpsLoadOneBootlegType2(CpsGfx + 0x000000, nStart + 2, 0, 2);
+	CpsLoadOneBootlegType2(CpsGfx + 0x000000, nStart + 3, 0, 3);
+	
+	return 0;
+}
+
+INT32 CpsLoadTilesMtwinsb(INT32 nStart)
+{
+	CpsLoadTilesBootlegSwap(CpsGfx + 0x000000, nStart + 0);
+	
+	return 0;
+}
+
+INT32 CpsLoadTilesWofabl(INT32 nStart)
+{
+	CpsLoadTilesBootlegType3(CpsGfx + 0x000000, nStart + 0);
+	CpsLoadTilesBootlegType3(CpsGfx + 0x200000, nStart + 4);
 	
 	return 0;
 }
@@ -1636,6 +1826,7 @@ static INT32 CpsGetROMs(bool bLoad)
 	UINT8* CpsGfxLoad = CpsGfx;
 	UINT8* CpsZRomLoad = CpsZRom;
 	UINT8* CpsQSamLoad = (UINT8*)CpsQSam;
+	UINT8* CpsKeyLoad = CpsKey;
 
 	INT32 nGfxNum = 0;
 
@@ -1660,7 +1851,7 @@ static INT32 CpsGetROMs(bool bLoad)
 		
 		if ((ri.nType & 0x0f) == CPS2_PRG_68K) {
 			if (bLoad) {
-				BurnLoadRom(CpsRomLoad, i, 1);
+				if (BurnLoadRom(CpsRomLoad, i, 1)) return 1;
 				CpsRomLoad += ri.nLen;
 			} else {
 				nCpsRomLen += ri.nLen;
@@ -1670,8 +1861,8 @@ static INT32 CpsGetROMs(bool bLoad)
 		
 		if ((ri.nType & 0x0f) == CPS2_PRG_68K_SIMM) {
 			if (bLoad) {
-				BurnLoadRom(CpsRomLoad + 0x000001, i + 0, 2);
-				BurnLoadRom(CpsRomLoad + 0x000000, i + 1, 2);
+				if (BurnLoadRom(CpsRomLoad + 0x000001, i + 0, 2)) return 1;
+				if (BurnLoadRom(CpsRomLoad + 0x000000, i + 1, 2)) return 1;
 				CpsRomLoad += ri.nLen * 2;
 				i += 2;
 			} else {
@@ -1682,7 +1873,7 @@ static INT32 CpsGetROMs(bool bLoad)
 		
 		if ((ri.nType & 0x0f) == CPS2_PRG_68K_XOR_TABLE) {
 			if (bLoad) {
-				BurnLoadRom(CpsCodeLoad, i, 1);
+				if (BurnLoadRom(CpsCodeLoad, i, 1)) return 1;
 				CpsCodeLoad += ri.nLen;
 			} else {
 				nCpsCodeLen += ri.nLen;
@@ -1810,6 +2001,16 @@ static INT32 CpsGetROMs(bool bLoad)
 				i++;
 			}
 		}
+		
+		if ((ri.nType & 0x0f) == CPS2_ENCRYPTION_KEY) {
+			if (bLoad) {
+				if (BurnLoadRom(CpsKeyLoad, i, 1)) return 1;
+				CpsKeyLoad += ri.nLen;
+			} else {
+				nCpsKeyLen += ri.nLen;
+			}
+			i++;
+		}
 	} while (ri.nLen);
 
 	if (bLoad) {
@@ -1836,6 +2037,7 @@ static INT32 CpsGetROMs(bool bLoad)
 		bprintf(PRINT_IMPORTANT, _T("  - Z80 ROM size:\t0x%08X\n"), nCpsZRomLen);
 		bprintf(PRINT_IMPORTANT, _T("  - Graphics data:\t0x%08X\n"), nCpsGfxLen);
 		bprintf(PRINT_IMPORTANT, _T("  - QSound data:\t0x%08X\n"), nCpsQSamLen);
+		bprintf(PRINT_IMPORTANT, _T("  - Key data:\t\t0x%08X\n"), nCpsKeyLen);
 #endif
 
 		if (/*!nCpsCodeLen ||*/ !nCpsRomLen || !nCpsGfxLen || !nCpsZRomLen || ! nCpsQSamLen) {
@@ -1853,10 +2055,10 @@ INT32 CpsInit()
 	INT32 nMemLen, i;
 	
 	if (Cps == 1) {
-		BurnSetRefreshRate(59.61);
+		BurnSetRefreshRate(59.63);
 	} else {
 		if (Cps == 2) {
-			BurnSetRefreshRate(59.629403);
+			BurnSetRefreshRate(59.63);
 		}
 	}
 
@@ -1869,7 +2071,7 @@ INT32 CpsInit()
 	}
 	nCPS68KClockspeed = nCPS68KClockspeed * 100 / nBurnFPS;
 
-	nMemLen = nCpsGfxLen + nCpsRomLen + nCpsCodeLen + nCpsZRomLen + nCpsQSamLen + nCpsAdLen;
+	nMemLen = nCpsGfxLen + nCpsRomLen + nCpsCodeLen + nCpsZRomLen + nCpsQSamLen + nCpsAdLen + nCpsKeyLen;
 
 	if (Cps1Qs == 1) {
 		nMemLen += nCpsZRomLen * 2;
@@ -1892,6 +2094,7 @@ INT32 CpsInit()
 	}
 	CpsQSam =(INT8*)(CpsZRom + nCpsZRomLen);
 	CpsAd   =(UINT8*)(CpsQSam + nCpsQSamLen);
+	CpsKey  =(UINT8*)(CpsAd + nCpsAdLen);
 
 	// Create Gfx addr mask
 	for (i = 0; i < 31; i++) {
@@ -1959,9 +2162,10 @@ INT32 CpsExit()
 	Scroll2TileMask = 0;
 	Scroll3TileMask = 0;
 
-	nCpsCodeLen = nCpsRomLen = nCpsGfxLen = nCpsZRomLen = nCpsQSamLen = nCpsAdLen = 0;
+	nCpsCodeLen = nCpsRomLen = nCpsGfxLen = nCpsZRomLen = nCpsQSamLen = nCpsAdLen = nCpsKeyLen = 0;
 	CpsRom = CpsZRom = CpsAd = CpsStar = NULL;
 	CpsQSam = NULL;
+	CpsKey = NULL;
 
 	// All Memory is allocated to this (this is the only one we can free)
 	BurnFree(CpsGfx);
@@ -1972,7 +2176,7 @@ INT32 CpsExit()
 
 	nCPS68KClockspeed = 0;
 	Cps = 0;
-	nCpsNumScanlines = 259;
+	nCpsNumScanlines = 262;
 
 	return 0;
 }

@@ -10,7 +10,7 @@
 static UINT8* pSShot = NULL;
 static UINT8* pConvertedImage = NULL;
 static png_bytep* pSShotImageRows = NULL;
-static FILE* ff;
+static FILE* ff = NULL;
 
 INT32 MakeScreenShot()
 {
@@ -60,7 +60,10 @@ INT32 SaveScreenshot(const char *path)
 			pSShotImageRows = NULL;
 		}
 
-		fclose(ff);
+		if (ff) {
+			fclose(ff);
+			remove(szSShotName);
+		}
 
 		return SSHOT_LIBPNG_ERROR;
     }

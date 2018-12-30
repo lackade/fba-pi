@@ -4,8 +4,9 @@ UINT8 GalInputPort0[8]       = {0, 0, 0, 0, 0, 0, 0, 0};
 UINT8 GalInputPort1[8]       = {0, 0, 0, 0, 0, 0, 0, 0};
 UINT8 GalInputPort2[8]       = {0, 0, 0, 0, 0, 0, 0, 0};
 UINT8 GalInputPort3[8]       = {0, 0, 0, 0, 0, 0, 0, 0};
+UINT8 GalInputPort4[8]       = {0, 0, 0, 0, 0, 0, 0, 0};
 UINT8 GalDip[7]              = {0, 0, 0, 0, 0, 0, 0};
-UINT8 GalInput[4]            = {0x00, 0x00, 0x00, 0x00};
+UINT8 GalInput[5]            = {0x00, 0x00, 0x00, 0x00, 0x00};
 UINT8 GalReset               = 0;
 UINT8 GalFakeDip             = 0;
 INT32 GalAnalogPort0         = 0;
@@ -71,18 +72,21 @@ UINT8 SfxSampleControl;
 UINT16 ScrambleProtectionState;
 UINT8 ScrambleProtectionResult;
 UINT8 MoonwarPortSelect;
+UINT8 MoonwarDialX[2];
 UINT8 MshuttleAY8910CS;
 UINT8 GmgalaxSelectedGame;
 UINT8 Fourin1Bank;
 UINT8 GameIsGmgalax;
 UINT8 GameIsBagmanmc;
+UINT8 GameIsMoonwar = 0;
 UINT8 CavelonBankSwitch;
 UINT8 GalVBlank;
+UINT8 Dingo;
 
 static inline void GalMakeInputs()
 {
 	// Reset Inputs
-	GalInput[0] = GalInput[1] = GalInput[2] = GalInput[3] = 0x00;
+	GalInput[0] = GalInput[1] = GalInput[2] = GalInput[3] = GalInput[4] = 0x00;
 
 	// Compile Digital Inputs
 	for (INT32 i = 0; i < 8; i++) {
@@ -90,6 +94,7 @@ static inline void GalMakeInputs()
 		GalInput[1] |= (GalInputPort1[i] & 1) << i;
 		GalInput[2] |= (GalInputPort2[i] & 1) << i;
 		GalInput[3] |= (GalInputPort3[i] & 1) << i;
+		GalInput[4] |= (GalInputPort4[i] & 1) << i;
 	}
 }
 
@@ -109,7 +114,7 @@ static INT32 GalMemIndex()
 	GalVideoRam            = Next; Next += 0x00400;
 	GalSpriteRam           = Next; Next += 0x00400;
 	GalScrollVals          = Next; Next += 0x00020;
-	GalGfxBank             = Next; Next += 0x0001f;
+	GalGfxBank             = Next; Next += 0x00020;
 	
 	if (GalZ80Rom2Size) {
 		GalZ80Ram2     = Next; Next += 0x00400;
@@ -180,6 +185,7 @@ static INT32 GalDoReset()
 	ScrambleProtectionState = 0;
 	ScrambleProtectionResult = 0;
 	MoonwarPortSelect = 0;
+	MoonwarDialX[0] = MoonwarDialX[1] = 0;
 	MshuttleAY8910CS = 0;
 	Fourin1Bank = 0;
 	CavelonBankSwitch = 0;
@@ -392,12 +398,9 @@ UINT8 KonamiPPIReadIN3()
 void KonamiPPIInit()
 {
 	ppi8255_init(2);
-	PPI0PortReadA = KonamiPPIReadIN0;
-	PPI0PortReadB = KonamiPPIReadIN1;
-	PPI0PortReadC = KonamiPPIReadIN2;
-	PPI1PortReadC = KonamiPPIReadIN3;
-	PPI1PortWriteA = KonamiSoundLatchWrite;
-	PPI1PortWriteB = KonamiSoundControlWrite;
+	ppi8255_set_read_ports(0, KonamiPPIReadIN0, KonamiPPIReadIN1, KonamiPPIReadIN2);
+	ppi8255_set_read_ports(1, NULL, NULL, KonamiPPIReadIN3);
+	ppi8255_set_write_ports(1, KonamiSoundLatchWrite, KonamiSoundControlWrite, NULL);
 }
 
 // Galaxian Memory Map
@@ -625,6 +628,10 @@ INT32 GalInit()
 // Moon Cresta Memory Map
 UINT8 __fastcall MooncrstZ80Read(UINT16 a)
 {
+	if (a >= 0x7000 && a <= 0x77ff) {
+		return 0; // nop / unmapped area constantly read/written to by porter / portman
+	}
+
 	switch (a) {
 		case 0xa000: {
 			return GalInput[0] | GalDip[0];
@@ -666,7 +673,11 @@ void __fastcall MooncrstZ80Write(UINT16 a, UINT8 d)
 		
 		return;
 	}
-	
+
+	if (a >= 0x7000 && a <= 0x77ff) {
+		return; // nop / unmapped area constantly written to by porter / portman
+	}
+
 	switch (a) {
 		case 0xa000:
 		case 0xa001:
@@ -841,7 +852,17 @@ void __fastcall JumpbugZ80Write(UINT16 a, UINT8 d)
 			AY8910Write(0, 0, d);
 			return;
 		}
-		
+
+		case 0x2600:
+		case 0x6000:
+		case 0x6001:
+		case 0x6803:
+		case 0x6805:
+		case 0xb000:
+		case 0xb004:
+			// ??? unknown writes
+			return;
+
 		case 0x6002:
 		case 0x6003:
 		case 0x6004:
@@ -1141,6 +1162,10 @@ void __fastcall TheendZ80Write(UINT16 a, UINT8 d)
 		case 0x6807: {
 			GalFlipScreenY = d & 1;
 			return;
+		}
+
+		case 0x7005: {
+			return; // NOP
 		}
 		
 		default: {
@@ -1537,6 +1562,7 @@ INT32 GalExit()
 	GalBackgroundEnable = 0;
 	ScrambleProtectionState = 0;
 	ScrambleProtectionResult = 0;
+	Dingo = 0;
 	
 	GalZ80Rom1Size = 0;
 	GalZ80Rom1Num = 0;
@@ -1572,6 +1598,7 @@ INT32 GalExit()
 	Fourin1Bank = 0;
 	GameIsGmgalax = 0;
 	GameIsBagmanmc = 0;
+	GameIsMoonwar = 0;
 	CavelonBankSwitch = 0;
 	DarkplntBulletColour = 0;
 	DambustrBgColour1 = 0;
@@ -1598,18 +1625,21 @@ INT32 GalFrame()
 {
 	INT32 nInterleave = 8;
 	INT32 nSoundBufferPos = 0;
-	
+	INT32 SoundLenInterlv = (nBurnSoundLen > 0x100) ? 0x100 : nBurnSoundLen; // keep spdcoin from freezing up when the coin breaks @ 48khz
+
 	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_GALAXIAN || GalSoundType == GAL_SOUND_HARDWARE_TYPE_KINGBALLDAC) {
 		nInterleave = nBurnSoundLen;
 		GalaxianSoundUpdateTimers();
 	}
-	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_KONAMIAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_FROGGERAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_EXPLORERAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_SCORPIONAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_HUNCHBACKAY8910) nInterleave = nBurnSoundLen / 4;
+	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_KONAMIAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_FROGGERAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_EXPLORERAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_SCORPIONAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_HUNCHBACKAY8910) nInterleave = SoundLenInterlv / 4;
 	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_SFXAY8910DAC) nInterleave = 32;
 	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_CHECKMAJAY8910) nInterleave = 32;
 	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_FANTASTCAY8910) nInterleave = 32;
 	
 	INT32 nIrqInterleaveFire = nInterleave / 4;
-	
+
+	if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_RACKNROLSN76496 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_HEXPOOLASN76496) { nInterleave = 8; nIrqInterleaveFire = nInterleave - 1; }
+
 	if (GameIsBagmanmc) nIrqInterleaveFire = 0;
 
 	if (GalReset) GalDoReset();
@@ -1620,7 +1650,7 @@ INT32 GalFrame()
 		if (GmgalaxSelectedGame == 1) nAddress = 0x4000;
 		ZetOpen(0);
 		ZetMapArea(0x0000, 0x3fff, 0, GalZ80Rom1 + nAddress);
-		ZetMapArea(0x0000, 0x3fff, 2 ,GalZ80Rom1 + nAddress);
+		ZetMapArea(0x0000, 0x3fff, 2, GalZ80Rom1 + nAddress);
 		ZetClose();
 		
 		GalGfxBank[0] = 0;
@@ -1668,6 +1698,7 @@ INT32 GalFrame()
 		}
 			
 		if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_CHECKMAJAY8910) {
+			if (Dingo && !((i%2) == 0)) continue; // slow down dingo music a bit.
 			// Run Z80 #2
 			nCurrentCPU = 1;
 			ZetOpen(nCurrentCPU);
@@ -1675,10 +1706,7 @@ INT32 GalFrame()
 			nGalCyclesSegment = nNext - nGalCyclesDone[nCurrentCPU];
 			nGalCyclesSegment = ZetRun(nGalCyclesSegment);
 			nGalCyclesDone[nCurrentCPU] += nGalCyclesSegment;
-			ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
-			nGalCyclesDone[nCurrentCPU] += ZetRun(300);
-			ZetSetIRQLine(0, CPU_IRQSTATUS_NONE);
-			nGalCyclesDone[nCurrentCPU] += ZetRun(300);
+			ZetSetIRQLine(0, CPU_IRQSTATUS_HOLD);
 			ZetClose();
 		}
 			
@@ -1731,16 +1759,16 @@ INT32 GalFrame()
 		
 		if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_ZIGZAGAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_JUMPBUGAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_CHECKMANAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_CHECKMAJAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_EXPLORERAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_SCORPIONAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_SFXAY8910DAC || GalSoundType == GAL_SOUND_HARDWARE_TYPE_MSHUTTLEAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_BONGOAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_AD2083AY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_HUNCHBACKAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_FANTASTCAY8910) {
 			if (pBurnSoundOut) {
-				INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
+				INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 				INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-				AY8910Render(&pAY8910Buffer[0], pSoundBuf, nSegmentLength, 0);
+				AY8910Render(pSoundBuf, nSegmentLength);
 				nSoundBufferPos += nSegmentLength;
 			}
 		}
 		
 		if (GalSoundType == GAL_SOUND_HARDWARE_TYPE_KONAMIAY8910 || GalSoundType == GAL_SOUND_HARDWARE_TYPE_FROGGERAY8910) {
 			if (pBurnSoundOut) {
-				INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
+				INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 				INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 				
 				AY8910Update(0, &pAY8910Buffer[0], nSegmentLength);
@@ -1803,7 +1831,7 @@ INT32 GalFrame()
 			INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 			if (nSegmentLength) {
-				AY8910Render(&pAY8910Buffer[0], pSoundBuf, nSegmentLength, 0);
+				AY8910Render(pSoundBuf, nSegmentLength);
  			}
 		}
 	}
@@ -1826,6 +1854,10 @@ INT32 GalFrame()
 					filter_rc_update(4, pAY8910Buffer[4], pSoundBuf, nSegmentLength);
 					filter_rc_update(5, pAY8910Buffer[5], pSoundBuf, nSegmentLength);
 				}
+			}
+			if (GameIsMoonwar) {
+				// Moonwar[a] has a horrible DC Offset
+				BurnSoundDCFilter();
 			}
 		}
 	}
@@ -1905,6 +1937,7 @@ INT32 GalScan(INT32 nAction, INT32 *pnMin)
 		SCAN_VAR(SfxSampleControl);
 		SCAN_VAR(ScrambleProtectionResult);
 		SCAN_VAR(MoonwarPortSelect);
+		SCAN_VAR(MoonwarDialX);
 		SCAN_VAR(MshuttleAY8910CS);
 		SCAN_VAR(GmgalaxSelectedGame);
 		SCAN_VAR(Fourin1Bank);

@@ -168,7 +168,7 @@ static void GameInpInitMacros()
 	INT32 nKickInputs[4][3];
 
 	INT32 nNeogeoButtons[4][4];
-	INT32 nPgmButtons[10][4];
+	INT32 nPgmButtons[10][16];
 
 	bStreetFighterLayout = false;
 	nMacroCount = 0;
@@ -711,7 +711,8 @@ static void GameInpInitMacros()
 	if ((nPunchx3[0] == 7) && (nKickx3[0] == 7)) {
 		bStreetFighterLayout = true;
 	}
-	if (nFireButtons >= 5 && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_CAPCOM_CPS2) {
+	if (nFireButtons >= 7 && (BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_CAPCOM_CPS2) {
+		// used to be 5 buttons in the above check - now we have volume buttons it is 7
 		bStreetFighterLayout = true;
 	}
 }
@@ -1546,7 +1547,7 @@ INT32 GameInputAutoIni(INT32 nPlayer, TCHAR* lpszFile, bool bOverWrite)
 	INT32 nFileVersion = 0;
 	UINT32 i;
 
-	nAnalogSpeed = 0x0100;
+	//nAnalogSpeed = 0x0100; /* this clobbers the setting read at the beginning of the file. */
 	
 	FILE* h = _tfopen(lpszFile, _T("rt"));
 	if (h == NULL) {

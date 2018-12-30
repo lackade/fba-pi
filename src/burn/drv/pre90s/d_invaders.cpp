@@ -17,17 +17,18 @@ static UINT32 *DrvPalette;
 static UINT8 DrvRecalc;
 
 static UINT8 *prev_snd_data;
+static INT32 explosion_counter = 0;
 
 static UINT16 shift_data;
 static UINT8 shift_count;
 static INT32 watchdog;
 
-static UINT8  DrvJoy1[8];
-static UINT8  DrvJoy2[8];
-static UINT8  DrvJoy3[8];
-static UINT8  DrvDips[1];
-static UINT8  DrvInputs[3];
-static UINT8  DrvReset;
+static UINT8 DrvJoy1[8];
+static UINT8 DrvJoy2[8];
+static UINT8 DrvJoy3[8];
+static UINT8 DrvDips[1];
+static UINT8 DrvInputs[3];
+static UINT8 DrvReset;
 static UINT32 inputxor=0;
 
 static struct BurnInputInfo InvadersInputList[] = {
@@ -113,12 +114,36 @@ static struct BurnDIPInfo SitvDIPList[]=
 
 STDDIPINFO(Sitv)
 
+static struct BurnDIPInfo OzmawarsDIPList[]=
+{
+	{0x0b, 0xff, 0xff, 0x00, NULL			},
+
+	{0   , 0xfe, 0   ,    4, "Energy"		},
+	{0x0b, 0x01, 0x03, 0x00, "15000"		},
+	{0x0b, 0x01, 0x03, 0x01, "20000"		},
+	{0x0b, 0x01, 0x03, 0x02, "25000"		},
+	{0x0b, 0x01, 0x03, 0x03, "35000"		},
+
+	{0   , 0xfe, 0   ,    2, "Bonus Energy"		},
+	{0x0b, 0x01, 0x08, 0x00, "15000"		},
+	{0x0b, 0x01, 0x08, 0x08, "10000"		},
+
+	{0   , 0xfe, 0   ,    2, "Coinage"		},
+	{0x0b, 0x01, 0x80, 0x00, "1 Coin  1 Credits"	},
+	{0x0b, 0x01, 0x80, 0x80, "1 Coin  2 Credits"	},
+};
+
+STDDIPINFO(Ozmawars)
+
 static void invaders_sh_1_write(UINT8 data, UINT8 *last)
 {
 	if ( data & 0x01 && ~*last & 0x01) BurnSamplePlay(9);	// Ufo Sound
 	if ( data & 0x02 && ~*last & 0x02) BurnSamplePlay(0);	// Shot Sound
-	if ( data & 0x04 && ~*last & 0x04) BurnSamplePlay(1);	// Base Hit
-	if (~data & 0x04 &&  *last & 0x04) BurnSampleStop(1);
+	if ( data & 0x04 && ~*last & 0x04 && BurnSampleGetStatus(1) == 0 && explosion_counter == 0) {
+		BurnSamplePlay(1);	// Base Hit
+		explosion_counter = 120;
+	}
+	if (~data & 0x04 &&  *last & 0x04 && BurnSampleGetStatus(1) != 0) BurnSampleStop(1);
 	if ( data & 0x08 && ~*last & 0x08) BurnSamplePlay(2);	// Invader Hit
 	if ( data & 0x10 && ~*last & 0x10) BurnSamplePlay(8);	// Bonus Missle Base
 
@@ -153,7 +178,7 @@ static void __fastcall invaders_write_port(UINT16 port, UINT8 data)
 		return;
 
 		case 0x05:
-			invaders_sh_2_write(data, &prev_snd_data[0]);
+			invaders_sh_2_write(data, &prev_snd_data[1]);
 		return;
 
 		case 0x06:
@@ -193,6 +218,7 @@ static INT32 DrvDoReset(INT32 clear_mem)
 	ZetClose();
 
 	BurnSampleReset();
+	explosion_counter = 0; // prevent double-playing sample
 
 	watchdog = 0;
 
@@ -211,7 +237,7 @@ static INT32 MemIndex()
 
 	DrvMainRAM		= Next; Next += 0x002000;
 
-	prev_snd_data		= Next; Next += 0x000002;
+	prev_snd_data	= Next; Next += 0x000002;
 
 	RamEnd			= Next;
 
@@ -359,7 +385,11 @@ static INT32 DrvFrame()
 		}
 		if (i == 224) {
 			ZetSetVector(0xcf);
-			ZetSetIRQLine(0, CPU_IRQSTATUS_AUTO);	
+			ZetSetIRQLine(0, CPU_IRQSTATUS_AUTO);
+
+			if (pBurnDraw) {
+				DrvDraw();
+			}
 		}
 	}
 
@@ -369,8 +399,8 @@ static INT32 DrvFrame()
 		BurnSampleRender(pBurnSoundOut, nBurnSoundLen);
 	}
 
-	if (pBurnDraw) {
-		DrvDraw();
+	if (explosion_counter) {
+		explosion_counter--;
 	}
 
 	return 0;
@@ -384,7 +414,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		*pnMin = 0x029695;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -403,22 +433,39 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 
 static struct BurnSampleInfo InvadersSampleDesc[] = {
 #if !defined (ROM_VERIFY)
-	{ "1.wav", SAMPLE_NOLOOP },	// Shot/Missle
-	{ "2.wav", SAMPLE_NOLOOP },	// Base Hit/Explosion
-	{ "3.wav", SAMPLE_NOLOOP },	// Invader Hit
-	{ "4.wav", SAMPLE_NOLOOP },	// Fleet move 1
-	{ "5.wav", SAMPLE_NOLOOP },	// Fleet move 2
-	{ "6.wav", SAMPLE_NOLOOP },	// Fleet move 3
-	{ "7.wav", SAMPLE_NOLOOP },	// Fleet move 4
-	{ "8.wav", SAMPLE_NOLOOP },	// UFO/Saucer Hit
-	{ "9.wav", SAMPLE_NOLOOP },	// Bonus Base
-	{ "18.wav",SAMPLE_NOLOOP },	// UFO Sound
+	{ "1", SAMPLE_NOLOOP },	// Shot/Missle
+	{ "2", SAMPLE_NOLOOP },	// Base Hit/Explosion
+	{ "3", SAMPLE_NOLOOP },	// Invader Hit
+	{ "4", SAMPLE_NOLOOP },	// Fleet move 1
+	{ "5", SAMPLE_NOLOOP },	// Fleet move 2
+	{ "6", SAMPLE_NOLOOP },	// Fleet move 3
+	{ "7", SAMPLE_NOLOOP },	// Fleet move 4
+	{ "8", SAMPLE_NOLOOP },	// UFO/Saucer Hit
+	{ "9", SAMPLE_NOLOOP },	// Bonus Base
+	{ "18",SAMPLE_NOLOOP },	// UFO Sound
 #endif
 	{ "", 0 }
 };
 
 STD_SAMPLE_PICK(Invaders)
 STD_SAMPLE_FN(Invaders)
+
+
+static struct BurnSampleInfo OzmawarsSampleDesc[] = {
+	{ "1", SAMPLE_NOLOOP },	// Shot/Missle
+	{ "2", SAMPLE_NOLOOP },	// Base Hit/Explosion
+	{ "3", SAMPLE_NOLOOP },	// Invader Hit
+	{ "4", SAMPLE_NOLOOP },	// Fleet move 1
+	{ "5", SAMPLE_NOLOOP },	// Fleet move 2
+	{ "6", SAMPLE_NOLOOP },	// Fleet move 3
+	{ "7", SAMPLE_NOLOOP },	// Fleet move 4
+	{ "8", SAMPLE_NOLOOP },	// UFO/Saucer Hit
+	{ "9", SAMPLE_NOLOOP },	// Bonus Base
+	{ "", 0 }
+};
+
+STD_SAMPLE_PICK(Ozmawars)
+STD_SAMPLE_FN(Ozmawars)
 
 
 // Space Invaders / Space Invaders M
@@ -443,7 +490,7 @@ struct BurnDriver BurnDrvInvaders = {
 	"Space Invaders / Space Invaders M\0", NULL, "Taito / Midway", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, invadersRomInfo, invadersRomName, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
+	NULL, invadersRomInfo, invadersRomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
 	InvadersInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x02,
 	224, 260, 3, 4
 };
@@ -473,7 +520,7 @@ struct BurnDriver BurnDrvSisv1 = {
 	"Space Invaders (SV Version rev 1)\0", NULL, "Taito", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, sisv1RomInfo, sisv1RomName, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
+	NULL, sisv1RomInfo, sisv1RomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
 	Sisv1Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
 	224, 260, 3, 4
 };
@@ -498,7 +545,7 @@ struct BurnDriver BurnDrvSisv2 = {
 	"Space Invaders (SV Version rev 2)\0", NULL, "Taito", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, sisv2RomInfo, sisv2RomName, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
+	NULL, sisv2RomInfo, sisv2RomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
 	Sisv1Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
 	224, 260, 3, 4
 };
@@ -523,7 +570,7 @@ struct BurnDriver BurnDrvSisv3 = {
 	"Space Invaders (SV Version rev 3)\0", NULL, "Taito", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, sisv3RomInfo, sisv3RomName, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
+	NULL, sisv3RomInfo, sisv3RomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
 	Sisv1Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
 	224, 260, 3, 4
 };
@@ -548,7 +595,7 @@ struct BurnDriver BurnDrvSisv = {
 	"Space Invaders (SV Version rev 4)\0", NULL, "Taito", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, sisvRomInfo, sisvRomName, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
+	NULL, sisvRomInfo, sisvRomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, InvadersInputInfo, InvadersDIPInfo,
 	Sisv1Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
 	224, 260, 3, 4
 };
@@ -576,7 +623,7 @@ struct BurnDriver BurnDrvSitv1 = {
 	"Space Invaders (TV Version rev 1)\0", NULL, "Taito", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, sitv1RomInfo, sitv1RomName, InvadersSampleInfo, InvadersSampleName, SitvInputInfo, SitvDIPInfo,
+	NULL, sitv1RomInfo, sitv1RomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, SitvInputInfo, SitvDIPInfo,
 	Sitv1Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
 	224, 260, 3, 4
 };
@@ -599,7 +646,81 @@ struct BurnDriver BurnDrvSitv = {
 	"Space Invaders (TV Version rev 2)\0", NULL, "Taito", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, sitvRomInfo, sitvRomName, InvadersSampleInfo, InvadersSampleName, SitvInputInfo, SitvDIPInfo,
+	NULL, sitvRomInfo, sitvRomName, NULL, NULL, InvadersSampleInfo, InvadersSampleName, SitvInputInfo, SitvDIPInfo,
 	Sitv1Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
+	224, 260, 3, 4
+};
+
+
+// Ozma Wars (set 1)
+
+static struct BurnRomInfo ozmawarsRomDesc[] = {
+	{ "mw01",		0x0800, 0x31f4397d, 1 | BRF_ESS | BRF_PRG }, //  0 i8080 Code
+	{ "mw02",		0x0800, 0xd8e77c62, 1 | BRF_ESS | BRF_PRG }, //  1
+	{ "mw03",		0x0800, 0x3bfa418f, 1 | BRF_ESS | BRF_PRG }, //  2
+	{ "mw04",		0x0800, 0xe190ce6c, 1 | BRF_ESS | BRF_PRG }, //  3
+	{ "mw05",		0x0800, 0x3bc7d4c7, 1 | BRF_ESS | BRF_PRG }, //  4
+	{ "mw06",		0x0800, 0x99ca2eae, 1 | BRF_ESS | BRF_PRG }, //  5
+	
+	{ "01.1",		0x0400, 0xaac24f34, 0 | BRF_OPT },
+	{ "02.2",		0x0400, 0x2bdf83a0, 0 | BRF_OPT },
+};
+
+STD_ROM_PICK(ozmawars)
+STD_ROM_FN(ozmawars)
+
+static INT32 OzmawarsInit()
+{
+	return DrvInit(0x800, 6, 0x000000);
+}
+
+struct BurnDriver BurnDrvOzmawars = {
+	"ozmawars", NULL, NULL, "invaders", "1979",
+	"Ozma Wars (set 1)\0", NULL, "SNK", "Miscellaneous",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
+	NULL, ozmawarsRomInfo, ozmawarsRomName, NULL, NULL, OzmawarsSampleInfo, OzmawarsSampleName, InvadersInputInfo, OzmawarsDIPInfo,
+	OzmawarsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
+	224, 260, 3, 4
+};
+
+
+// Ozma Wars (set 2)
+
+static struct BurnRomInfo ozmawars2RomDesc[] = {
+	{ "oz1",		0x0400, 0x9300830e, 1 | BRF_ESS | BRF_PRG }, //  0 i8080 Code
+	{ "oz2",		0x0400, 0x957fc661, 1 | BRF_ESS | BRF_PRG }, //  1
+	{ "oz3",		0x0400, 0xcf8f4d6c, 1 | BRF_ESS | BRF_PRG }, //  2
+	{ "oz4",		0x0400, 0xf51544a5, 1 | BRF_ESS | BRF_PRG }, //  3
+	{ "oz5",		0x0400, 0x5597bf52, 1 | BRF_ESS | BRF_PRG }, //  4
+	{ "oz6",		0x0400, 0x19b43578, 1 | BRF_ESS | BRF_PRG }, //  5
+	{ "oz7",		0x0400, 0xa285bfde, 1 | BRF_ESS | BRF_PRG }, //  6
+	{ "oz8",		0x0400, 0xae59a629, 1 | BRF_ESS | BRF_PRG }, //  7
+	{ "oz9",		0x0400, 0xdf0cc633, 1 | BRF_ESS | BRF_PRG }, //  8
+	{ "oz10",		0x0400, 0x31b7692e, 1 | BRF_ESS | BRF_PRG }, //  9
+	{ "oz11",		0x0400, 0x660e934c, 1 | BRF_ESS | BRF_PRG }, //  10
+	{ "oz12",		0x0400, 0x8b969f61, 1 | BRF_ESS | BRF_PRG }, //  11
+	
+	{ "01.1",		0x0400, 0xaac24f34, 0 | BRF_OPT },
+	{ "02.2",		0x0400, 0x2bdf83a0, 0 | BRF_OPT },
+};
+
+STD_ROM_PICK(ozmawars2)
+STD_ROM_FN(ozmawars2)
+
+static INT32 Ozmawars2Init()
+{
+	INT32 nRet = DrvInit(0x400, 12, 0x000000);
+
+	return nRet;
+}
+
+struct BurnDriver BurnDrvOzmawars2 = {
+	"ozmawars2", "ozmawars", NULL, "invaders", "1979",
+	"Ozma Wars (set 2)\0", NULL, "SNK", "Miscellaneous",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
+	NULL, ozmawars2RomInfo, ozmawars2RomName, NULL, NULL, OzmawarsSampleInfo, OzmawarsSampleName, InvadersInputInfo, OzmawarsDIPInfo,
+	Ozmawars2Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 2,
 	224, 260, 3, 4
 };

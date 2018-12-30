@@ -53,7 +53,7 @@ INT32 CheatUpdate()
 	return 0;
 }
 
-INT32 CheatEnable(INT32 nCheat, INT32 nOption)
+INT32 CheatEnable(INT32 nCheat, INT32 nOption) // -1 / 0 - disable
 {
 	INT32 nCurrentCheat = 0;
 	CheatInfo* pCurrentCheat = pCheatInfo;
@@ -72,25 +72,54 @@ INT32 CheatEnable(INT32 nCheat, INT32 nOption)
 	cheat_subptr = cheat_ptr->cpuconfig;
 
 	while (pCurrentCheat && nCurrentCheat <= nCheat) {
-		if (nCurrentCheat == nCheat) {
+		if (nCurrentCheat == nCheat) { // Cheat found, let's process it.
+			INT32 deactivate = 0;
 
-			if (nOption == -1) {
+			if (nOption == -1 || nOption == 0) {
 				nOption = pCurrentCheat->nDefault;
+				deactivate = 1;
 			}
 
-			if (pCurrentCheat->nType != 1) {
+			// Return OK if the cheat is already active with the same option
+			if (pCurrentCheat->nCurrent == nOption) {
+				return 0;
+			}
 
-				// Return OK if the cheat is already active with the same option
-				if (pCurrentCheat->nCurrent == nOption) {
-					return 0;
+			if (deactivate) { // disable cheat option
+				if (pCurrentCheat->nType != 1) {
+					nOption = 1; // Set to the first option as there is no addressinfo associated with default (disabled) cheat entry. -dink
+
+					// Deactivate old option (if any)
+					pAddressInfo = pCurrentCheat->pOption[nOption]->AddressInfo;
+
+					while (pAddressInfo->nAddress) {
+						if (pAddressInfo->nCPU != nOpenCPU) {
+
+							if (nOpenCPU != -1) {
+								cheat_subptr->close();
+							}
+
+							nOpenCPU = pAddressInfo->nCPU;
+							cheat_ptr = &cpus[nOpenCPU];
+							cheat_subptr = cheat_ptr->cpuconfig;
+							cheat_subptr->open(cheat_ptr->nCPU);
+						}
+
+						if (pCurrentCheat->bRestoreOnDisable) {
+							// Write back original values to memory
+							bprintf(0, _T("Cheat #%d, option #%d. action: "), nCheat, nOption);
+							bprintf(0, _T("Undo cheat @ 0x%X -> 0x%X.\n"), pAddressInfo->nAddress, pAddressInfo->nOriginalValue);
+							cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nOriginalValue);
+						}
+						pAddressInfo++;
+					}
+					nOption = 0; // Set back to 0 (see above line: nOption = 1;)
 				}
-
-				// Deactivate old option (if any)
+			} else { // activate cheat option
 				pAddressInfo = pCurrentCheat->pOption[nOption]->AddressInfo;
+
 				while (pAddressInfo->nAddress) {
-
 					if (pAddressInfo->nCPU != nOpenCPU) {
-
 						if (nOpenCPU != -1) {
 							cheat_subptr->close();
 						}
@@ -101,47 +130,44 @@ INT32 CheatEnable(INT32 nCheat, INT32 nOption)
 						cheat_subptr->open(cheat_ptr->nCPU);
 					}
 
-					// Write back original values to memory
-					cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nOriginalValue);
+					pCurrentCheat->bModified = 0;
+
+					// Copy the original values
+					pAddressInfo->nOriginalValue = cheat_subptr->read(pAddressInfo->nAddress);
+
+					bprintf(0, _T("Cheat #%d, option #%d. action: "), nCheat, nOption);
+					if (pCurrentCheat->bWatchMode) {
+						bprintf(0, _T("Watch memory @ 0x%X (0x%X)\n"), pAddressInfo->nAddress, pAddressInfo->nOriginalValue);
+					} else
+					if (pCurrentCheat->bOneShot) {
+						bprintf(0, _T("Apply cheat @ 0x%X -> 0x%X. (Before 0x%X - One-Shot mode)\n"), pAddressInfo->nAddress, pAddressInfo->nValue, pAddressInfo->nOriginalValue);
+						pCurrentCheat->bOneShot = 3; // re-load the one-shot frame counter
+					} else {
+						bprintf(0, _T("Apply cheat @ 0x%X -> 0x%X. (Undo 0x%X)\n"), pAddressInfo->nAddress, pAddressInfo->nValue, pAddressInfo->nOriginalValue);
+					}
+					if (pCurrentCheat->bWaitForModification)
+						bprintf(0, _T(" - Triggered by: Waiting for modification!\n"));
+
+					if (pCurrentCheat->nType != 0) {
+						if (pAddressInfo->nCPU != nOpenCPU) {
+							if (nOpenCPU != -1) {
+								cheat_subptr->close();
+							}
+
+							nOpenCPU = pAddressInfo->nCPU;
+							cheat_ptr = &cpus[nOpenCPU];
+							cheat_subptr = cheat_ptr->cpuconfig;
+							cheat_subptr->open(cheat_ptr->nCPU);
+						}
+
+						if (!pCurrentCheat->bWatchMode && !pCurrentCheat->bWaitForModification) {
+							// Activate the cheat
+							cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nValue);
+						}
+					}
+
 					pAddressInfo++;
 				}
-			}
-
-			// Activate new option
-			pAddressInfo = pCurrentCheat->pOption[nOption]->AddressInfo;
-			while (pAddressInfo->nAddress) {
-
-				if (pAddressInfo->nCPU != nOpenCPU) {
-					if (nOpenCPU != -1) {
-						cheat_subptr->close();
-					}
-
-					nOpenCPU = pAddressInfo->nCPU;
-					cheat_ptr = &cpus[nOpenCPU];
-					cheat_subptr = cheat_ptr->cpuconfig;
-					cheat_subptr->open(cheat_ptr->nCPU);
-				}
-
-				// Copy the original values
-				pAddressInfo->nOriginalValue = cheat_subptr->read(pAddressInfo->nAddress);
-
-				if (pCurrentCheat->nType != 0) {
-					if (pAddressInfo->nCPU != nOpenCPU) {
-						if (nOpenCPU != -1) {
-							cheat_subptr->close();
-						}
-
-						nOpenCPU = pAddressInfo->nCPU;
-						cheat_ptr = &cpus[nOpenCPU];
-						cheat_subptr = cheat_ptr->cpuconfig;
-						cheat_subptr->open(cheat_ptr->nCPU);
-					}
-
-					// Activate the cheat
-					cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nValue);
-				}
-
-				pAddressInfo++;
 			}
 
 			// Set cheat status and active option
@@ -174,6 +200,10 @@ INT32 CheatEnable(INT32 nCheat, INT32 nOption)
 	return 1;
 }
 
+#if defined (BUILD_WIN32)
+extern INT32 VidSNewTinyMsg(const TCHAR* pText, INT32 nRGB = 0, INT32 nDuration = 0, INT32 nPriority = 5);
+#endif
+
 INT32 CheatApply()
 {
 	if (!bCheatsEnabled) {
@@ -181,12 +211,14 @@ INT32 CheatApply()
 	}
 
 	INT32 nOpenCPU = -1;
+	INT32 nCurrentCheat = 0;
 
 	CheatInfo* pCurrentCheat = pCheatInfo;
 	CheatAddressInfo* pAddressInfo;
 	while (pCurrentCheat) {
 		if (pCurrentCheat->nStatus > 1) {
 			pAddressInfo = pCurrentCheat->pOption[pCurrentCheat->nCurrent]->AddressInfo;
+
 			while (pAddressInfo->nAddress) {
 
 				if (pAddressInfo->nCPU != nOpenCPU) {
@@ -200,11 +232,46 @@ INT32 CheatApply()
 					cheat_subptr->open(cheat_ptr->nCPU);
 				}
 
-				cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nValue);
+				if (pCurrentCheat->bWatchMode) {
+					// Watch address mode, Win32-only for now.
+#if defined (BUILD_WIN32)
+					pAddressInfo->nOriginalValue = cheat_subptr->read(pAddressInfo->nAddress);
+					wchar_t framestring[32];
+					swprintf(framestring, L"%X", pAddressInfo->nOriginalValue);
+					VidSNewTinyMsg(framestring, 0, 5, 5);
+#endif
+				} else {
+					// update the cheat
+					if (pCurrentCheat->bWaitForModification) {
+						UINT32 nValNow = cheat_subptr->read(pAddressInfo->nAddress);
+						if (nValNow != pAddressInfo->nOriginalValue) {
+							bprintf(0, _T(" - Address modified! old = %X new = %X\n"),pAddressInfo->nOriginalValue, nValNow);
+							cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nValue);
+							pCurrentCheat->bModified = 1;
+							pAddressInfo->nOriginalValue = pAddressInfo->nValue;
+						}
+					} else {
+						// Write the value.
+						cheat_subptr->write(pAddressInfo->nAddress, pAddressInfo->nValue);
+						pCurrentCheat->bModified = 1;
+					}
+				}
 				pAddressInfo++;
+			}
+			if (pCurrentCheat->bModified) {
+				if (pCurrentCheat->bOneShot == 2) {
+					if (nOpenCPU != -1) {
+						cheat_subptr->close();
+						nOpenCPU = -1;
+					}
+					bprintf(0, _T("One-Shot cheat #%d ends.\n"), nCurrentCheat);
+					CheatEnable(nCurrentCheat, -1);
+				}
+				if (pCurrentCheat->bOneShot > 1) pCurrentCheat->bOneShot--;
 			}
 		}
 		pCurrentCheat = pCurrentCheat->pNext;
+		nCurrentCheat++;
 	}
 
 	if (nOpenCPU != -1) {
@@ -232,13 +299,9 @@ void CheatExit()
 		do {
 			pNextCheat = pCurrentCheat->pNext;
 			for (INT32 i = 0; i < CHEAT_MAX_OPTIONS; i++) {
-				if (pCurrentCheat->pOption[i]) {
-					free(pCurrentCheat->pOption[i]);
-				}
+				BurnFree(pCurrentCheat->pOption[i]);
 			}
-			if (pCurrentCheat) {
-				free(pCurrentCheat);
-			}
+			BurnFree(pCurrentCheat);
 		} while ((pCurrentCheat = pNextCheat) != 0);
 	}
 
@@ -271,19 +334,13 @@ INT32 CheatSearchInit()
 
 void CheatSearchExit()
 {
-	if (MemoryValues) {
-		free(MemoryValues);
-		MemoryValues = NULL;
-	}
-	if (MemoryStatus) {
-		free(MemoryStatus);
-		MemoryStatus = NULL;
-	}
+	BurnFree(MemoryValues);
+	BurnFree(MemoryStatus);
 	
 	nMemorySize = 0;
 	
-	memset(CheatSearchShowResultAddresses, 0, CHEATSEARCH_SHOWRESULTS);
-	memset(CheatSearchShowResultValues, 0, CHEATSEARCH_SHOWRESULTS);
+	memset(CheatSearchShowResultAddresses, 0, sizeof(CheatSearchShowResultAddresses));
+	memset(CheatSearchShowResultValues, 0, sizeof(CheatSearchShowResultValues));
 }
 
 void CheatSearchStart()
@@ -300,8 +357,8 @@ void CheatSearchStart()
 	cheat_subptr->open(cheat_ptr->nCPU);
 	nMemorySize = cheat_subptr->nMemorySize;
 
-	MemoryValues = (UINT8*)malloc(nMemorySize);
-	MemoryStatus = (UINT8*)malloc(nMemorySize);
+	MemoryValues = (UINT8*)BurnMalloc(nMemorySize);
+	MemoryStatus = (UINT8*)BurnMalloc(nMemorySize);
 	
 	memset(MemoryStatus, IN_RESULTS, nMemorySize);
 	
@@ -321,9 +378,9 @@ static void CheatSearchGetResults()
 	UINT32 nAddress;
 	UINT32 nResultsPos = 0;
 	
-	memset(CheatSearchShowResultAddresses, 0, CHEATSEARCH_SHOWRESULTS);
-	memset(CheatSearchShowResultValues, 0, CHEATSEARCH_SHOWRESULTS);
-	
+	memset(CheatSearchShowResultAddresses, 0, sizeof(CheatSearchShowResultAddresses));
+	memset(CheatSearchShowResultValues, 0, sizeof(CheatSearchShowResultValues));
+
 	for (nAddress = 0; nAddress < nMemorySize; nAddress++) {		
 		if (MemoryStatus[nAddress] == IN_RESULTS) {
 			CheatSearchShowResultAddresses[nResultsPos] = nAddress;

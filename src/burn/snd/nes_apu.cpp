@@ -660,42 +660,54 @@ static inline void apu_update(struct nesapu_info *info)
 }
 
 /* READ VALUES FROM REGISTERS */
-UINT8 nesapuRead(INT32 chip,INT32 address)
+UINT8 nesapuRead(INT32 chip, INT32 address)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_NESAPUSndInitted) bprintf(PRINT_ERROR, _T("nesapuRead called without init\n"));
 #endif
 
-  struct nesapu_info *info = &nesapu_chips[chip];
-  if (address == 0x0f) /*FIXED* Address $4015 has different behaviour*/
-  	{
-  	INT32 readval = 0;
-  		if ( info->APU.dpcm.enabled == TRUE )
-  			{
-  				readval |= 0x10;
-  			}
+	struct nesapu_info *info = &nesapu_chips[chip];
+	if (address == 0x0f) /*FIXED* Address $4015 has different behaviour*/
+	{
+		INT32 readval = 0;
+		if (info->APU.squ[0].vbl_length > 0)
+			readval |= 0x01;
 
-  		if ( info->APU.dpcm.irq_occurred == TRUE )
-  			{
-  				readval |= 0x80;
-  			}
-  		return readval;
-  		}
-  else
-  return info->APU.regs[address];
+		if (info->APU.squ[1].vbl_length > 0)
+			readval |= 0x02;
+
+		if (info->APU.tri.vbl_length > 0)
+			readval |= 0x04;
+
+		if (info->APU.noi.vbl_length > 0)
+			readval |= 0x08;
+
+		if (info->APU.dpcm.enabled == TRUE)
+			readval |= 0x10;
+
+		if (info->APU.dpcm.irq_occurred == TRUE)
+			readval |= 0x80;
+
+		return readval;
+	} else {
+		return info->APU.regs[address];
+	}
 }
 
 /* WRITE VALUE TO TEMP REGISTRY AND QUEUE EVENT */
-void nesapuWrite(INT32 chip,INT32 address, UINT8 value)
+void nesapuWrite(INT32 chip, INT32 address, UINT8 value)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_NESAPUSndInitted) bprintf(PRINT_ERROR, _T("nesapuWrite called without init\n"));
 #endif
 
-  struct nesapu_info *info = &nesapu_chips[chip]; //sndti_token(SOUND_NES, chip);
-   info->APU.regs[address]=value;
-   apu_update(info);
-   apu_regwrite(info,address,value);
+	struct nesapu_info *info = &nesapu_chips[chip]; //sndti_token(SOUND_NES, chip);
+
+	if (address > 0x17) return;
+
+	info->APU.regs[address]=value;
+	apu_update(info);
+	apu_regwrite(info,address,value);
 }
 
 /* EXTERNAL INTERFACE FUNCTIONS */
@@ -887,9 +899,10 @@ void nesapuExit()
 	if (!DebugSnd_NESAPUSndInitted) bprintf(PRINT_ERROR, _T("nesapuExit called without init\n"));
 #endif
 
-	INT32 i;
+	if (!DebugSnd_NESAPUSndInitted) return;
+
 	struct nesapu_info *info;
-	for (i = 0; i < CHIP_NUM; i++)
+	for (INT32 i = 0; i < CHIP_NUM; i++)
 	{
 		info = &nesapu_chips[i];
 		if (info->stream)
@@ -899,7 +912,7 @@ void nesapuExit()
 	DebugSnd_NESAPUSndInitted = 0;
 }
 
-INT32 nesapuScan(INT32 nAction)
+void nesapuScan(INT32 nAction, INT32 *)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_NESAPUSndInitted) bprintf(PRINT_ERROR, _T("nesapuScan called without init\n"));
@@ -911,61 +924,12 @@ INT32 nesapuScan(INT32 nAction)
 		{
 			struct nesapu_info *info = &nesapu_chips[i];
 
-			for (INT32 j = 0; j < 2; j++)
-			{
-				for (INT32 k = 0; k < 4; k++) {
-					SCAN_VAR(info->APU.squ[j].regs[k]);	// array[4]
-				}
-				SCAN_VAR(info->APU.squ[j].vbl_length);
-				SCAN_VAR(info->APU.squ[j].freq);
-				SCAN_VAR(info->APU.squ[j].phaseacc);
-				SCAN_VAR(info->APU.squ[j].output_vol);
-				SCAN_VAR(info->APU.squ[j].env_phase);
-				SCAN_VAR(info->APU.squ[j].sweep_phase);
-				SCAN_VAR(info->APU.squ[j].adder);
-				SCAN_VAR(info->APU.squ[j].env_vol);
-				SCAN_VAR(info->APU.squ[j].enabled);
-			}
-
-			for (INT32 k = 0; k < 4; k++) {
-				SCAN_VAR(info->APU.tri.regs[k]); // array [4]
-			}
-			SCAN_VAR(info->APU.tri.linear_length);
-			SCAN_VAR(info->APU.tri.vbl_length);
-			SCAN_VAR(info->APU.tri.write_latency);
-			SCAN_VAR(info->APU.tri.phaseacc);
-			SCAN_VAR(info->APU.tri.output_vol);
-			SCAN_VAR(info->APU.tri.adder);
-			SCAN_VAR(info->APU.tri.counter_started);
-			SCAN_VAR(info->APU.tri.enabled);
-			for (INT32 k = 0; k < 4; k++) {
-				SCAN_VAR(info->APU.noi.regs[k]); // array [4]
-			}
-			SCAN_VAR(info->APU.noi.cur_pos);
-			SCAN_VAR(info->APU.noi.vbl_length);
-			SCAN_VAR(info->APU.noi.phaseacc);
-			SCAN_VAR(info->APU.noi.output_vol);
-			SCAN_VAR(info->APU.noi.env_phase);
-			SCAN_VAR(info->APU.noi.env_vol);
-			SCAN_VAR(info->APU.noi.enabled);
-			for (INT32 k = 0; k < 4; k++) {
-				SCAN_VAR(info->APU.dpcm.regs[k]); // array [4]
-			}
-			SCAN_VAR(info->APU.dpcm.address);
-			SCAN_VAR(info->APU.dpcm.length);
-			SCAN_VAR(info->APU.dpcm.bits_left);
-			SCAN_VAR(info->APU.dpcm.phaseacc);
-			SCAN_VAR(info->APU.dpcm.output_vol);
-			SCAN_VAR(info->APU.dpcm.cur_byte);
-			SCAN_VAR(info->APU.dpcm.enabled);
-			SCAN_VAR(info->APU.dpcm.irq_occurred);
-			SCAN_VAR(info->APU.dpcm.vol);
-			for (INT32 k = 0; k < 17; k++) {
-				SCAN_VAR(info->APU.regs[k]); // array [17]
-			}
+			SCAN_VAR(info->APU.squ);
+			SCAN_VAR(info->APU.tri);
+			SCAN_VAR(info->APU.noi);
+			SCAN_VAR(info->APU.dpcm);
+			SCAN_VAR(info->APU.regs);
 			SCAN_VAR(info->APU.buf_pos);
 		}
 	}
-
-	return 0;
 }

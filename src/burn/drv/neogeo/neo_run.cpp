@@ -225,6 +225,11 @@ static UINT32 nSoundStatus;
 static INT32 nSoundPrevReply;
 #endif
 
+INT32 ssideki2mode = 0;
+INT32 s1945pmode = 0;
+INT32 fatfury2mode = 0; // fatfury2 protection active (fatfury2, ssideki)
+INT32 vlinermode = 0;
+
 static INT32 nInputSelect;
 static UINT8* NeoInputBank;
 static UINT32 nAnalogAxis[2];
@@ -304,7 +309,9 @@ static bool bZ80BIOS;
 
 static INT32 /*nNeoCDCyclesIRQ = 0,*/ nNeoCDCyclesIRQPeriod = 0;
 
+#ifdef BUILD_A68K
 static bool bUseAsm68KCoreOldValue = false;
+#endif
 
 bool IsNeoGeoCD() {
 	return (nNeoSystemType & NEO_SYS_CD);
@@ -387,7 +394,7 @@ static void NeoSetSystemType()
 	}
 	
 	// See if we're emulating MVS or AES hardware
-	if (nBIOS == -1 || nBIOS == 10 || nBIOS == 11 || nBIOS == 12 || ((NeoSystem & 0x74) == 0x20)) {
+	if (nBIOS == -1 || nBIOS == 15 || nBIOS == 16 || nBIOS == 17 || ((NeoSystem & 0x74) == 0x20)) {
 		nNeoSystemType = NEO_SYS_CART | NEO_SYS_AES;
 		return;
 	}
@@ -403,11 +410,11 @@ static INT32 NeoLoad68KBIOS(INT32 nNewBIOS)
 	}
 	
 	if ((BurnDrvGetHardwareCode() & HARDWARE_SNK_CONTROLMASK) == HARDWARE_SNK_TRACKBALL) {
-		nNewBIOS = 26;
+		nNewBIOS = 34;
 	}
 
 	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_DEDICATED_PCB) {
-		nNewBIOS = 27;
+		nNewBIOS = 35;
 	}
 
 	// The most recent MVS models doesn't have a Z80 BIOS
@@ -635,8 +642,16 @@ static INT32 LoadRoms()
 	if (!strcmp("pbobblenb", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x380000;
 	if (!strcmp("alpham2p", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x200000;
 	if (!strcmp("burningfp", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x180000;
+	if (!strcmp("burningfpa", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x200000;
+	if (!strcmp("gpilotsp", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x180000;
+	if (!strcmp("lresortp", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x200000;
 	if (!strcmp("kotm2p", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x300000;
 	if (!strcmp("sbp", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x800000;
+	if (!strcmp("lasthope", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x600000;
+	if (!strcmp("mslug5w", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x10002f0;
+	if (!strcmp("kof2k2omg", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x1000000;
+	if (!strcmp("kof2k2omg9b", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x1000000;
+	if (!strcmp("kof2k2omg9", BurnDrvGetTextA(DRV_NAME))) nYM2610ADPCMASize[nNeoActiveSlot] = 0x1000000;
 	
 //	bprintf(PRINT_NORMAL, _T("%x\n"), nYM2610ADPCMASize[nNeoActiveSlot]);
 	
@@ -981,16 +996,6 @@ static void neogeoFMIRQHandler(INT32, INT32 nStatus)
 	}
 }
 
-static INT32 neogeoSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / nZ80Clockspeed;
-}
-
-static double neogeoGetTime()
-{
-	return (double)ZetTotalCycles() / nZ80Clockspeed;
-}
-
 // ----------------------------------------------------------------------------
 
 UINT8 __fastcall neogeoReadByteGambling(UINT32 sekAddress)
@@ -1053,7 +1058,7 @@ UINT8 __fastcall vliner_timing(UINT32 sekAddress)
 
 		case 0x320001: {
 //			if (!bAESBIOS) {
-			if (nBIOS != 10 && nBIOS != 11 && nBIOS != 12) {
+			if (nBIOS != 14 && nBIOS != 16 && nBIOS != 17) {
 				UINT8 nuPD4990AOutput = uPD4990ARead(SekTotalCycles() - nuPD4990ATicks);
 				nuPD4990ATicks = SekTotalCycles();
 				return 0x3F | (nuPD4990AOutput << 6);
@@ -1165,7 +1170,7 @@ static void NeoMapActiveCartridge()
 			SekSetReadByteHandler(6,     neogeoReadByteGambling);
 			SekSetReadWordHandler(6,     neogeoReadWordGambling);
 			
-			if (!strcmp(BurnDrvGetTextA(DRV_NAME), "vliner") || !strcmp(BurnDrvGetTextA(DRV_NAME), "vlinero")) {
+			if (vlinermode) {
 				SekMapHandler(7,	0x320000, 0x320001, MAP_READ);
 				SekSetReadByteHandler(7,     vliner_timing);
 			}
@@ -1488,7 +1493,7 @@ INT32 NeoScan(INT32 nAction, INT32* pnMin)
 				if (NeoCallbackActive && NeoCallbackActive->pBankswitch) {
 					NeoCallbackActive->pBankswitch();
 				} else {
-					if ((BurnDrvGetHardwareCode() & HARDWARE_SNK_CONTROLMASK) != HARDWARE_SNK_GAMBLING) {
+					if ((BurnDrvGetHardwareCode() & HARDWARE_SNK_CONTROLMASK) != HARDWARE_SNK_GAMBLING && fatfury2mode == 0) {
 						SekOpen(0);
 						SekMapMemory(Neo68KROMActive + nNeo68KROMBank, 0x200000, 0x2FFFFF, MAP_ROM);
 						SekClose();
@@ -1513,7 +1518,7 @@ INT32 NeoScan(INT32 nAction, INT32* pnMin)
 			nPrevBurnCPUSpeedAdjust = -1;
 
 			SCAN_VAR(nLEDLatch);
-			SCAN_VAR(nLED[3]);
+			SCAN_VAR(nLED);
 
 //			BurnGameFeedback(sizeof(nLED), nLED);
 		}
@@ -1635,9 +1640,9 @@ void __fastcall neogeoZ80Out(UINT16 nAddress, UINT8 nValue)
 
 			if (ZetTotalCycles() > nCycles68KSync) {
 
-//				bprintf(PRINT_NORMAL, _T("    %i\n"), ZetTotalCycles());
+				//				bprintf(PRINT_NORMAL, _T("    %i\n"), ZetTotalCycles());
 				BurnTimerUpdateEnd();
-//				bprintf(PRINT_NORMAL, _T("    %i - %i\n"), ZetTotalCycles(), nCycles68KSync);
+				//				bprintf(PRINT_NORMAL, _T("    %i - %i\n"), ZetTotalCycles(), nCycles68KSync);
 			}
 #endif
 
@@ -1740,7 +1745,7 @@ static inline void SendSoundCommand(const UINT8 nCommand)
 	ZetNmi();
 
 #if 1 && defined USE_SPEEDHACKS
-	neogeoSynchroniseZ80(0x0200);
+	neogeoSynchroniseZ80((s1945pmode) ? 0x60 : 0x0200);
 #endif
 }
 
@@ -1802,7 +1807,7 @@ UINT8 __fastcall neogeoReadByte(UINT32 sekAddress)
 #if 1 && defined USE_SPEEDHACKS
 				// nSoundStatus: &1 = sound latch read, &2 = response written
 				if (nSoundStatus != 3) {
-					neogeoSynchroniseZ80(0x0100);
+					neogeoSynchroniseZ80((s1945pmode) ? 0x60 : 0x0100);
 				}
 #else
 				neogeoSynchroniseZ80(0);
@@ -2224,11 +2229,14 @@ void __fastcall neogeoWriteWordVideo(UINT32 sekAddress, UINT16 wordValue)
 
 				// ssideki2 has some problems with this
 				nIRQCycles = SekCurrentScanline() * nSekCyclesScanline + NeoConvertIRQPosition(nIRQOffset + 8);
-//				bprintf(PRINT_NORMAL, _T("   %i - %i\n"), SekCurrentScanline(), SekTotalCycles() % SekCyclesScanline());
+
+				if (ssideki2mode) // kludge for ssideki2
+					nIRQCycles = SekTotalCycles() + NeoConvertIRQPosition(nIRQOffset);
+//				bprintf(PRINT_NORMAL, _T("   %i - %i\n"), SekCurrentScanline(), SekTotalCycles() % nSekCyclesScanline);
 #endif
 
 #if 0 || defined LOG_IRQ
-				bprintf(PRINT_NORMAL, _T("    IRQ Line -> %3i (at line %3i, relative).\n"), nIRQCycles / SekCyclesScanline(), SekCurrentScanline());
+				bprintf(PRINT_NORMAL, _T("    IRQ Line -> %3i (at line %3i, relative).\n"), nIRQCycles / nSekCyclesScanline, SekCurrentScanline());
 #endif
 
 				if (nIRQCycles < 0) {
@@ -3526,42 +3534,50 @@ void wav_exit();
 static INT32 neogeoReset()
 {
 	if (nNeoSystemType & NEO_SYS_CART) {
-		NeoLoad68KBIOS(NeoSystem & 0x1f);
+		NeoLoad68KBIOS(NeoSystem & 0x3f);
 	
-		if (nBIOS == -1 || nBIOS == 23) {
+		if (nBIOS == -1 || nBIOS == 33) {
 			// Write system type & region code into BIOS ROM
 			*((UINT16*)(Neo68KBIOS + 0x000400)) = BURN_ENDIAN_SWAP_INT16(((NeoSystem & 4) << 13) | (NeoSystem & 0x03));
 		}
 
 #if 1 && defined FBA_DEBUG
 		if (((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) != HARDWARE_SNK_DEDICATED_PCB) && (BurnDrvGetHardwareCode() & HARDWARE_SNK_CONTROLMASK) != HARDWARE_SNK_TRACKBALL) {
-			switch (NeoSystem & 0x1f) {
+			switch (NeoSystem & 0x3f) {
 				case 0x00: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Asia/Europe ver. 6 (1 slot) BIOS\n")); break; }
 				case 0x01: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Asia/Europe ver. 5 (1 slot) BIOS\n")); break; }
 				case 0x02: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Asia/Europe ver. 3 (4 slot) BIOS\n")); break; }
 				case 0x03: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS USA ver. 5 (2 slot) BIOS\n")); break; }
-				case 0x04: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS USA ver. 5 (6 slot) BIOS\n")); break; }
-				case 0x05: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Japan ver. 6 (? slot) BIOS\n")); break; }
-				case 0x06: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Japan ver. 5 (? slot) BIOS\n")); break; }
-				case 0x07: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Japan ver. 3 (4 slot) BIOS\n")); break; }
-				case 0x08: { bprintf(PRINT_IMPORTANT, _T("Emulating using NEO-MVH MV1C BIOS\n")); break; }
-				case 0x09: { bprintf(PRINT_IMPORTANT, _T("MVS Japan (J3)\n")); break; }
-				case 0x0a: { bprintf(PRINT_IMPORTANT, _T("Emulating using AES Japan BIOS\n")); break; }
-				case 0x0b: { bprintf(PRINT_IMPORTANT, _T("Emulating using AES Asia BIOS\n")); break; }
-				case 0x0c: { bprintf(PRINT_IMPORTANT, _T("Emulating using Development Kit BIOS\n")); break; }
-				case 0x0d: { bprintf(PRINT_IMPORTANT, _T("Emulating using Deck ver. 6 (Git Ver 1.3) BIOS\n")); break; }
-				case 0x0e: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 3.0 BIOS\n")); break; }
-				case 0x0f: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.3 BIOS\n")); break; }
-				case 0x10: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.3 (alt) BIOS\n")); break; }
-				case 0x11: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.2 BIOS\n")); break; }
-				case 0x12: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.1 BIOS\n")); break; }
-				case 0x13: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.0 BIOS\n")); break; }
-				case 0x14: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.3 BIOS\n")); break; }
-				case 0x15: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.2 BIOS\n")); break; }
-				case 0x16: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.2 (alt) BIOS\n")); break; }
-				case 0x17: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.1 BIOS\n")); break; }
-				case 0x18: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.0 BIOS\n")); break; }		
-				case 0x19: { bprintf(PRINT_IMPORTANT, _T("Emulating using NeoOpen BIOS v0.1 beta BIOS\n")); break; }		
+				case 0x04: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS USA ver. 5 (4 slot) BIOS\n")); break; }
+				case 0x05: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS USA ver. 5 (6 slot) BIOS\n")); break; }
+				case 0x06: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS USA (U4) BIOS\n")); break; }
+				case 0x07: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS USA (U3) BIOS\n")); break; }
+				case 0x08: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Japan ver. 6 (? slot) BIOS\n")); break; }
+				case 0x09: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Japan ver. 5 (? slot) BIOS\n")); break; }
+				case 0x0a: { bprintf(PRINT_IMPORTANT, _T("Emulating using MVS Japan ver. 3 (4 slot) BIOS\n")); break; }
+				case 0x0b: { bprintf(PRINT_IMPORTANT, _T("Emulating using NEO-MVH MV1C BIOS (Asia)\n")); break; }
+				case 0x0c: { bprintf(PRINT_IMPORTANT, _T("Emulating using NEO-MVH MV1C BIOS (Japan)\n")); break; }
+				case 0x0d: { bprintf(PRINT_IMPORTANT, _T("MVS Japan (J3)\n")); break; }
+				case 0x0e: { bprintf(PRINT_IMPORTANT, _T("MVS Japan (J3, alt)\n")); break; }
+				case 0x0f: { bprintf(PRINT_IMPORTANT, _T("Emulating using AES Japan BIOS\n")); break; }
+				case 0x10: { bprintf(PRINT_IMPORTANT, _T("Emulating using AES Asia BIOS\n")); break; }
+				case 0x11: { bprintf(PRINT_IMPORTANT, _T("Emulating using Development Kit BIOS\n")); break; }
+				case 0x12: { bprintf(PRINT_IMPORTANT, _T("Emulating using Deck ver. 6 (Git Ver 1.3) BIOS\n")); break; }
+				case 0x13: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 3.3 BIOS\n")); break; }
+				case 0x14: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 3.2 BIOS\n")); break; }
+				case 0x15: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 3.1 BIOS\n")); break; }
+				case 0x16: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 3.0 BIOS\n")); break; }
+				case 0x17: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.3 BIOS\n")); break; }
+				case 0x18: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.3 (alt) BIOS\n")); break; }
+				case 0x19: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.2 BIOS\n")); break; }
+				case 0x1a: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.1 BIOS\n")); break; }
+				case 0x1b: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 2.0 BIOS\n")); break; }
+				case 0x1c: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.3 BIOS\n")); break; }
+				case 0x1d: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.2 BIOS\n")); break; }
+				case 0x1e: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.2 (alt) BIOS\n")); break; }
+				case 0x1f: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.1 BIOS\n")); break; }
+				case 0x20: { bprintf(PRINT_IMPORTANT, _T("Emulating using Universe BIOS ver. 1.0 BIOS\n")); break; }		
+				case 0x21: { bprintf(PRINT_IMPORTANT, _T("Emulating using NeoOpen BIOS v0.1 beta BIOS\n")); break; }		
 			}
 		}
 	
@@ -3695,6 +3711,8 @@ static INT32 neogeoReset()
 	nNeoWatchdog = 0;
 #endif
 
+	HiscoreReset();
+
 	nIRQCycles = NO_IRQ_PENDING;
 	
 	nNeoCDIRQVector = 0;
@@ -3704,6 +3722,7 @@ static INT32 neogeoReset()
 	return 0;
 }
 
+#ifdef BUILD_A68K
 static void SwitchToMusashi()
 {
 	if (bBurnUseASMCPUEmulation) {
@@ -3714,6 +3733,7 @@ static void SwitchToMusashi()
 		bBurnUseASMCPUEmulation = false;
 	}
 }
+#endif
 
 static INT32 NeoInitCommon()
 {
@@ -3742,9 +3762,11 @@ static INT32 NeoInitCommon()
 		RAMIndex();													// Index the allocated memory
 	}
 	
+#ifdef BUILD_A68K
 	if (nNeoSystemType & NEO_SYS_CD) {
 		SwitchToMusashi();
 	}
+#endif
 
 	SekInit(0, 0x68000);											// Allocate 68000
     SekOpen(0);
@@ -3931,14 +3953,14 @@ static INT32 NeoInitCommon()
 #endif
 
 	if (nNeoSystemType & NEO_SYS_CART) {
-		BurnYM2610Init(8000000, YM2610ADPCMAROM[0], &nYM2610ADPCMASize[0], YM2610ADPCMBROM[0], &nYM2610ADPCMBSize[0], &neogeoFMIRQHandler, neogeoSynchroniseStream, neogeoGetTime, 0);
+		BurnYM2610Init(8000000, YM2610ADPCMAROM[0], &nYM2610ADPCMASize[0], YM2610ADPCMBROM[0], &nYM2610ADPCMBSize[0], &neogeoFMIRQHandler, 0);
 	} else {
-		BurnYM2610Init(8000000, YM2610ADPCMBROM[0], &nYM2610ADPCMBSize[0], YM2610ADPCMBROM[0], &nYM2610ADPCMBSize[0], &neogeoFMIRQHandler, neogeoSynchroniseStream, neogeoGetTime, 0);
+		BurnYM2610Init(8000000, YM2610ADPCMBROM[0], &nYM2610ADPCMBSize[0], YM2610ADPCMBROM[0], &nYM2610ADPCMBSize[0], &neogeoFMIRQHandler, 0);
 	}
 	
 	BurnYM2610SetRoute(BURN_SND_YM2610_YM2610_ROUTE_1, 1.00, BURN_SND_ROUTE_LEFT);
 	BurnYM2610SetRoute(BURN_SND_YM2610_YM2610_ROUTE_2, 1.00, BURN_SND_ROUTE_RIGHT);
-	BurnYM2610SetRoute(BURN_SND_YM2610_AY8910_ROUTE, 0.60, BURN_SND_ROUTE_BOTH);
+	BurnYM2610SetRoute(BURN_SND_YM2610_AY8910_ROUTE, 0.20, BURN_SND_ROUTE_BOTH);
 
 	BurnTimerAttachZet(nZ80Clockspeed);
 
@@ -4086,32 +4108,32 @@ INT32 NeoInit()
 	}
 
 	if (nNeoSystemType & NEO_SYS_PCB) {
-		BurnLoadRom(Neo68KBIOS, 0x00080 +     27, 1);
+		BurnLoadRom(Neo68KBIOS, 0x00080 +     35, 1);
 	}
 
 	if ((BurnDrvGetHardwareCode() & HARDWARE_PUBLIC_MASK) == HARDWARE_SNK_MVS) {
-		BurnLoadRom(NeoZ80BIOS,		0x00000 + 29, 1);
-		BurnLoadRom(NeoTextROMBIOS,	0x00000 + 30, 1);
-		BurnLoadRom(NeoZoomROM,		0x00000 + 31, 1);
+		BurnLoadRom(NeoZ80BIOS,		0x00000 + 36, 1);
+		BurnLoadRom(NeoTextROMBIOS,	0x00000 + 37, 1);
+		BurnLoadRom(NeoZoomROM,		0x00000 + 38, 1);
 	} else {
 
 		// Still load the Z80 BIOS & text layer data for AES systems, since it might be switched to MVS later
 
 		if (nNeoSystemType & NEO_SYS_PCB) {
 			bZ80BIOS = false;
-			BurnLoadRom(NeoTextROMBIOS,	0x00080 + 30, 1);
-			BurnLoadRom(NeoZoomROM,		0x00080 + 31, 1);
+			BurnLoadRom(NeoTextROMBIOS,	0x00080 + 37, 1);
+			BurnLoadRom(NeoZoomROM,		0x00080 + 38, 1);
 		} else {
-			BurnLoadRom(NeoZ80BIOS,		0x00080 + 29, 1);
-			BurnLoadRom(NeoTextROMBIOS,	0x00080 + 30, 1);
-			BurnLoadRom(NeoZoomROM,		0x00080 + 31, 1);
+			BurnLoadRom(NeoZ80BIOS,		0x00080 + 36, 1);
+			BurnLoadRom(NeoTextROMBIOS,	0x00080 + 37, 1);
+			BurnLoadRom(NeoZoomROM,		0x00080 + 38, 1);
 		}
 	}
 	BurnUpdateProgress(0.0, _T("Preprocessing text layer graphics...")/*, BST_PROCESS_TXT*/, 0);
 	NeoDecodeTextBIOS(0, 0x020000, NeoTextROMBIOS);
 
 	nBIOS = 9999;
-	if (NeoLoad68KBIOS(NeoSystem & 0x1f)) {
+	if (NeoLoad68KBIOS(NeoSystem & 0x3f)) {
 		return 1;
 	}
 
@@ -4249,6 +4271,7 @@ INT32 NeoExit()
 	
 	nNeoCDZ80ProgWriteWordCancelHack = 0;
 	
+#ifdef BUILD_A68K
 	// Switch back CPU core if needed
 	if (nNeoSystemType & NEO_SYS_CD) {
 		if (bUseAsm68KCoreOldValue) {
@@ -4259,6 +4282,7 @@ INT32 NeoExit()
 			bBurnUseASMCPUEmulation = true;
 		}
 	}
+#endif
 
 	recursing = false;
 	
@@ -4266,6 +4290,11 @@ INT32 NeoExit()
 
 	// release the NeoGeo CD information object if needed
 	NeoCDInfo_Exit();
+
+	ssideki2mode = 0;
+	s1945pmode = 0;
+	fatfury2mode = 0;
+	vlinermode = 0;
 
 	return 0;
 }
@@ -4616,14 +4645,14 @@ INT32 NeoFrame()
 			SekSetIRQLine(nScanlineIRQ, CPU_IRQSTATUS_ACK);
 
 #if 0 || defined LOG_IRQ
-			bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * SekCyclesScanline());
+			bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * nSekCyclesScanline);
 #endif
 
 			if (nIRQControl & 0x80) {
 				nIRQCycles += NeoConvertIRQPosition(nIRQOffset + 1);
 
 #if 0 || defined LOG_IRQ
-				bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / SekCyclesScanline(), SekCurrentScanline());
+				bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / nSekCyclesScanline, SekCurrentScanline());
 #endif
 
 			}
@@ -4652,13 +4681,13 @@ INT32 NeoFrame()
 				nIRQAcknowledge &= ~2;
 				SekSetIRQLine(nScanlineIRQ, CPU_IRQSTATUS_ACK);
 #if 0 || defined LOG_IRQ
-				bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * SekCyclesScanline());
+				bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * nSekCyclesScanline);
 #endif
 
 				if (nIRQControl & 0x80) {
 					nIRQCycles += NeoConvertIRQPosition(nIRQOffset + 1);
 #if 0 || defined LOG_IRQ
-					bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / SekCyclesScanline(), SekCurrentScanline());
+					bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / nSekCyclesScanline, SekCurrentScanline());
 #endif
 
 				}
@@ -4711,14 +4740,14 @@ INT32 NeoFrame()
 				SekSetIRQLine(nScanlineIRQ, CPU_IRQSTATUS_ACK);
 
 #if 0 || defined LOG_IRQ
-				bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * SekCyclesScanline());
+				bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * nSekCyclesScanline);
 #endif
 
 				if (nIRQControl & 0x80) {
 					nIRQCycles += NeoConvertIRQPosition(nIRQOffset + 1);
 
 #if 0 || defined LOG_IRQ
-					bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / SekCyclesScanline(), SekCurrentScanline());
+					bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / nSekCyclesScanline, SekCurrentScanline());
 #endif
 
 				}
@@ -4791,7 +4820,7 @@ INT32 NeoFrame()
 		}
 
 #if 0 || defined LOG_IRQ
-		bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, VBlank).\n"), nIRQCycles / SekCyclesScanline(), SekCurrentScanline());
+		bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, VBlank).\n"), nIRQCycles / nSekCyclesScanline, SekCurrentScanline());
 #endif
 
 	}
@@ -4804,14 +4833,14 @@ INT32 NeoFrame()
 			SekSetIRQLine(nScanlineIRQ, CPU_IRQSTATUS_ACK);
 
 #if 0 || defined LOG_IRQ
-			bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * SekCyclesScanline());
+			bprintf(PRINT_NORMAL, _T("  - IRQ triggered (line %3i + %3i cycles).\n"), SekCurrentScanline(), SekTotalCycles() - SekCurrentScanline() * nSekCyclesScanline);
 #endif
 
 			if (nIRQControl & 0x80) {
 				nIRQCycles += NeoConvertIRQPosition(nIRQOffset + 1);
 
 #if 0 || defined LOG_IRQ
-				bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / SekCyclesScanline(), SekCurrentScanline());
+				bprintf(PRINT_NORMAL, _T("  - IRQ Line -> %3i (at line %3i, autoload).\n"), nIRQCycles / nSekCyclesScanline, SekCurrentScanline());
 #endif
 
 			}
@@ -4831,12 +4860,12 @@ INT32 NeoFrame()
 
 #if 0 || defined LOG_IRQ
 		} else {
-			bprintf(PRINT_NORMAL, _T("  - IRQ Line past screen end (IRQControl: %02X, line -> %3i).\n"), nIRQControl, nIRQCycles / SekCyclesScanline());
+			bprintf(PRINT_NORMAL, _T("  - IRQ Line past screen end (IRQControl: %02X, line -> %3i).\n"), nIRQControl, nIRQCycles / nSekCyclesScanline);
 #endif
 
 		}
 	}
-//	bprintf(PRINT_NORMAL, " -- IRQControl: %02X, nIRQCycles / SekCyclesScanline(): %3i.\n", nIRQControl, nIRQCycles / SekCyclesScanline());
+//	bprintf(PRINT_NORMAL, " -- IRQControl: %02X, nIRQCycles / nSekCyclesScanline: %3i.\n", nIRQControl, nIRQCycles / nSekCyclesScanline);
 
 	// Update the sound until the end of the frame
 	

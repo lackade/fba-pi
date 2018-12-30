@@ -78,11 +78,15 @@ int Mips3Init()
 #endif
 
     ResetMemoryMap();
+	
+	return 0;
 }
 
 int Mips3UseRecompiler(bool use)
 {
     g_useRecompiler = use;
+	
+	return 0;
 }
 
 int Mips3Exit()
@@ -94,6 +98,8 @@ int Mips3Exit()
     delete g_mmap;
     g_mips = nullptr;
     g_mmap = nullptr;
+	
+	return 0;
 }
 
 
@@ -339,4 +345,10 @@ void write_dword(addr_t address, uint64_t value)
 }
 
 }
+}
+
+
+unsigned int Mips3GetPC()
+{
+    return g_mips->m_prev_pc;
 }

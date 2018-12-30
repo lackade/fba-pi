@@ -1,4 +1,5 @@
 // FB Alpha GI Joe driver module
+// Based on MAME driver by Olivier Galibert
 
 #include "tiles_generic.h"
 #include "m68000_intf.h" 
@@ -187,6 +188,7 @@ static void __fastcall gijoe_main_write_word(UINT32 address, UINT16 data)
 			ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
 		return;
 	}
+	//bprintf(0, _T("%X %X\n"), address, data);
 }
 
 static void __fastcall gijoe_main_write_byte(UINT32 address, UINT8 data)
@@ -355,7 +357,7 @@ static UINT8 __fastcall gijoe_sound_read(UINT16 address)
 
 static void gijoe_sprite_callback(INT32 */*code*/, INT32 *color, INT32 *priority)
 {
-	int pri = (*color & 0x03e0) >> 4;
+	INT32 pri = (*color & 0x03e0) >> 4;
 
 	if (pri <= layerpri[3])					*priority = 0x0000;
 	else if (pri > layerpri[3] && pri <= layerpri[2])	*priority = 0xff00;
@@ -368,7 +370,7 @@ static void gijoe_sprite_callback(INT32 */*code*/, INT32 *color, INT32 *priority
 
 static void gijoe_tile_callback(int layer, int *code, int *color, int */*flags*/)
 {
-	int tile = *code;
+	INT32 tile = *code;
 
 	if (tile >= 0xf000 && tile <= 0xf4ff)
 	{
@@ -441,6 +443,8 @@ static INT32 DrvDoReset()
 
 	avac_vrc = 0xffff;
 	sound_nmi_enable = 0;
+
+	irq6_timer = -1;
 
 	return 0;
 }
@@ -542,7 +546,7 @@ static INT32 DrvInit()
 	K056832SetGlobalOffsets(24, 16);
 
 	K053247Init(DrvGfxROM1, DrvGfxROMExp1, 0x3fffff, gijoe_sprite_callback, 1);
-	K053247SetSpriteOffset(-61, -46);
+	K053247SetSpriteOffset(-61, -46+10);
 
 	K054539Init(0, 48000, DrvSndROM, 0x200000);
 	K054539SetRoute(0, BURN_SND_K054539_ROUTE_1, 1.00, BURN_SND_ROUTE_LEFT);
@@ -593,7 +597,7 @@ static INT32 DrvDraw()
 {
 	DrvPaletteRecalc();
 
-	int layers[4], dirty, mask, vrc_mode, vrc_new;
+	INT32 layers[4], dirty, mask = 0, vrc_mode, vrc_new;
 
 	K056832ReadAvac(&vrc_mode, &vrc_new);
 
@@ -673,15 +677,14 @@ static INT32 DrvFrame()
 			DrvInputs[3] ^= (DrvJoy4[i] & 1) << i;
 		}
 
-		DrvInputs[0] = (DrvInputs[0] & 0xfff7) | (DrvDips[0] & 0x08);
+		DrvInputs[0] = (DrvInputs[0] & 0xf7ff) | ((DrvDips[0] & 0x08) << 8);
 		DrvInputs[2] = (DrvInputs[2] & 0x7f7f) | (DrvDips[1] & 0x80) | ((DrvDips[2] & 0x80) << 8);
 		DrvInputs[3] = (DrvInputs[3] & 0xff7f) | (DrvDips[3] & 0x80);
 		DrvInputs[0] &= 0x0fff;
 		DrvInputs[1] &= 0x0fff;
 	}
 
-	INT32 nInterleave = nBurnSoundLen;
-	INT32 nSoundBufferPos = 0;
+	INT32 nInterleave = 256;
 	INT32 nCyclesTotal[2] = { 16000000 / 60, 8000000 / 60 };
 	INT32 nCyclesDone[2] = { 0, 0 };
 
@@ -696,10 +699,10 @@ static INT32 DrvFrame()
 		nCyclesSegment = SekRun(nCyclesSegment);
 		nCyclesDone[0] += nCyclesSegment;
 
-		if (control_data & 0x20 && irq6_timer > 0) {
+		if (control_data & 0x20 && irq6_timer == 0) {
 			SekSetIRQLine(6, CPU_IRQSTATUS_AUTO);
-		}
-		irq6_timer--;
+			irq6_timer = -1;
+		} else if (irq6_timer != -1) irq6_timer--;
 
 		nNext = (i + 1) * nCyclesTotal[1] / nInterleave;
 		nCyclesSegment = nNext - nCyclesDone[1];
@@ -709,33 +712,23 @@ static INT32 DrvFrame()
 			ZetNmi();
 		}
 
-		if (pBurnSoundOut) {
-			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
-			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			memset (pSoundBuf, 0, nSegmentLength * 2 * 2);
-			K054539Update(0, pSoundBuf, nSegmentLength);
-			nSoundBufferPos += nSegmentLength;
-		}
-	}
+		if (i == 240) {
+			if (K056832IsIrqEnabled()) {
+				if (K053246_is_IRQ_enabled()) {
+					gijoe_objdma();
+					irq6_timer = 1; // guess
+				}
 
-	if (K056832IsIrqEnabled()) {
-		if (K053246_is_IRQ_enabled()) {
-			gijoe_objdma();
-			irq6_timer = 10; // guess
-		}
-
-		if (control_data & 0x80) {
-			SekSetIRQLine(5, CPU_IRQSTATUS_AUTO);
+				if (control_data & 0x80) {
+					SekSetIRQLine(5, CPU_IRQSTATUS_AUTO);
+				}
+			}
 		}
 	}
 
 	if (pBurnSoundOut) {
-		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
-		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-		if (nSegmentLength) {
-			memset (pSoundBuf, 0, nSegmentLength * 2 * 2);
-			K054539Update(0, pSoundBuf, nSegmentLength);
-		}
+		BurnSoundClear();
+		K054539Update(0, pBurnSoundOut, nBurnSoundLen);
 	}
 
 	ZetClose();
@@ -748,7 +741,7 @@ static INT32 DrvFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -756,7 +749,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029732;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -767,20 +760,20 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		K054539Scan(nAction);
+		K054539Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
 
 		SCAN_VAR(avac_vrc);
+		SCAN_VAR(avac_bits);
+		SCAN_VAR(avac_occupancy);
 		SCAN_VAR(sound_nmi_enable);
 		SCAN_VAR(control_data);
-		SCAN_VAR(sound_nmi_enable);
 		SCAN_VAR(irq6_timer);
 
-		for (INT32 i = 0; i < 4; i++) {
-			SCAN_VAR(avac_bits[i]);
-			SCAN_VAR(avac_occupancy[i]);
-		}
+		SCAN_VAR(layerpri);
+		SCAN_VAR(layer_colorbase);
+		SCAN_VAR(sprite_colorbase);
 	}
 
 	return 0;
@@ -817,8 +810,8 @@ struct BurnDriver BurnDrvGijoe = {
 	"gijoe", NULL, NULL, NULL, "1992",
 	"G.I. Joe (World, EAB, set 1)\0", NULL, "Konami", "GX069",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_MISC, 0,
-	NULL, gijoeRomInfo, gijoeRomName, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, gijoeRomInfo, gijoeRomName, NULL, NULL, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -826,7 +819,7 @@ struct BurnDriver BurnDrvGijoe = {
 
 // G.I. Joe (World, EB8, prototype?)
 
-static struct BurnRomInfo gijoeaRomDesc[] = {
+static struct BurnRomInfo gijoeeaRomDesc[] = {
 	{ "rom3.14e",		0x040000, 0x0a11f63a, 1 | BRF_PRG | BRF_ESS }, //  0 68K Code
 	{ "rom2.18e",		0x040000, 0x8313c559, 1 | BRF_PRG | BRF_ESS }, //  1
 	{ "069a12.13e",		0x040000, 0x75a7585c, 1 | BRF_PRG | BRF_ESS }, //  2
@@ -847,15 +840,15 @@ static struct BurnRomInfo gijoeaRomDesc[] = {
 	{ "er5911.7d",		0x000080, 0x64f5c87b, 6 | BRF_OPT },           // 12 eeprom data
 };
 
-STD_ROM_PICK(gijoea)
-STD_ROM_FN(gijoea)
+STD_ROM_PICK(gijoeea)
+STD_ROM_FN(gijoeea)
 
-struct BurnDriver BurnDrvGijoea = {
-	"gijoea", "gijoe", NULL, NULL, "1992",
+struct BurnDriver BurnDrvGijoeea = {
+	"gijoeea", "gijoe", NULL, NULL, "1992",
 	"G.I. Joe (World, EB8, prototype?)\0", NULL, "Konami", "GX069",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, gijoeaRomInfo, gijoeaRomName, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, gijoeeaRomInfo, gijoeeaRomName, NULL, NULL, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -891,8 +884,8 @@ struct BurnDriver BurnDrvGijoeu = {
 	"gijoeu", "gijoe", NULL, NULL, "1992",
 	"G.I. Joe (US, UAB)\0", NULL, "Konami", "GX069",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, gijoeuRomInfo, gijoeuRomName, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, gijoeuRomInfo, gijoeuRomName, NULL, NULL, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -928,8 +921,45 @@ struct BurnDriver BurnDrvGijoej = {
 	"gijoej", "gijoe", NULL, NULL, "1992",
 	"G.I. Joe (Japan, JAA)\0", NULL, "Konami", "GX069",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, gijoejRomInfo, gijoejRomName, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, gijoejRomInfo, gijoejRomName, NULL, NULL, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
+	288, 224, 4, 3
+};
+
+
+// G.I. Joe (Asia, AA)
+
+static struct BurnRomInfo gijoeaRomDesc[] = {
+	{ "069aa03.14e",	0x040000, 0x74355c6e, 1 | BRF_PRG | BRF_ESS }, //  0 68K Code
+	{ "069aa02.18e",	0x040000, 0xd3dd0397, 1 | BRF_PRG | BRF_ESS }, //  1
+	{ "069a12.13e",		0x040000, 0x75a7585c, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "069a11.16e",		0x040000, 0x3153e788, 1 | BRF_PRG | BRF_ESS }, //  3
+
+	{ "069a01.7c",		0x010000, 0x74172b99, 2 | BRF_PRG | BRF_ESS }, //  4 Z80 Code
+
+	{ "069a10.18j",		0x100000, 0x4c6743ee, 3 | BRF_GRA },           //  5 K056832 Characters
+	{ "069a09.16j",		0x100000, 0xe6e36b05, 3 | BRF_GRA },           //  6
+
+	{ "069a08.6h",		0x100000, 0x325477d4, 4 | BRF_GRA },           //  7 K053247 Sprites
+	{ "069a05.1h",		0x100000, 0xc4ab07ed, 4 | BRF_GRA },           //  8
+	{ "069a07.4h",		0x100000, 0xccaa3971, 4 | BRF_GRA },           //  9
+	{ "069a06.2h",		0x100000, 0x63eba8e1, 4 | BRF_GRA },           // 10
+
+	{ "069a04.1e",		0x200000, 0x11d6dcd6, 5 | BRF_SND },           // 11 k054539
+
+	{ "er5911.7d",		0x000080, 0x6363513c, 6 | BRF_OPT },           // 12 eeprom data
+};
+
+STD_ROM_PICK(gijoea)
+STD_ROM_FN(gijoea)
+
+struct BurnDriver BurnDrvGijoea = {
+	"gijoea", "gijoe", NULL, NULL, "1992",
+	"G.I. Joe (Asia, AA)\0", NULL, "Konami", "GX069",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, gijoeaRomInfo, gijoeaRomName, NULL, NULL, NULL, NULL, GijoeInputInfo, GijoeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };

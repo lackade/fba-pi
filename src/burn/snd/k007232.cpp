@@ -1,5 +1,30 @@
+// copyright-holders:Nicola Salmoria,Hiromitsu Shioya
+/*********************************************************/
+/*    Konami PCM controller                              */
+/*********************************************************/
+
+/*
+  Changelog, Hiromitsu Shioya 02/05/2002
+  fix start address decode timing. (sample loop bug.)
+
+    Changelog, Mish, August 1999:
+        Removed interface support for different memory regions per channel.
+        Removed interface support for differing channel volume.
+
+        Added bankswitching.
+        Added support for multiple chips.
+
+        (Nb:  Should different memory regions per channel be needed
+        the bankswitching function can set this up).
+
+NS990821
+support for the k007232_VOL() macro.
+added external port callback, and functions to set the volume of the channels
+
+*/
+
+
 #include "burnint.h"
-#include "burn_sound.h"
 #include "k007232.h"
 
 #define KDAC_A_PCM_MAX	(2)
@@ -17,10 +42,7 @@ struct kdacApcm
 	UINT32			step[KDAC_A_PCM_MAX];
 	UINT32			bank[KDAC_A_PCM_MAX];
 	INT32			play[KDAC_A_PCM_MAX];
-
 	UINT8 			wreg[0x10];
-	
-	INT32			UpdateStep;
 };
 
 // stuff that doesn't need to be saved..
@@ -31,6 +53,7 @@ struct kdacPointers
 	UINT32  		pcmlimit;
 	K07232_PortWrite	K07232PortWriteHandler;
 	
+	INT32			UpdateStep;
 	double			gain[2];
 	INT32			output_dir[2];
 };
@@ -89,7 +112,7 @@ void K007232Update(INT32 chip, INT16* pSoundBuf, INT32 nLength)
 
 				if (Chip->play[i] == 0) break;
 
-				Chip->addr[i] += (Chip->step[i] * Chip->UpdateStep) >> 16;
+				Chip->addr[i] += (Chip->step[i] * Ptr->UpdateStep) >> 16;
 
 				out = (Ptr->pcmbuf[i][addr] & 0x7f) - 0x40;
 
@@ -235,11 +258,11 @@ void K007232Init(INT32 chip, INT32 clock, UINT8 *pPCMData, INT32 PCMDataSize)
 	memset(Ptr,	0, sizeof(kdacPointers));
 
 	if (Left == NULL) {
-		Left = (INT32*)malloc(nBurnSoundLen * sizeof(INT32));
+		Left = (INT32*)BurnMalloc(nBurnSoundLen * sizeof(INT32));
 	}
 
 	if (Right == NULL) {
-		Right = (INT32*)malloc(nBurnSoundLen * sizeof(INT32));
+		Right = (INT32*)BurnMalloc(nBurnSoundLen * sizeof(INT32));
 	}
 
 	Ptr->pcmbuf[0] = pPCMData;
@@ -247,6 +270,30 @@ void K007232Init(INT32 chip, INT32 clock, UINT8 *pPCMData, INT32 PCMDataSize)
 	Ptr->pcmlimit  = PCMDataSize;
 
 	Ptr->clock = clock;
+
+	KDAC_A_make_fncode();
+
+	double Rate = (double)clock / 128 / nBurnSoundRate;
+	Ptr->UpdateStep = (INT32)(Rate * 0x10000);
+
+	Ptr->gain[BURN_SND_K007232_ROUTE_1] = 1.00;
+	Ptr->gain[BURN_SND_K007232_ROUTE_2] = 1.00;
+	Ptr->output_dir[BURN_SND_K007232_ROUTE_1] = BURN_SND_ROUTE_BOTH;
+	Ptr->output_dir[BURN_SND_K007232_ROUTE_2] = BURN_SND_ROUTE_BOTH;
+	
+	nNumChips = chip;
+
+	K007232Reset(chip);
+}
+
+void K007232Reset(INT32 chip)
+{
+#if defined FBA_DEBUG
+	if (!DebugSnd_K007232Initted) bprintf(PRINT_ERROR, _T("K007232Reset called without init\n"));
+	if (chip > nNumChips) bprintf(PRINT_ERROR, _T("K007232Reset called with invalid chip %x\n"), chip);
+#endif
+
+	Chip = &Chips[chip];
 
 	for (INT32 i = 0; i < KDAC_A_PCM_MAX; i++) {
 		Chip->start[i] = 0;
@@ -260,25 +307,13 @@ void K007232Init(INT32 chip, INT32 clock, UINT8 *pPCMData, INT32 PCMDataSize)
 	Chip->vol[1][1] = 255;
 
 	for (INT32 i = 0; i < 0x10; i++)  Chip->wreg[i] = 0;
-
-	KDAC_A_make_fncode();
-	
-	double Rate = (double)clock / 128 / nBurnSoundRate;
-	Chip->UpdateStep = (INT32)(Rate * 0x10000);
-	
-	Ptr->gain[BURN_SND_K007232_ROUTE_1] = 1.00;
-	Ptr->gain[BURN_SND_K007232_ROUTE_2] = 1.00;
-	Ptr->output_dir[BURN_SND_K007232_ROUTE_1] = BURN_SND_ROUTE_BOTH;
-	Ptr->output_dir[BURN_SND_K007232_ROUTE_2] = BURN_SND_ROUTE_BOTH;
-	
-	nNumChips = chip;
 }
 
 void K007232SetRoute(INT32 chip, INT32 nIndex, double nVolume, INT32 nRouteDir)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_K007232Initted) bprintf(PRINT_ERROR, _T("K007232SetRoute called without init\n"));
-	if (chip >nNumChips) bprintf(PRINT_ERROR, _T("K007232SetRoute called with invalid chip %x\n"), chip);
+	if (chip > nNumChips) bprintf(PRINT_ERROR, _T("K007232SetRoute called with invalid chip %x\n"), chip);
 	if (nIndex < 0 || nIndex > 1) bprintf(PRINT_ERROR, _T("K007232SetRoute called with invalid index %i\n"), nIndex);
 #endif
 
@@ -294,21 +329,14 @@ void K007232Exit()
 	if (!DebugSnd_K007232Initted) bprintf(PRINT_ERROR, _T("K007232Exit called without init\n"));
 #endif
 
-	if (Left) {
-		free(Left);
-		Left = NULL;
-	}	
-
-	if (Right) {
-		free(Right);
-		Right = NULL;
-	}
+	BurnFree(Left);
+	BurnFree(Right);
 	
 	DebugSnd_K007232Initted = 0;
 	nNumChips = 0;
 }
 
-INT32 K007232Scan(INT32 nAction, INT32 *pnMin)
+void K007232Scan(INT32 nAction, INT32 *pnMin)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_K007232Initted) bprintf(PRINT_ERROR, _T("K007232Scan called without init\n"));
@@ -319,12 +347,10 @@ INT32 K007232Scan(INT32 nAction, INT32 *pnMin)
 	}
 
 	if ((nAction & ACB_DRIVER_DATA) == 0) {
-		return 1;
+		return;
 	}
 
 	SCAN_VAR(Chips);
-
-	return 0;
 }
 
 void K007232SetVolume(INT32 chip, INT32 channel,INT32 volumeA,INT32 volumeB)

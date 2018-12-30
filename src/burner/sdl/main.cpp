@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
 
 	ConfigAppSave();
 	BurnLibExit();
-	SDL_Quit();
+	//SDL_Quit();
 
 	return 0;
 }

@@ -311,16 +311,6 @@ static void bladestl_ym2203_write_portB(UINT32, UINT32 data)
 	memcpy (DrvUpdROM, DrvUpdROM + 0x20000 + (((data & 0x38) >> 3) * 0x20000), 0x20000);
 }
 
-inline static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)M6809TotalCycles() * nSoundRate / 2000000;
-}
-
-inline static double DrvGetTime()
-{
-	return (double)M6809TotalCycles() / 2000000.0;
-}
-
 static INT32 DrvDoReset(INT32 clear_ram)
 {
 	if (clear_ram) {
@@ -340,6 +330,8 @@ static INT32 DrvDoReset(INT32 clear_ram)
 	K007342Reset();
 
 	bladestl_ym2203_write_portB(0,0);
+
+	HiscoreReset();
 
 	HD6309Bank = 0;
 	soundlatch = 0;
@@ -429,7 +421,7 @@ static INT32 DrvInit()
 	HD6309SetReadHandler(bladestl_main_read);
 	HD6309Close();
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvM6809RAM,		0x0000, 0x07ff, MAP_RAM);
 	M6809MapMemory(DrvM6809ROM  + 0x08000,	0x8000, 0xffff, MAP_ROM);
@@ -446,7 +438,7 @@ static INT32 DrvInit()
 	UPD7759Init(0, UPD7759_STANDARD_CLOCK, DrvUpdROM);
 	UPD7759SetRoute(0, 0.60, BURN_SND_ROUTE_BOTH);
 
-	BurnYM2203Init(1, 3579545, NULL, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(1, 3579545, NULL, 0);
 	BurnYM2203SetPorts(0, NULL, NULL, &bladestl_ym2203_write_portA, &bladestl_ym2203_write_portB);
 	BurnTimerAttachM6809(2000000);
 	BurnYM2203SetAllRoutes(0, 0.45, BURN_SND_ROUTE_BOTH);
@@ -601,7 +593,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 
 		K051733Scan(nAction);
 		BurnYM2203Scan(nAction, pnMin);
-		UPD7759Scan(0, nAction, pnMin);
+		UPD7759Scan(nAction, pnMin);
 
 		K007342Scan(nAction);
 
@@ -647,8 +639,8 @@ struct BurnDriver BurnDrvBladestl = {
 	"bladestl", NULL, NULL, NULL, "1987",
 	"Blades of Steel (version T)\0", NULL, "Konami", "GX797",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, bladestlRomInfo, bladestlRomName, NULL, NULL, BladestlInputInfo, BladestlDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, bladestlRomInfo, bladestlRomName, NULL, NULL, NULL, NULL, BladestlInputInfo, BladestlDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x120,
 	224, 256, 3, 4
 };
@@ -678,8 +670,8 @@ struct BurnDriver BurnDrvBladestll = {
 	"bladestll", "bladestl", NULL, NULL, "1987",
 	"Blades of Steel (version L)\0", NULL, "Konami", "GX797",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, bladestllRomInfo, bladestllRomName, NULL, NULL, BladestlInputInfo, BladestlDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, bladestllRomInfo, bladestllRomName, NULL, NULL, NULL, NULL, BladestlInputInfo, BladestlDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x120,
 	224, 256, 3, 4
 };
@@ -709,8 +701,8 @@ struct BurnDriver BurnDrvBladestle = {
 	"bladestle", "bladestl", NULL, NULL, "1987",
 	"Blades of Steel (version E)\0", NULL, "Konami", "GX797",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, bladestleRomInfo, bladestleRomName, NULL, NULL, BladestlInputInfo, BladestlDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
+	NULL, bladestleRomInfo, bladestleRomName, NULL, NULL, NULL, NULL, BladestlInputInfo, BladestlDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x120,
 	224, 256, 3, 4
 };

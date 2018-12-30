@@ -44,7 +44,7 @@ static UINT8 bRecalcPalette = 0;
 static UINT32 gfx_code_mask;
 //static UINT8 bMahjong = 0;
 static UINT8 Mahjong_keyboard = 0;
-static UINT8 HasNVRam;
+static UINT8 HasNVRam = 0;
 
 static INT32 yoffset;
 static INT32 sva_x;
@@ -534,7 +534,7 @@ static struct BurnDIPInfo GundamexDIPList[]=
 	{0x16, 0x01, 0x06, 0x02, "Hard"		},
 	{0x16, 0x01, 0x06, 0x00, "Hardest"		},
 
-	{0   , 0xfe, 0   ,    0, "Flip Screen"		},
+	{0   , 0xfe, 0   ,    2, "Flip Screen"		},
 	{0x16, 0x01, 0x10, 0x10, "Off"		},
 	{0x16, 0x01, 0x10, 0x00, "On"		},
 
@@ -550,7 +550,7 @@ static struct BurnDIPInfo GundamexDIPList[]=
 	{0x16, 0x01, 0x80, 0x80, "Off"		},
 	{0x16, 0x01, 0x80, 0x00, "On"		},
 
-	{0   , 0xfe, 0   ,    2, "Coin A"		},
+	{0   , 0xfe, 0   ,    8, "Coin A"		},
 	{0x17, 0x01, 0x07, 0x00, "4 Coins 1 Credits "		},
 	{0x17, 0x01, 0x07, 0x01, "3 Coins 1 Credits "		},
 	{0x17, 0x01, 0x07, 0x02, "2 Coins 1 Credits "		},
@@ -570,7 +570,7 @@ static struct BurnDIPInfo GundamexDIPList[]=
 	{0x17, 0x01, 0x38, 0x18, "1 Coin 4 Credits "		},
 	{0x17, 0x01, 0x38, 0x20, "1 Coin 5 Credits "		},
 
-	{0   , 0xfe, 0   ,    8, "Debug Mode"		},
+	{0   , 0xfe, 0   ,    2, "Debug Mode"		},
 	{0x17, 0x01, 0x40, 0x40, "Off"		},
 	{0x17, 0x01, 0x40, 0x00, "On"		},
 
@@ -792,15 +792,15 @@ static struct BurnDIPInfo WschampDIPList[]=
 	{0x12, 0x01, 0x0f, 0x01, "1 Coin 6 Credits, 1 Credit Start & Continue"		},
 	{0x12, 0x01, 0x0f, 0x00, "Free Play"		},
 
-	{0   , 0xfe, 0   ,    0, "Service Mode"		},
+	{0   , 0xfe, 0   ,    2, "Service Mode"		},
 	{0x12, 0x01, 0x80, 0x80, "Off"		},
 	{0x12, 0x01, 0x80, 0x00, "On"		},
 
-	{0   , 0xfe, 0   ,    0, "Vert. Flip Screen"		},
+	{0   , 0xfe, 0   ,    2, "Vert. Flip Screen"		},
 	{0x13, 0x01, 0x01, 0x01, "Off"		},
 	{0x13, 0x01, 0x01, 0x00, "On"		},
 
-	{0   , 0xfe, 0   ,    0, "Horiz. Flip Screen"		},
+	{0   , 0xfe, 0   ,    2, "Horiz. Flip Screen"		},
 	{0x13, 0x01, 0x02, 0x02, "Off"		},
 	{0x13, 0x01, 0x02, 0x00, "On"		},
 
@@ -808,7 +808,7 @@ static struct BurnDIPInfo WschampDIPList[]=
 	{0x13, 0x01, 0x04, 0x00, "Off"		},
 	{0x13, 0x01, 0x04, 0x04, "On"		},
 
-	{0   , 0xfe, 0   ,    2, "Difficulty"		},
+	{0   , 0xfe, 0   ,    4, "Difficulty"		},
 	{0x13, 0x01, 0x18, 0x10, "Easy"		},
 	{0x13, 0x01, 0x18, 0x18, "Normal"		},
 	{0x13, 0x01, 0x18, 0x08, "Hard"		},
@@ -848,15 +848,15 @@ static struct BurnDIPInfo TrophyhDIPList[]=
 	{0x12, 0x01, 0x0f, 0x01, "1 Coin 6 Credits, 1 Credit Start & Continue"		},
 	{0x12, 0x01, 0x0f, 0x00, "Free Play"		},
 
-	{0   , 0xfe, 0   ,    0, "Service Mode"		},
+	{0   , 0xfe, 0   ,    2, "Service Mode"		},
 	{0x12, 0x01, 0x80, 0x80, "Off"		},
 	{0x12, 0x01, 0x80, 0x00, "On"		},
 
-	{0   , 0xfe, 0   ,    0, "Vert. Flip Screen"		},
+	{0   , 0xfe, 0   ,    2, "Vert. Flip Screen"		},
 	{0x13, 0x01, 0x01, 0x01, "Off"		},
 	{0x13, 0x01, 0x01, 0x00, "On"		},
 
-	{0   , 0xfe, 0   ,    0, "Horiz. Flip Screen"		},
+	{0   , 0xfe, 0   ,    2, "Horiz. Flip Screen"		},
 	{0x13, 0x01, 0x02, 0x02, "Off"		},
 	{0x13, 0x01, 0x02, 0x00, "On"		},
 
@@ -864,7 +864,7 @@ static struct BurnDIPInfo TrophyhDIPList[]=
 	{0x13, 0x01, 0x04, 0x00, "Off"		},
 	{0x13, 0x01, 0x04, 0x04, "On"		},
 
-	{0   , 0xfe, 0   ,    2, "Difficulty"		},
+	{0   , 0xfe, 0   ,    4, "Difficulty"		},
 	{0x13, 0x01, 0x18, 0x10, "Easy"		},
 	{0x13, 0x01, 0x18, 0x18, "Normal"		},
 	{0x13, 0x01, 0x18, 0x08, "Hard"		},
@@ -988,38 +988,54 @@ static struct BurnRomInfo pzlbowlRomDesc[] = {
 STD_ROM_PICK(pzlbowl)
 STD_ROM_FN(pzlbowl)
 
+static struct BurnRomInfo ablastRomDesc[] = {
+	// Genuine P0-142A PCB
+	{ "a-blast_twn_u06.u06",	  0x080000, 0xe62156d7, BRF_ESS | BRF_PRG },	// 68000 code
+	{ "a-blast_twn_u07.u07",	  0x080000, 0xd4ddc16b, BRF_ESS | BRF_PRG },
+
+	{ "a-blast_twn_u38.u38",	  0x400000, 0x090923da,	BRF_GRA },				// GFX
+	{ "a-blast_twn_u39.u39",	  0x400000, 0x6bb17d83,	BRF_GRA },
+	{ "a-blast_twn_u40.u40",	  0x400000, 0xdb94847d,	BRF_GRA },
+
+	{ "a-blast_twn_u18.u18",	  0x200000, 0xde4e65e2, BRF_SND },				// PCM
+};
+
+STD_ROM_PICK(ablast)
+STD_ROM_FN(ablast)
+
 static struct BurnRomInfo penbrosRomDesc[] = {
-	{ "u06.bin",	  0x080000, 0x7bbdffac, BRF_ESS | BRF_PRG },	// 68000 code
-	{ "u07.bin",	  0x080000, 0xd50cda5f, BRF_ESS | BRF_PRG },
+	// Genuine P0-142A PCB - Original or hack?
+	{ "a-blast_jpn_u06.u06",	  0x080000, 0x7bbdffac, BRF_ESS | BRF_PRG },	// 68000 code
+	{ "a-blast_jpn_u07.u07",	  0x080000, 0xd50cda5f, BRF_ESS | BRF_PRG },
 
-	{ "u38.bin",	  0x400000, 0x4247b39e,	BRF_GRA },				// GFX
-	{ "u39.bin",	  0x400000, 0xf9f07faf,	BRF_GRA },
-	{ "u40.bin",	  0x400000, 0xdc9e0a96,	BRF_GRA },
+	{ "a-blast_jpn_u38.u38",	  0x400000, 0x4247b39e,	BRF_GRA },				// GFX
+	{ "a-blast_jpn_u39.u39",	  0x400000, 0xf9f07faf,	BRF_GRA },
+	{ "a-blast_jpn_u40.u40",	  0x400000, 0xdc9e0a96,	BRF_GRA },
 
-	{ "u18.bin",	  0x200000, 0xde4e65e2, BRF_SND },				// PCM
+	{ "a-blast_jpn_u18.u18",	  0x200000, 0xde4e65e2, BRF_SND },				// PCM
 };
 
 STD_ROM_PICK(penbros)
 STD_ROM_FN(penbros)
 
 static struct BurnRomInfo gundamexRomDesc[] = {
-	{ "ka002002.u2",	0x080000, 0xe850f6d8, BRF_ESS | BRF_PRG }, //  0 68000 code
-	{ "ka002004.u3",	0x080000, 0xc0fb1208, BRF_ESS | BRF_PRG }, //  1
-	{ "ka002001.u4",	0x080000, 0x553ebe6b, BRF_ESS | BRF_PRG }, //  2
-	{ "ka002003.u5",	0x080000, 0x946185aa, BRF_ESS | BRF_PRG }, //  3
-	{ "ka001005.u77",	0x080000, 0xf01d3d00, BRF_ESS | BRF_PRG }, //  4
+	{ "ka_002_002.u2",	0x080000, 0xe850f6d8, BRF_ESS | BRF_PRG }, //  0 68000 code
+	{ "ka_002_004.u3",	0x080000, 0xc0fb1208, BRF_ESS | BRF_PRG }, //  1
+	{ "ka_002_001.u4",	0x080000, 0x553ebe6b, BRF_ESS | BRF_PRG }, //  2
+	{ "ka_002_003.u5",	0x080000, 0x946185aa, BRF_ESS | BRF_PRG }, //  3
+	{ "ka-001-005.u77",	0x080000, 0xf01d3d00, BRF_ESS | BRF_PRG }, //  4
 
-	{ "ka001009.u16",	0x200000, 0x997d8d93, BRF_GRA }, //  5 GFX
-	{ "ka001010.u18",	0x200000, 0x811b67ca, BRF_GRA }, //  6
-	{ "ka001011.u20",	0x200000, 0x08a72700, BRF_GRA }, //  7
-	{ "ka001012.u15",	0x200000, 0xb789e4a8, BRF_GRA }, //  8
-	{ "ka001013.u17",	0x200000, 0xd8a0201f, BRF_GRA }, //  9
-	{ "ka001014.u19",	0x200000, 0x7635e026, BRF_GRA }, // 10
-	{ "ka001006.u21",	0x200000, 0x6aac2f2f, BRF_GRA }, // 11
-	{ "ka001007.u22",	0x200000, 0x588f9d63, BRF_GRA }, // 12
-	{ "ka001008.u23",	0x200000, 0xdb55a60a, BRF_GRA }, // 13
+	{ "ka-001-009.u16",	0x200000, 0x997d8d93, BRF_GRA }, //  5 GFX
+	{ "ka-001-010.u18",	0x200000, 0x811b67ca, BRF_GRA }, //  6
+	{ "ka-001-011.u20",	0x200000, 0x08a72700, BRF_GRA }, //  7
+	{ "ka-001-012.u15",	0x200000, 0xb789e4a8, BRF_GRA }, //  8
+	{ "ka-001-013.u17",	0x200000, 0xd8a0201f, BRF_GRA }, //  9
+	{ "ka-001-014.u19",	0x200000, 0x7635e026, BRF_GRA }, // 10
+	{ "ka-001-006.u21",	0x200000, 0x6aac2f2f, BRF_GRA }, // 11
+	{ "ka-001-007.u22",	0x200000, 0x588f9d63, BRF_GRA }, // 12
+	{ "ka-001-008.u23",	0x200000, 0xdb55a60a, BRF_GRA }, // 13
 
-	{ "ka001015.u28",	0x200000, 0xada2843b, BRF_SND }, // 14 PCM
+	{ "ka-001-015.u28",	0x200000, 0xada2843b, BRF_SND }, // 14 PCM
 	
 	{ "eeprom.bin",         0x000080, 0x80f8e248, BRF_OPT },
 };
@@ -1551,7 +1567,7 @@ static INT32 MemIndex(INT32 CodeSize, INT32 GfxSize, INT32 PcmSize, INT32 ExtRam
 
 	Ram68K		= Next; Next += 0x010000;
 	RamUnknown	= Next; Next += ExtRamSize;
-	if (HasNVRam) RamNV = Next; Next += 0x10000;
+	if (HasNVRam) { RamNV = Next; Next += 0x10000; }
 	RamSpr		= (UINT16 *) Next; Next += 0x020000 * sizeof(UINT16);
 	RamSprBak	= (UINT16 *) Next; Next += 0x020000 * sizeof(UINT16);
 	RamPal		= (UINT16 *) Next; Next += 0x008000 * sizeof(UINT16);
@@ -2919,7 +2935,7 @@ static void drawgfxN(UINT32,UINT32,INT32,INT32,INT32,INT32)
 
 typedef void (*pDrawgfx)(UINT32,UINT32,INT32,INT32,INT32,INT32);
 
-static void DrvDraw()
+static INT32 DrvDraw()
 {
 	if (bRecalcPalette) {
 		for (INT32 i=0;i<0x08000; i++)
@@ -2932,7 +2948,7 @@ static void DrvDraw()
 
 	if (BURN_ENDIAN_SWAP_INT16(RamVReg[0x30/2]) & 1) { // Blank Screen
 		memcpy(RamSprBak, RamSpr, 0x040000);
-		return;
+		return 0;
 	}
 
 	UINT16 *s1  = RamSprBak + 0x3000 / 2;
@@ -3097,6 +3113,8 @@ static void DrvDraw()
 	BurnTransferCopy(CurPal);
 
 	memcpy(RamSprBak, RamSpr, 0x040000);
+
+	return 0;
 }
 
 
@@ -3257,17 +3275,14 @@ static INT32 grdiansScan(INT32 nAction,INT32 *pnMin)
 		ba.szName = "All Ram";
 		BurnAcb(&ba);
 	}
-	
-#if 0
-	// This is causing crashes
-	if (nAction & ACB_NVRAM && HasNVRam) {
+
+	if (nAction & ACB_NVRAM && HasNVRam && RamNV) {
 		memset(&ba, 0, sizeof(ba));
 		ba.Data = RamNV;
 		ba.nLen = 0x10000;
-		ba.szName = "Backup Ram";
+		ba.szName = "SetaNVRam";
 		BurnAcb(&ba);
 	}
-#endif
 
 	if (nAction & ACB_DRIVER_DATA) {
 
@@ -3302,11 +3317,11 @@ static INT32 grdiansScan(INT32 nAction,INT32 *pnMin)
 
 struct BurnDriver BurnDrvGrdians = {
 	"grdians", NULL, NULL, NULL, "1995",
-	"Guardians\0Denjin Makai II\0", NULL, "Banpresto", "Newer Seta",
+	"Guardians\0Denjin Makai II\0", "Imperfect graphics @ game start cutscene", "Banpresto", "Newer Seta",
 	L"Guardians\0\u96FB\u795E\u9B54\u584A \uFF29\uFF29\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_SCRFIGHT, 0,
-	NULL, grdiansRomInfo, grdiansRomName, NULL, NULL, grdiansInputInfo, grdiansDIPInfo,
-	grdiansInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, grdiansRomInfo, grdiansRomName, NULL, NULL, NULL, NULL, grdiansInputInfo, grdiansDIPInfo,
+	grdiansInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	304, 232, 4, 3
 };
 
@@ -3315,8 +3330,8 @@ struct BurnDriver BurnDrvMj4simai = {
 	"Wakakusamonogatari Mahjong Yonshimai (Japan)\0", NULL, "Maboroshi Ware", "Newer Seta",
 	L"\u82E5\u8349\u7269\u8A9E \u9EBB\u96C0\u56DB\u59C9\u59B9 (Japan)\0Wakakusamonogatari Mahjong Yonshimai\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_SETA2, GBF_MAHJONG, 0,
-	NULL, mj4simaiRomInfo, mj4simaiRomName, NULL, NULL, mj4simaiInputInfo, mj4simaiDIPInfo,
-	mj4simaiInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, mj4simaiRomInfo, mj4simaiRomName, NULL, NULL, NULL, NULL, mj4simaiInputInfo, mj4simaiDIPInfo,
+	mj4simaiInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	384, 240, 4, 3
 };
 
@@ -3325,8 +3340,8 @@ struct BurnDriver BurnDrvMyangel = {
 	"Kosodate Quiz My Angel (Japan)\0", NULL, "Namco", "Newer Seta",
 	L"\u5B50\u80B2\u3066\u30AF\u30A4\u30BA \u30DE\u30A4 \u30A8\u30F3\u30B8\u30A7\u30EB (Japan)\0Kosodate Quiz My Angel\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_QUIZ, 0,
-	NULL, myangelRomInfo, myangelRomName, NULL, NULL, myangelInputInfo, myangelDIPInfo,
-	myangelInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, myangelRomInfo, myangelRomName, NULL, NULL, NULL, NULL, myangelInputInfo, myangelDIPInfo,
+	myangelInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	376, 240, 4, 3
 };
 
@@ -3335,8 +3350,8 @@ struct BurnDriver BurnDrvMyangel2 = {
 	"Kosodate Quiz My Angel 2 (Japan)\0", NULL, "Namco", "Newer Seta",
 	L"\u5B50\u80B2\u3066\u30AF\u30A4\u30BA \u30DE\u30A4 \u30A8\u30F3\u30B8\u30A7\u30EB \uFF12 (Japan)\0Kosodate Quiz My Angel 2\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_QUIZ, 0,
-	NULL, myangel2RomInfo, myangel2RomName, NULL, NULL, myangelInputInfo, myangel2DIPInfo,
-	myangel2Init, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, myangel2RomInfo, myangel2RomName, NULL, NULL, NULL, NULL, myangelInputInfo, myangel2DIPInfo,
+	myangel2Init, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	376, 240, 4, 3
 };
 
@@ -3345,8 +3360,8 @@ struct BurnDriver BurnDrvPzlbowl = {
 	"Puzzle De Bowling (Japan)\0", NULL, "Nihon System / Moss", "Newer Seta",
 	L"Puzzle De Bowling\0\u30D1\u30BA\u30EB \uFF24\uFF25 \u30DC\u30FC\u30EA\u30F3\u30B0\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_PUZZLE, 0,
-	NULL, pzlbowlRomInfo, pzlbowlRomName, NULL, NULL, grdiansInputInfo, pzlbowlDIPInfo,
-	pzlbowlInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, pzlbowlRomInfo, pzlbowlRomName, NULL, NULL, NULL, NULL, grdiansInputInfo, pzlbowlDIPInfo,
+	pzlbowlInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	384, 240, 4, 3
 };
 
@@ -3355,8 +3370,18 @@ struct BurnDriver BurnDrvPenbros = {
 	"Penguin Brothers (Japan)\0", NULL, "Subsino", "Newer Seta",
 	L"\u30DA\u30F3\u30AE\u30F3 \u30D6\u30E9\u30B6\u30FC\u30BA (Japan)\0Penguin Brothers\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_PLATFORM, 0,
-	NULL, penbrosRomInfo, penbrosRomName, NULL, NULL, penbrosInputInfo, penbrosDIPInfo,
-	penbrosInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, penbrosRomInfo, penbrosRomName, NULL, NULL, NULL, NULL, penbrosInputInfo, penbrosDIPInfo,
+	penbrosInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
+	320, 224, 4, 3
+};
+
+struct BurnDriver BurnDrvAblast = {
+	"ablast", "penbros", NULL, NULL, "2000",
+	"A-Blast (Japan)\0", NULL, "Subsino", "Newer Seta",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_SETA2, GBF_PLATFORM, 0,
+	NULL, ablastRomInfo, ablastRomName, NULL, NULL, NULL, NULL, penbrosInputInfo, penbrosDIPInfo,
+	penbrosInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 224, 4, 3
 };
 
@@ -3365,8 +3390,8 @@ struct BurnDriver BurnDrvGundamex = {
 	"Mobile Suit Gundam EX Revue\0", NULL, "Banpresto", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_VSFIGHT, 0,
-	NULL, gundamexRomInfo, gundamexRomName, NULL, NULL, GundamexInputInfo, GundamexDIPInfo,
-	gundamexInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, gundamexRomInfo, gundamexRomName, NULL, NULL, NULL, NULL, GundamexInputInfo, GundamexDIPInfo,
+	gundamexInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	384, 224, 4, 3
 };
 
@@ -3375,8 +3400,8 @@ struct BurnDriver BurnDrvDeerhunt = {
 	"Deer Hunting USA V4.3\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, deerhuntRomInfo, deerhuntRomName, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, deerhuntRomInfo, deerhuntRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3385,8 +3410,8 @@ struct BurnDriver BurnDrvDeerhuna = {
 	"Deer Hunting USA V4.2\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, deerhunaRomInfo, deerhunaRomName, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, deerhunaRomInfo, deerhunaRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3395,8 +3420,8 @@ struct BurnDriver BurnDrvDeerhunb = {
 	"Deer Hunting USA V4.0\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, deerhunbRomInfo, deerhunbRomName, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, deerhunbRomInfo, deerhunbRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3405,8 +3430,8 @@ struct BurnDriver BurnDrvDeerhunc = {
 	"Deer Hunting USA V3.0\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, deerhuncRomInfo, deerhuncRomName, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, deerhuncRomInfo, deerhuncRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3415,8 +3440,8 @@ struct BurnDriver BurnDrvDeerhund = {
 	"Deer Hunting USA V2\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, deerhundRomInfo, deerhundRomName, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, deerhundRomInfo, deerhundRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3425,18 +3450,18 @@ struct BurnDriver BurnDrvDeerhune = {
 	"Deer Hunting USA V1\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, deerhuneRomInfo, deerhuneRomName, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, deerhuneRomInfo, deerhuneRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, DeerhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
 struct BurnDriver BurnDrvTurkhunt = {
 	"turkhunt", NULL, NULL, NULL, "2001",
-	"Turkey Hunting USA V1.0\0", NULL, "Sammy USA Corporation", "Newer Seta",
+	"Turkey Hunting USA V1.00\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, turkhuntRomInfo, turkhuntRomName, NULL, NULL, DeerhuntInputInfo, TurkhuntDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, turkhuntRomInfo, turkhuntRomName, NULL, NULL, NULL, NULL, DeerhuntInputInfo, TurkhuntDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3445,8 +3470,8 @@ struct BurnDriver BurnDrvWschamp = {
 	"Wing Shooting Championship V2.00\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, wschampRomInfo, wschampRomName, NULL, NULL, WschampInputInfo, WschampDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, wschampRomInfo, wschampRomName, NULL, NULL, NULL, NULL, WschampInputInfo, WschampDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3455,8 +3480,8 @@ struct BurnDriver BurnDrvWschampa = {
 	"Wing Shooting Championship V1.01\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, wschampaRomInfo, wschampaRomName, NULL, NULL, WschampInputInfo, WschampDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, wschampaRomInfo, wschampaRomName, NULL, NULL, NULL, NULL, WschampInputInfo, WschampDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3465,18 +3490,18 @@ struct BurnDriver BurnDrvWschampb = {
 	"Wing Shooting Championship V1.00\0", NULL, "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, wschampbRomInfo, wschampbRomName, NULL, NULL, WschampInputInfo, WschampDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, wschampbRomInfo, wschampbRomName, NULL, NULL, NULL, NULL, WschampInputInfo, WschampDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
 struct BurnDriver BurnDrvTrophyh = {
 	"trophyh", NULL, NULL, NULL, "2002",
-	"Trophy Hunting - Bear & Moose V1.0\0", NULL, "Sammy USA Corporation", "Newer Seta",
+	"Trophy Hunting - Bear & Moose V1.00\0", "Hangs are normal, just wait it out.", "Sammy USA Corporation", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_SETA2, GBF_SHOOT, 0,
-	NULL, trophyhRomInfo, trophyhRomName, NULL, NULL, WschampInputInfo, TrophyhDIPInfo,
-	samshootInit, grdiansExit, samshootFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, trophyhRomInfo, trophyhRomName, NULL, NULL, NULL, NULL, WschampInputInfo, TrophyhDIPInfo,
+	samshootInit, grdiansExit, samshootFrame, samshootDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3490,8 +3515,8 @@ struct BurnDriverD BurnDrvFuncube2 = {
 	"Funcube 2 (v1.1)\0", "Unemulated Sub CPU", "Namco", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	0, 2, HARDWARE_SETA2, GBF_PUZZLE, 0,
-	NULL, funcube2RomInfo, funcube2RomName, NULL, NULL, grdiansInputInfo, grdiansDIPInfo,
-	funcubeInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, funcube2RomInfo, funcube2RomName, NULL, NULL, NULL, NULL, grdiansInputInfo, grdiansDIPInfo,
+	funcubeInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };
 
@@ -3500,7 +3525,7 @@ struct BurnDriverD BurnDrvFuncube4 = {
 	"Funcube 4 (v1.0)\0", "Unemulated Sub CPU", "Namco", "Newer Seta",
 	NULL, NULL, NULL, NULL,
 	0, 2, HARDWARE_SETA2, GBF_PUZZLE, 0,
-	NULL, funcube4RomInfo, funcube4RomName, NULL, NULL, grdiansInputInfo, grdiansDIPInfo,
-	funcubeInit, grdiansExit, grdiansFrame, NULL, grdiansScan, &bRecalcPalette, 0x8000,
+	NULL, funcube4RomInfo, funcube4RomName, NULL, NULL, NULL, NULL, grdiansInputInfo, grdiansDIPInfo,
+	funcubeInit, grdiansExit, grdiansFrame, DrvDraw, grdiansScan, &bRecalcPalette, 0x8000,
 	320, 240, 4, 3
 };

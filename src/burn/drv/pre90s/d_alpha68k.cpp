@@ -1,3 +1,6 @@
+// FB Alpha SNK / Alpha 68k based driver module
+// Based on MAME driver by Pierpaolo Prazzoli, Bryan McPhail,Stephane Humbert
+
 #include "tiles_generic.h"
 #include "m68000_intf.h"
 #include "z80_intf.h"
@@ -45,11 +48,6 @@ static INT32 nCyclesSegment;
 
 static INT32 nDrvTotal68KCycles = 0;
 static INT32 nDrvTotalZ80Cycles = 0;
-
-typedef void (*DrvRender)();
-static DrvRender DrvDrawFunction = NULL;
-static void SstingryDraw();
-static void KyrosDraw();
 
 static struct BurnInputInfo SstingryInputList[] =
 {
@@ -668,16 +666,6 @@ static INT32 Kyros2PlaneOffsets[3]      = { 0, 0x80000, 0x80004 };
 static INT32 Kyros2XOffsets[8]          = { 67, 66, 65, 64, 3, 2, 1, 0 };
 static INT32 Kyros2Offsets[8]           = { 0, 8, 16, 24, 32, 40, 48, 56 };
 
-inline static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)(ZetTotalCycles() * nSoundRate / nDrvTotalZ80Cycles);
-}
-
-inline static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / nDrvTotalZ80Cycles;
-}
-
 static INT32 DrvSyncDAC()
 {
 	return (INT32)(float)(nBurnSoundLen * (ZetTotalCycles() / ((double)nDrvTotalZ80Cycles / (nBurnFPS / 100.000))));
@@ -750,7 +738,7 @@ static INT32 SstingryInit()
 	nDrvTotal68KCycles = 6000000;
 	nDrvTotalZ80Cycles = 3579545;
 	
-	BurnYM2203Init(3, 3000000, NULL, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(3, 3000000, NULL, 0);
 	BurnTimerAttachZet(3579545);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.35, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.35, BURN_SND_ROUTE_BOTH);
@@ -769,7 +757,6 @@ static INT32 SstingryInit()
 	DACSetRoute(0, 0.75, BURN_SND_ROUTE_BOTH);
 	
 	GenericTilesInit();
-	DrvDrawFunction = SstingryDraw;
 	
 	DrvMicroControllerID = 0x00ff;
 	DrvCoinID = 0x22 | (0x22 << 8);
@@ -864,7 +851,7 @@ static INT32 KyrosInit()
 	nDrvTotal68KCycles = 6000000;
 	nDrvTotalZ80Cycles = 4000000;
 	
-	BurnYM2203Init(3, 2000000, NULL, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(3, 2000000, NULL, 0);
 	BurnTimerAttachZet(4000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.35, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.35, BURN_SND_ROUTE_BOTH);
@@ -883,7 +870,6 @@ static INT32 KyrosInit()
 	DACSetRoute(0, 0.75, BURN_SND_ROUTE_BOTH);
 	
 	GenericTilesInit();
-	DrvDrawFunction = KyrosDraw;
 	
 	DrvMicroControllerID = 0x0012;
 	DrvCoinID = 0x22 | (0x22 << 8);
@@ -916,8 +902,6 @@ static INT32 DrvExit()
 	DrvFlipScreen = 0;
 	DrvSoundLatch = 0;
 	
-	DrvDrawFunction = NULL;
-
 	return 0;
 }
 
@@ -1102,7 +1086,7 @@ static void KyrosDrawSprites(INT32 c, INT32 d)
 	}
 }
 
-static void SstingryDraw()
+static INT32 SstingryDraw()
 {
 	BurnTransferClear();
 	KyrosCalcPalette();
@@ -1113,9 +1097,11 @@ static void SstingryDraw()
 	SstingryDrawSprites(3, 0x0c00);
 	SstingryDrawSprites(1, 0x0400);
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
-static void KyrosDraw()
+static INT32 KyrosDraw()
 {
 	BurnTransferClear();
 	KyrosCalcPalette();
@@ -1126,6 +1112,8 @@ static void KyrosDraw()
 	KyrosDrawSprites(3, 0x0c00);
 	KyrosDrawSprites(1, 0x0400);
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
 static INT32 DrvFrame()
@@ -1168,7 +1156,7 @@ static INT32 DrvFrame()
 	SekClose();
 	ZetClose();
 	
-	if (pBurnDraw) DrvDrawFunction();
+	if (pBurnDraw) BurnDrvRedraw();
 
 	return 0;
 }
@@ -1176,7 +1164,7 @@ static INT32 DrvFrame()
 static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
-	
+
 	if (pnMin != NULL) {
 		*pnMin = 0x029735;
 	}
@@ -1188,13 +1176,22 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		ba.szName = "All Ram";
 		BurnAcb(&ba);
 	}
-	
+
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
 		ZetScan(nAction);
 
+		SCAN_VAR(DrvCredits);
+		SCAN_VAR(DrvTrigState);
+		SCAN_VAR(DrvDeposits1);
+		SCAN_VAR(DrvDeposits2);
+		SCAN_VAR(DrvCoinValue);
+		SCAN_VAR(DrvMicroControllerData);
+		SCAN_VAR(DrvLatch);
+		SCAN_VAR(DrvFlipScreen);
+		SCAN_VAR(DrvSoundLatch);
 	}
-	
+
 	return 0;
 }
 
@@ -1203,8 +1200,8 @@ struct BurnDriver BurnDrvSstingry = {
 	"Super Stingray (Japan)\0", NULL, "Alpha Denshi Co.", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, SstingryRomInfo, SstingryRomName, NULL, NULL, SstingryInputInfo, SstingryDIPInfo,
-	SstingryInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, SstingryRomInfo, SstingryRomName, NULL, NULL, NULL, NULL, SstingryInputInfo, SstingryDIPInfo,
+	SstingryInit, DrvExit, DrvFrame, SstingryDraw, DrvScan,
 	NULL, 0x101, 224, 256, 3, 4
 };
 
@@ -1213,8 +1210,8 @@ struct BurnDriver BurnDrvKyros = {
 	"Kyros\0", NULL, "Alpha Denshi Co. (World Games Inc. license)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, KyrosRomInfo, KyrosRomName, NULL, NULL, SstingryInputInfo, KyrosDIPInfo,
-	KyrosInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, KyrosRomInfo, KyrosRomName, NULL, NULL, NULL, NULL, SstingryInputInfo, KyrosDIPInfo,
+	KyrosInit, DrvExit, DrvFrame, KyrosDraw, DrvScan,
 	NULL, 0x101, 224, 256, 3, 4
 };
 
@@ -1223,7 +1220,7 @@ struct BurnDriver BurnDrvKyrosj = {
 	"Kyros No Yakata (Japan)\0", NULL, "Alpha Denshi Co.", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, KyrosjRomInfo, KyrosjRomName, NULL, NULL, SstingryInputInfo, KyrosDIPInfo,
-	KyrosInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, KyrosjRomInfo, KyrosjRomName, NULL, NULL, NULL, NULL, SstingryInputInfo, KyrosDIPInfo,
+	KyrosInit, DrvExit, DrvFrame, KyrosDraw, DrvScan,
 	NULL, 0x101, 224, 256, 3, 4
 };

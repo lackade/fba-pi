@@ -1,4 +1,5 @@
 #include "burnint.h"
+#include "pic16c5x_intf.h"
 
 void pic16c5xDoReset(INT32 type, INT32 *rom, INT32 *ram);
 extern INT32 pic16c5xScanCpu(INT32 nAction, INT32* pnMin);
@@ -13,6 +14,22 @@ static UINT8 *pic16c5x_ram = NULL;
 
 static UINT8 (*pPic16c5xReadPort)(UINT16 port) = NULL;
 static void (*pPic16c5xWritePort)(UINT16 port, UINT8 data) = NULL;
+
+cpu_core_config pic16c5xConfig =
+{
+	pic16c5xOpen,
+	pic16c5xClose,
+	pic16c5xCheatRead,
+	pic16c5xCheatWrite, 
+	pic16c5xGetActive,
+	pic16c5xTotalCycles,
+	pic16c5xNewFrame,
+	pic16c5xRun,
+	pic16c5xRunEnd,
+	pic16c5xReset,
+	0x7ff,
+	0
+};
 
 UINT16 pic16c5xFetch(UINT16 address)
 {
@@ -51,7 +68,7 @@ void pic16c5xWrite(UINT16 address, UINT8 data)
 #endif
 
 	address &= ram_address_mask;
-	
+
 	if (nPic16c5xCpuType == 0x16C57 || nPic16c5xCpuType == 0x16C58) {
 		if (address >= 0x60 && address <= 0x6f) {
 			// mirror
@@ -59,7 +76,7 @@ void pic16c5xWrite(UINT16 address, UINT8 data)
 			return;
 		}
 	}
-		
+
 	pic16c5x_ram[address] = data;
 }
 
@@ -107,6 +124,31 @@ void pic16c5xReset()
 	pic16c5xDoReset(nPic16c5xCpuType, &rom_address_mask, &ram_address_mask);
 }
 
+INT32 pic16c5xGetActive()
+{
+	return 0; // only one cpu supported atm
+}
+
+INT32 pic16c5xTotalCycles() // not functional
+{
+	return 0;
+}
+
+void pic16c5xNewFrame() // not functional
+{
+	// 
+}
+
+UINT8 pic16c5xCheatRead(UINT32 address)
+{
+	return pic16c5xRead(address);
+}
+
+void pic16c5xCheatWrite(UINT32 address, UINT8 data)
+{
+	pic16c5xWrite(address, data);
+}
+
 void pic16c5xInit(INT32 /*nCPU*/, INT32 type, UINT8 *mem)
 {
 	DebugCPU_PIC16C5XInitted = 1;
@@ -118,6 +160,8 @@ void pic16c5xInit(INT32 /*nCPU*/, INT32 type, UINT8 *mem)
 	pic16c5x_rom = mem;
 	
 	pic16c5x_ram = (UINT8*)BurnMalloc(ram_address_mask + 1);
+
+	CpuCheatRegister(0/*nCPU*/, &pic16c5xConfig);
 }
 
 void pic16c5xExit()
@@ -129,8 +173,14 @@ void pic16c5xExit()
 	pic16c5x_rom = NULL;
 	nPic16c5xCpuType = -1;
 	
-	BurnFree(pic16c5x_ram);
-	
+	if (pic16c5x_ram) {
+		BurnFree(pic16c5x_ram);
+		pic16c5x_ram = NULL;
+	}
+
+	pPic16c5xReadPort = NULL;
+	pPic16c5xWritePort = NULL;
+
 	DebugCPU_PIC16C5XInitted = 0;
 }
 

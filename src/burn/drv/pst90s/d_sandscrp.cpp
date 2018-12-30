@@ -1,6 +1,6 @@
 // FB Alpha Sand Scorpion driver module
 // Based on MAME driver by Luca Elia
-// Note: oc'd from 12 to 15mhz to make this game playable - dink
+// Note: oc'd from 12 to 20mhz to make this game playable, for some reason its not so bad in mame... - dink
 
 #include "tiles_generic.h"
 #include "z80_intf.h"
@@ -210,7 +210,7 @@ static UINT16 galpanib_calc_read(UINT32 offset) // Simulation of the CALC1 MCU
 
 
 		case 0x14/2:
-			return rand(); // really rand
+			return BurnRandom(); // really rand
 	}
 
 	return 0;
@@ -383,7 +383,7 @@ static void __fastcall sandscrp_sound_write_port(UINT16 port, UINT8 data)
 		return;
 
 		case 0x04:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 
 		case 0x06:
@@ -427,16 +427,6 @@ static UINT8 DrvYM2203PortB(UINT32)
 static void DrvFMIRQHandler(INT32, INT32 nStatus)
 {
 	ZetSetIRQLine(0, (nStatus) ? CPU_IRQSTATUS_ACK : CPU_IRQSTATUS_NONE);
-}
-
-static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 4000000;
-}
-
-static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 4000000;
 }
 
 static INT32 DrvDoReset(INT32 full_reset)
@@ -614,7 +604,7 @@ static INT32 DrvInit(INT32 type)
 	ZetSetInHandler(sandscrp_sound_read_port);
 	ZetClose();
 
-	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, 0);
 	BurnYM2203SetPorts(0, &DrvYM2203PortA, &DrvYM2203PortB, NULL, NULL);
 	BurnTimerAttachZet(4000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.50, BURN_SND_ROUTE_BOTH);
@@ -668,12 +658,17 @@ static INT32 DrvDraw()
 
 	BurnTransferClear();
 
-	for (INT32 i = 0; i < 8; i++) {
+	for (INT32 i = 0; i < 4; i++) {
 		kaneko_view2_draw_layer(0, 0, i);
 		kaneko_view2_draw_layer(0, 1, i);
 	}
 
 	pandora_update(pTransDraw);
+
+	for (INT32 i = 4; i < 8; i++) {
+		kaneko_view2_draw_layer(0, 0, i);
+		kaneko_view2_draw_layer(0, 1, i);
+	}
 
 	BurnTransferCopy(DrvPalette);
 
@@ -704,7 +699,7 @@ static INT32 DrvFrame()
 	}
 
 	INT32 nInterleave = 256;
-	INT32 nCyclesTotal[2] =  { 15000000 / 60, 4000000 / 60 };
+	INT32 nCyclesTotal[2] =  { 12000000 / 60, 4000000 / 60 };
 	INT32 nCyclesDone[2] = { 0, 0 };
 
 	SekOpen(0);
@@ -712,11 +707,9 @@ static INT32 DrvFrame()
 
 	for (INT32 i = 0; i < nInterleave; i++) {
 
-		INT32 nSegment = nCyclesTotal[0] / nInterleave;
+		nCyclesDone[0] += SekRun(((i + 1) * nCyclesTotal[0] / nInterleave) - nCyclesDone[0]);
 
-		nCyclesDone[0] += SekRun(nSegment);
-
-		if (i == 224) {
+		if (i == 240) {
 			vblank_irq = 1;
 			update_irq_state();
 		}
@@ -726,7 +719,7 @@ static INT32 DrvFrame()
 			update_irq_state();
 		}
 
-		BurnTimerUpdate(SekTotalCycles()/3);
+		BurnTimerUpdate((i + 1) * nCyclesTotal[1] / nInterleave);
 	}
 
 	BurnTimerEndFrame(nCyclesTotal[1]);
@@ -748,7 +741,7 @@ static INT32 DrvFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -756,7 +749,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029707;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -773,7 +766,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM2203Scan(nAction, pnMin);
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(vblank_irq);
 		SCAN_VAR(sprite_irq);
@@ -783,6 +776,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SCAN_VAR(latch1_full);
 		SCAN_VAR(latch2_full);
 		SCAN_VAR(nDrvZ80Bank);
+
+		BurnRandomScan(nAction);
 	}
 
 	if (nAction & ACB_WRITE) {
@@ -827,7 +822,7 @@ struct BurnDriver BurnDrvSandscrp = {
 	"Sand Scorpion\0", NULL, "Face", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_POST90S, GBF_VERSHOOT, 0,
-	NULL, sandscrpRomInfo, sandscrpRomName, NULL, NULL, SandscrpInputInfo, SandscrpDIPInfo,
+	NULL, sandscrpRomInfo, sandscrpRomName, NULL, NULL, NULL, NULL, SandscrpInputInfo, SandscrpDIPInfo,
 	sandscrpInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };
@@ -858,7 +853,7 @@ struct BurnDriver BurnDrvSandscrpa = {
 	"Sand Scorpion (Earlier)\0", NULL, "Face", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_POST90S, GBF_VERSHOOT, 0,
-	NULL, sandscrpaRomInfo, sandscrpaRomName, NULL, NULL, SandscrpInputInfo, SandscrpDIPInfo,
+	NULL, sandscrpaRomInfo, sandscrpaRomName, NULL, NULL, NULL, NULL, SandscrpInputInfo, SandscrpDIPInfo,
 	sandscrpInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };
@@ -892,7 +887,7 @@ struct BurnDriver BurnDrvSandscrpb = {
 	"Sand Scorpion (Chinese Title Screen, Revised Hardware)\0", NULL, "Face", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_POST90S, GBF_VERSHOOT, 0,
-	NULL, sandscrpbRomInfo, sandscrpbRomName, NULL, NULL, SandscrpInputInfo, SandscrpDIPInfo,
+	NULL, sandscrpbRomInfo, sandscrpbRomName, NULL, NULL, NULL, NULL, SandscrpInputInfo, SandscrpDIPInfo,
 	sandscrpbInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };

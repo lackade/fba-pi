@@ -27,6 +27,8 @@
     7.  The DMA clears the CPU's HRQ line
     8.  (steps 3-7 are repeated for every byte in the chain)
 
+    MAME sources by Curt Coder,Carl
+
 **********************************************************************/
 
 #include "burnint.h"
@@ -317,7 +319,7 @@ UINT8 i8257Read(UINT8 offset)
 		case 6:
 		case 7:
 			/* DMA address/count register */
-			data = ( m_registers[offset] >> (m_msb ? 8 : 0) ) & 0xFF;
+			data = ( m_registers[offset & 7] >> (m_msb ? 8 : 0) ) & 0xFF;
 			i8257_prepare_msb_flip();
 		break;
 
@@ -355,11 +357,11 @@ void i8257Write(UINT8 offset, UINT8 data)
 			/* DMA address/count register */
 			if (m_msb)
 			{
-				m_registers[offset] |= ((UINT16) data) << 8;
+				m_registers[offset & 0x7] |= ((UINT16) data) << 8;
 			}
 			else
 			{
-				m_registers[offset] = data;
+				m_registers[offset & 0x7] = data;
 			}
 	
 			if (DMA_MODE_AUTOLOAD(m_mode))
@@ -372,11 +374,11 @@ void i8257Write(UINT8 offset, UINT8 data)
 					case 5:
 						if (m_msb)
 						{
-							m_registers[offset+2] |= ((UINT16) data) << 8;
+							m_registers[(offset & 0x7)+2] |= ((UINT16) data) << 8;
 						}
 						else
 						{
-							m_registers[offset+2] = data;
+							m_registers[(offset & 0x7)+2] = data;
 						}
 				}
 			}
@@ -419,14 +421,10 @@ void i8257Scan()
 	if (!DebugDev_8257DMAInitted) bprintf(PRINT_ERROR, _T("i8257Scan called without init\n"));
 #endif
 
-	for (INT32 i = 0; i < I8257_NUM_CHANNELS; i++) {
-		SCAN_VAR(m_registers[i * 2 + 0]);
-		SCAN_VAR(m_registers[i * 2 + 1]);
-
-		SCAN_VAR(m_address[i]);
-		SCAN_VAR(m_count[i]);
-		SCAN_VAR(m_rwmode[i]);
-	}
+	SCAN_VAR(m_registers);
+	SCAN_VAR(m_address);
+	SCAN_VAR(m_count);
+	SCAN_VAR(m_rwmode);
 
 	SCAN_VAR(m_mode);
 	SCAN_VAR(m_rr);

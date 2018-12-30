@@ -1,3 +1,6 @@
+// FB Alpha Playmark hardware driver module
+// Based on MAME driver by Nicola Salmoria, Pierpaolo Prazzoli, Quench
+
 #include "tiles_generic.h"
 #include "m68000_intf.h"
 #include "pic16c5x_intf.h"
@@ -62,11 +65,11 @@ static INT32 nCyclesDone[2], nCyclesTotal[2];
 static INT32 nCyclesSegment;
 static INT32 nIRQLine = 2;
 
-typedef void (*Render)();
+typedef INT32 (*Render)();
 static Render DrawFunction;
-static void DrvRender();
-static void ExcelsrRender();
-static void HotmindRender();
+static INT32 DrvRender();
+static INT32 ExcelsrRender();
+static INT32 HotmindRender();
 
 static struct BurnInputInfo BigtwinInputList[] = {
 	{"Coin 1"            , BIT_DIGITAL  , DrvInputPort0 + 4, "p1 coin"   },
@@ -926,7 +929,7 @@ UINT8 PlaymarkSoundReadPort(UINT16 Port)
 				Data = DrvSoundCommand;
 			} else {
 				if ((DrvOkiControl & 0x38) == 0x28) {
-					Data = MSM6295ReadStatus(0) & 0x0f;
+					Data = MSM6295Read(0) & 0x0f;
 				}
 			}
 
@@ -978,7 +981,7 @@ void PlaymarkSoundWritePort(UINT16 Port, UINT8 Data)
 			DrvOkiControl = Data;
 
 			if ((Data & 0x38) == 0x18) {
-				MSM6295Command(0, DrvOkiCommand);
+				MSM6295Write(0, DrvOkiCommand);
 			}
 			return;
 		}
@@ -1580,7 +1583,7 @@ static void DrvRenderBitmap()
 	}
 }
 
-static void DrvRender()
+static INT32 DrvRender()
 {
 	BurnTransferClear();
 	DrvRenderFgLayer();
@@ -1588,9 +1591,11 @@ static void DrvRender()
 	DrvRenderSprites(4, 0x400, 32, -1, 0, 0);
 	DrvRenderCharLayer(64, 8);
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
-static void ExcelsrRender()
+static INT32 ExcelsrRender()
 {
 	BurnTransferClear();
 	DrvRenderFgLayer();
@@ -1600,9 +1605,11 @@ static void ExcelsrRender()
 	DrvRenderCharLayer(32, 16);
 	DrvRenderSprites(2, 0xd00, 16, 0, 0, 0);
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
-static void HotmindRender()
+static INT32 HotmindRender()
 {
 	BurnTransferClear();
 	if (DrvScreenEnable) {
@@ -1614,6 +1621,8 @@ static void HotmindRender()
 		HotmindRenderCharLayer();
 	}
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
 static INT32 DrvFrame()
@@ -1697,8 +1706,8 @@ struct BurnDriver BurnDrvBigtwin = {
 	"Big Twin\0", NULL, "Playmark", "Misc",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, BigtwinRomInfo, BigtwinRomName, NULL, NULL, BigtwinInputInfo, BigtwinDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, BigtwinRomInfo, BigtwinRomName, NULL, NULL, NULL, NULL, BigtwinInputInfo, BigtwinDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrawFunction, DrvScan,
 	NULL, 0x400, 320, 240, 4, 3
 };
 
@@ -1707,8 +1716,8 @@ struct BurnDriver BurnDrvExcelsr = {
 	"Excelsior (set 1)\0", NULL, "Playmark", "Misc",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, ExcelsrRomInfo, ExcelsrRomName, NULL, NULL, ExcelsrInputInfo, ExcelsrDIPInfo,
-	ExcelsrInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, ExcelsrRomInfo, ExcelsrRomName, NULL, NULL, NULL, NULL, ExcelsrInputInfo, ExcelsrDIPInfo,
+	ExcelsrInit, DrvExit, DrvFrame, DrawFunction, DrvScan,
 	NULL, 0x400, 320, 240, 4, 3
 };
 
@@ -1717,8 +1726,8 @@ struct BurnDriver BurnDrvExcelsra = {
 	"Excelsior (set 2)\0", NULL, "Playmark", "Misc",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, ExcelsraRomInfo, ExcelsraRomName, NULL, NULL, ExcelsrInputInfo, ExcelsrDIPInfo,
-	ExcelsrInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, ExcelsraRomInfo, ExcelsraRomName, NULL, NULL, NULL, NULL, ExcelsrInputInfo, ExcelsrDIPInfo,
+	ExcelsrInit, DrvExit, DrvFrame, DrawFunction, DrvScan,
 	NULL, 0x400, 320, 240, 4, 3
 };
 
@@ -1727,7 +1736,7 @@ struct BurnDriver BurnDrvHotmind = {
 	"Hot Mind (Hard Times hardware)\0", NULL, "Playmark", "Misc",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, HotmindRomInfo, HotmindRomName, NULL, NULL, HotmindInputInfo, HotmindDIPInfo,
-	HotmindInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, HotmindRomInfo, HotmindRomName, NULL, NULL, NULL, NULL, HotmindInputInfo, HotmindDIPInfo,
+	HotmindInit, DrvExit, DrvFrame, DrawFunction, DrvScan,
 	NULL, 0x400, 320, 224, 4, 3
 };

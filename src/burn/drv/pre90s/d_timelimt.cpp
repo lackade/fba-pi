@@ -3,10 +3,7 @@
 
 #include "tiles_generic.h"
 #include "z80_intf.h"
-#include "driver.h"
-extern "C" {
 #include "ay8910.h"
-}
 
 static UINT8 *AllMem;
 static UINT8 *MemEnd;
@@ -27,19 +24,19 @@ static UINT8 *DrvColPROM;
 static UINT32 *DrvPalette;
 static UINT8 DrvRecalc;
 
-static INT16 *pAY8910Buffer[6];
-
-static UINT8  DrvJoy1[8];
-static UINT8  DrvJoy2[8];
-static UINT8  DrvDips[1];
-static UINT8  DrvInputs[2];
-static UINT8  DrvReset;
+static UINT8 DrvJoy1[8];
+static UINT8 DrvJoy2[8];
+static UINT8 DrvDips[1];
+static UINT8 DrvInputs[2];
+static UINT8 DrvReset;
 
 static UINT8 soundlatch;
 static UINT8 nmi_enable;
 static UINT8 scrolly;
 static UINT16 scrollx;
 static INT32 watchdog;
+
+static INT32 TimelimtMode = 0;
 
 static struct BurnInputInfo TimelimtInputList[] = {
 	{"P1 Coin",		BIT_DIGITAL,	DrvJoy2 + 0,	"p1 coin"	},
@@ -283,13 +280,6 @@ static INT32 MemIndex()
 
 	RamEnd			= Next;
 
-	pAY8910Buffer[0]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[1]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[2]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[3]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[4]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[5]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-
 	MemEnd			= Next;
 
 	return 0;
@@ -374,18 +364,24 @@ static INT32 DrvInit()
 		if (BurnLoadRom(DrvColPROM + 0x0000, 11, 1)) return 1;
 		if (BurnLoadRom(DrvColPROM + 0x0020, 12, 1)) return 1;
 
-		if (BurnLoadRom(DrvColPROM + 0x0040, 13, 1))
-		{
-			const UINT8 color_data[32] = {
-				0x00, 0x00, 0xA4, 0xF6, 0xC0, 0x2F, 0x07, 0xFF, 0x00, 0x00, 0xA4, 0xF6, 0xC0, 0x28, 0x07, 0xFF, 
-				0x00, 0x00, 0xA4, 0xF6, 0xC0, 0x2F, 0x07, 0xFF, 0x00, 0x00, 0xA4, 0xF6, 0xC0, 0x0D, 0x07, 0xFF
+		if (!TimelimtMode)
+			if (BurnLoadRom(DrvColPROM + 0x0040, 13, 1)) return 1;
+
+		if (TimelimtMode)
+		{ // fill in missing timelimt prom with color values, values (c) 2017 -dink
+	            const UINT8 color_data[32] = {
+		        //0     1     2     3     4     5     6     7     8     9     a     b     c     d     e     f
+				0x00, 0x00, 0xA4, 0xF6, 0xC0, 0x2F, 0x07, 0xFF, 0x00, 0x99, 0x99, 0xF6, 0x0A, 0x1F, 0x58, 0xFF,
+				0x00, 0x0F, 0xB5, 0x54, 0xE1, 0x50, 0x5F, 0x64, 0x00, 0x0B, 0x53, 0x0F, 0x80, 0x08, 0x0D, 0xAE
 			};
 
 			memcpy (DrvColPROM + 0x40, color_data, 0x20);
 		}
 
 		if (BurnLoadRom(DrvZ80ROM1 + 0x0000, 14, 1)) return 1;
-		    BurnLoadRom(DrvZ80ROM1 + 0x1000, 15, 1);
+
+		if (TimelimtMode)
+			if (BurnLoadRom(DrvZ80ROM1 + 0x1000, 15, 1)) return 1;
 
 		DrvGfxDecode();
 		DrvPaletteInit();
@@ -411,10 +407,11 @@ static INT32 DrvInit()
 	ZetSetInHandler(timelimt_sound_read_port);
 	ZetClose();
 
-	AY8910Init(0, 1536000, nBurnSoundRate, NULL, NULL, NULL, NULL);
+	AY8910Init(0, 1536000, 0);
 	AY8910SetAllRoutes(0, 0.25, BURN_SND_ROUTE_BOTH);
 
-	AY8910Init(1, 1536000, nBurnSoundRate, &timelimt_ay8910_1_portA_read, NULL, NULL, NULL);
+	AY8910Init(1, 1536000, 1);
+	AY8910SetPorts(1, &timelimt_ay8910_1_portA_read, NULL, NULL, NULL);
 	AY8910SetAllRoutes(1, 0.25, BURN_SND_ROUTE_BOTH);
 
 	GenericTilesInit();
@@ -434,6 +431,8 @@ static INT32 DrvExit()
 	AY8910Exit(1);
 
 	BurnFree(AllMem);
+
+	TimelimtMode = 0;
 
 	return 0;
 }
@@ -463,7 +462,7 @@ static void draw_fg_layer()
 {
 	for (INT32 offs = 0; offs < 32 * 32; offs++)
 	{
-		INT32 sx = (offs & 0x1f) * 8;
+		INT32 sx = ((offs & 0x1f) * 8);
 		INT32 sy = ((offs / 0x20) * 8) - 16;
 
 		if (sx >= nScreenWidth || sy >= nScreenHeight) continue;
@@ -509,9 +508,11 @@ static INT32 DrvDraw()
 		DrvRecalc = 0;
 	}
 
-	draw_bg_layer();
-	draw_sprites();
-	draw_fg_layer();
+	BurnTransferClear();
+
+	if (nBurnLayer & 1) draw_bg_layer();
+	if (nBurnLayer & 2) draw_sprites();
+	if (nBurnLayer & 4) draw_fg_layer();
 
 	BurnTransferCopy(DrvPalette);
 
@@ -529,6 +530,48 @@ static INT32 DrvFrame()
 		DrvDoReset(1);
 	}
 
+	/*  -- save until 100% sure colors jive well. --
+	static UINT8 oldj = 0;
+	static INT32 selektor = 0;
+
+	if (DrvJoy1[4] && oldj == 0) {
+		selektor++;
+	}
+	if (counter!=0) DrvColPROM[0x40 + selektor] = counter;
+	bprintf(0, _T("DrvColPROM[0x40 + %X] = %X.\n"), selektor, counter);
+	oldj = DrvJoy1[4];
+
+	//    0x40 + 2 = windows in police car
+	//         + 3 = tires
+	//           5 = hubcaps
+	//           6 = headlights
+	//           7 = body
+	//           8
+	//           9 = police pants 0x99
+	//           A = police coat    ""
+	//           B = shoes/hair
+	//           C = Holster/belt 0xa ?
+	//           D = Face       0x1f
+	//			 E = gun        0x58
+	//           F = cuff       0x65
+	//           10 = nothing
+	//           11 = gang suit 0xf
+	//           12 = gang face 0xb5
+	//           13 = gang shoes 0x54
+	//           14 = gang tie/knife 0xe1
+	//           15 = killr shirt 0x50
+	//           16 = gang shirt 0x5f
+	//           17 = "" pants 0x64
+	//           18 = ?
+	//           19 = bomb clock 0xb
+	//           1a = skull border 0x53
+	//           1b = bomb wrapper 0xf
+	//           1c = bomb border/wire, 0x80
+	//           1d = clock hands 0x8
+	//           1e = bomb wrapper 2 0xd
+	//           1f = skull 0xae
+	*/
+
 	{
 		DrvInputs[0] = 0;
 		DrvInputs[1] = 0x03;
@@ -537,6 +580,8 @@ static INT32 DrvFrame()
 			DrvInputs[1] ^= (DrvJoy2[i] & 1) << i;
 		}
 	}
+
+
 
 	INT32 nInterleave = 50; // 3000 hz
 	INT32 nCyclesTotal[2] = { 5000000 / 60, 3072000 / 60 };
@@ -548,7 +593,7 @@ static INT32 DrvFrame()
 
 		ZetOpen(0);
 		nCyclesDone[0] += ZetRun(nSegment);
-		if (i == (nInterleave - 1) && nmi_enable) ZetNmi();
+		if (i == (nInterleave - 1) && nmi_enable && nCurrentFrame & 1) ZetNmi();
 		ZetClose();
 
 		nSegment = nCyclesTotal[1] / nInterleave;
@@ -560,7 +605,7 @@ static INT32 DrvFrame()
 	}
 
 	if (pBurnSoundOut) {
-		AY8910Render(&pAY8910Buffer[0], pBurnSoundOut, nBurnSoundLen, 0);
+		AY8910Render(pBurnSoundOut, nBurnSoundLen);
 	}
 
 	if (pBurnDraw) {
@@ -619,7 +664,7 @@ static struct BurnRomInfo timelimtRomDesc[] = {
 
 	{ "clr.35",	0x0020, 0x9c9e6073, 5 | BRF_GRA },           // 11 Color proms
 	{ "clr.48",	0x0020, 0xa0bcac59, 5 | BRF_GRA },           // 12
-	{ "clr.57",	0x0020, 0x00000000, 5 | BRF_NODUMP | BRF_GRA },           // 13
+	{ "clr.57",	0x0020, 0x3a9f5394, 5 | BRF_GRA },           // 13
 
 	{ "tl5",	0x1000, 0x5b782e4a, 6 | BRF_PRG | BRF_ESS }, // 14 Z80 #1 code
 	{ "tl4",	0x1000, 0xa32883a9, 6 | BRF_PRG | BRF_ESS }, // 15
@@ -628,13 +673,20 @@ static struct BurnRomInfo timelimtRomDesc[] = {
 STD_ROM_PICK(timelimt)
 STD_ROM_FN(timelimt)
 
+static INT32 TimelimtInit()
+{
+	TimelimtMode = 1;
+
+	return DrvInit();
+}
+
 struct BurnDriver BurnDrvTimelimt = {
 	"timelimt", NULL, NULL, NULL, "1983",
 	"Time Limit\0", NULL, "Chuo Co. Ltd", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_MISC_PRE90S, GBF_PLATFORM, 0,
-	NULL, timelimtRomInfo, timelimtRomName, NULL, NULL, TimelimtInputInfo, TimelimtDIPInfo,
-	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
+	NULL, timelimtRomInfo, timelimtRomName, NULL, NULL, NULL, NULL, TimelimtInputInfo, TimelimtDIPInfo,
+	TimelimtInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	224, 256, 3, 4
 };
 
@@ -672,7 +724,7 @@ struct BurnDriver BurnDrvProgress = {
 	"Progress\0", NULL, "Chuo Co. Ltd", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, progressRomInfo, progressRomName, NULL, NULL, ProgressInputInfo, ProgressDIPInfo,
+	NULL, progressRomInfo, progressRomName, NULL, NULL, NULL, NULL, ProgressInputInfo, ProgressDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	224, 256, 3, 4
 };

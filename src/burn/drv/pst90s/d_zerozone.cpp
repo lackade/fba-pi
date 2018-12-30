@@ -218,7 +218,7 @@ void __fastcall zerozone_sound_write(UINT16 address, UINT8 data)
 	switch (address)
 	{
 		case 0x9800:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 	}
 }
@@ -228,7 +228,7 @@ UINT8 __fastcall zerozone_sound_read(UINT16 address)
 	switch (address)
 	{
 		case 0x9800:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0xa000:
 			return soundlatch;
@@ -488,7 +488,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(soundlatch);
 		SCAN_VAR(tilebank);
@@ -519,8 +519,8 @@ struct BurnDriver BurnDrvZerozone = {
 	"zerozone", NULL, NULL, NULL, "1993",
 	"Zero Zone\0", NULL, "Comad", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, 0,
-	NULL, zerozoneRomInfo, zerozoneRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
+	NULL, zerozoneRomInfo, zerozoneRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	368, 224, 4, 3
 };
@@ -547,8 +547,8 @@ struct BurnDriver BurnDrvLvgirl94 = {
 	"lvgirl94", NULL, NULL, NULL, "1994",
 	"Las Vegas Girl (Girl '94)\0", NULL, "Comad", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, 0,
-	NULL, lvgirl94RomInfo, lvgirl94RomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
+	NULL, lvgirl94RomInfo, lvgirl94RomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	368, 224, 4, 3
 };

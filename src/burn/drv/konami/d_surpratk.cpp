@@ -367,6 +367,7 @@ static INT32 DrvInit()
 	BurnYM2151SetRoute(BURN_SND_YM2151_YM2151_ROUTE_2, 1.00, BURN_SND_ROUTE_RIGHT);
 
 	DrvDoReset();
+	konami_set_highlight_over_sprites_mode(1);
 
 	return 0;
 }
@@ -454,14 +455,18 @@ static INT32 DrvFrame()
 	for (INT32 i = 0; i < nInterleave; i++)	{
 		INT32 nSegment = (nCyclesTotal / nInterleave) * (i + 1);
 
-		nCyclesDone += konamiRun(nSegment - nCyclesDone);
-
-		if (i == 235) {
-			if (K052109_irq_enabled) konamiSetIrqLine(KONAMI_IRQ_LINE, CPU_IRQSTATUS_AUTO);
+		if (i == 240) {
+			if (K052109_irq_enabled) {
+				nCyclesDone += konamiRun(10); // avoid irq masking from ym2151-generated irq's
+				konamiSetIrqLine(KONAMI_IRQ_LINE, CPU_IRQSTATUS_HOLD);
+				nCyclesDone += konamiRun(10);
+			}
 		}
 
-		if (pBurnSoundOut) {
-			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+		nCyclesDone += konamiRun(nSegment - nCyclesDone);
+
+		if (pBurnSoundOut && i%8 == 7) {
+			INT32 nSegmentLength = nBurnSoundLen / (nInterleave / 8);
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 			BurnYM2151Render(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
@@ -485,7 +490,7 @@ static INT32 DrvFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -493,7 +498,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029705;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -503,7 +508,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 
 		konamiCpuScan(nAction);
 
-		BurnYM2151Scan(nAction);
+		BurnYM2151Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
 	}
@@ -542,10 +547,10 @@ struct BurnDriver BurnDrvSuratk = {
 	"suratk", NULL, NULL, NULL, "1990",
 	"Surprise Attack (World ver. K)\0", NULL, "Konami", "GX911",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT | GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, suratkRomInfo, suratkRomName, NULL, NULL, SurpratkInputInfo, SurpratkDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, suratkRomInfo, suratkRomName, NULL, NULL, NULL, NULL, SurpratkInputInfo, SurpratkDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
-	288, 224, 4, 3
+	304, 224, 4, 3
 };
 
 
@@ -569,10 +574,10 @@ struct BurnDriver BurnDrvSuratka = {
 	"suratka", "suratk", NULL, NULL, "1990",
 	"Surprise Attack (Asia ver. L)\0", NULL, "Konami", "GX911",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT | GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, suratkaRomInfo, suratkaRomName, NULL, NULL, SurpratkInputInfo, SurpratkDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, suratkaRomInfo, suratkaRomName, NULL, NULL, NULL, NULL, SurpratkInputInfo, SurpratkDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
-	288, 224, 4, 3
+	304, 224, 4, 3
 };
 
 
@@ -596,8 +601,8 @@ struct BurnDriver BurnDrvSuratkj = {
 	"suratkj", "suratk", NULL, NULL, "1990",
 	"Surprise Attack (Japan ver. M)\0", NULL, "Konami", "GX911",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_HORSHOOT | GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, suratkjRomInfo, suratkjRomName, NULL, NULL, SurpratkInputInfo, SuratkjDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_RUNGUN, 0,
+	NULL, suratkjRomInfo, suratkjRomName, NULL, NULL, NULL, NULL, SurpratkInputInfo, SuratkjDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
-	288, 224, 4, 3
+	304, 224, 4, 3
 };

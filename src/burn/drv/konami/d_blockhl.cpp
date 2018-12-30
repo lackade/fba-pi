@@ -204,7 +204,7 @@ UINT8 __fastcall blockhl_sound_read(UINT16 address)
 			return *soundlatch;
 
 		case 0xc001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 	}
 
 	return 0;
@@ -486,7 +486,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		konamiCpuScan(nAction);
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
+		BurnYM2151Scan(nAction, pnMin);
 		KonamiICScan(nAction);
 	}
 
@@ -528,7 +528,7 @@ struct BurnDriver BurnDrvBlockhl = {
 	"Block Hole\0", NULL, "Konami", "GX973",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_PUZZLE, 0,
-	NULL, blockhlRomInfo, blockhlRomName, NULL, NULL, BlockhlInputInfo, BlockhlDIPInfo,
+	NULL, blockhlRomInfo, blockhlRomName, NULL, NULL, NULL, NULL, BlockhlInputInfo, BlockhlDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };
@@ -562,7 +562,7 @@ struct BurnDriver BurnDrvQuarth = {
 	"Quarth (Japan)\0", NULL, "Konami", "GX973",
 	L"Quarth\0\u30AF\u30A9\u30FC\u30B9 (Japan)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_PUZZLE, 0,
-	NULL, quarthRomInfo, quarthRomName, NULL, NULL, BlockhlInputInfo, BlockhlDIPInfo,
+	NULL, quarthRomInfo, quarthRomName, NULL, NULL, NULL, NULL, BlockhlInputInfo, BlockhlDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };

@@ -11,7 +11,7 @@
  #include "vid_directx_support.h"
 #endif
 #ifdef SOFTFX_ENABLE_SDL
- #include <SDL/SDL.h>
+ #include <SDL.h>
 #endif
 
 #define FILTER_PLAIN				0

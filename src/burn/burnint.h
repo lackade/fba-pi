@@ -1,3 +1,6 @@
+#ifndef _BURNINT_H
+#define _BURNINT_H
+
 // Burn - Arcade emulator library - internal code
 
 // Standard headers
@@ -6,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <stdint.h>
 
 #if defined(__LIBRETRO__) && defined(_MSC_VER)
 #include <tchar.h>
@@ -14,11 +16,12 @@
 #include "tchar.h"
 #endif
 
-#ifdef __LIBRETRO_OPTIMIZATIONS__
+#ifdef __LIBRETRO__
 #include "burn_libretro_opts.h"
 #endif
 
 #include "burn.h"
+#include "burn_sound.h"
 
 #ifdef LSB_FIRST
 typedef union
@@ -60,6 +63,8 @@ struct BurnDriver {
 	INT32 (*GetZipName)(char** pszName, UINT32 i);				// Function to get possible zip names
 	INT32 (*GetRomInfo)(struct BurnRomInfo* pri, UINT32 i);		// Function to get the length and crc of each rom
 	INT32 (*GetRomName)(char** pszName, UINT32 i, INT32 nAka);	// Function to get the possible names for each rom
+	INT32 (*GetHDDInfo)(struct BurnHDDInfo* pri, UINT32 i);			// Function to get hdd info
+	INT32 (*GetHDDName)(char** pszName, UINT32 i, INT32 nAka);		// Function to get the possible names for each hdd
 	INT32 (*GetSampleInfo)(struct BurnSampleInfo* pri, UINT32 i);		// Function to get the sample flags
 	INT32 (*GetSampleName)(char** pszName, UINT32 i, INT32 nAka);	// Function to get the possible names for each sample
 	INT32 (*GetInputInfo)(struct BurnInputInfo* pii, UINT32 i);	// Function to get the input info for the game
@@ -170,6 +175,7 @@ void BurnExitMemoryManager();
 extern UINT8 Debug_BurnTransferInitted;
 extern UINT8 Debug_BurnGunInitted;
 extern UINT8 Debug_BurnLedInitted;
+extern UINT8 Debug_BurnShiftInitted;
 extern UINT8 Debug_HiscoreInitted;
 extern UINT8 Debug_GenericTilesInitted;
 
@@ -242,3 +248,5 @@ extern UINT8 DebugCPU_I8039Initted;
 extern UINT8 DebugCPU_SH2Initted;
 
 void DebugTrackerExit();
+
+#endif

@@ -17,21 +17,20 @@
 */
 
 #include "smsshared.h"
-#include "burnint.h"
 #include "z80_intf.h"
 #include "sn76496.h"
-
+#include "burn_ym2413.h"
 
 bitmap_t bitmap;
 cart_t cart;
 input_t input;
 
 /* Run the virtual console emulation for one frame */
-void system_frame(int skip_render)
+void system_frame(INT32 skip_render)
 {
-    static int iline_table[] = {0xC0, 0xE0, 0xF0};
-    int lpf = (sms.display == DISPLAY_NTSC) ? 262 : 313;
-    int iline, z80cnt = 0;;
+    static INT32 iline_table[] = {0xC0, 0xE0, 0xF0};
+    INT32 lpf = (sms.display == DISPLAY_NTSC) ? 262 : 313;
+    INT32 iline, z80cnt = 0;;
 	INT32 nSoundBufferPos = 0;
 
     /* Debounce pause key */
@@ -77,10 +76,11 @@ void system_frame(int skip_render)
 
                 if(vdp.reg[0x00] & 0x10)
 				{
-					if (!(ZetTotalCycles() % CYCLES_PER_LINE)) {
+					/*if (!(ZetTotalCycles() % CYCLES_PER_LINE)) {
 						ZetRun(1);
 						z80cnt++;
-					}
+						}*/
+					ZetRun(16);
 					ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
                 }
             }
@@ -99,6 +99,7 @@ void system_frame(int skip_render)
 
             if(vdp.reg[0x01] & 0x20)
             {
+				ZetRun(16); // Fixes Zool, Monster Truck Wars, Chicago Syndacite, Terminator 2 (SMS)
                 ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
             }
         }
@@ -107,7 +108,13 @@ void system_frame(int skip_render)
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / lpf;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+			if (sms.use_fm)	{
+				BurnYM2413Render(pSoundBuf, nSegmentLength);
+			} else {
+				memset(pSoundBuf, 0, nSegmentLength * 2 * sizeof(INT16));
+			}
 			SN76496Update(0, pSoundBuf, nSegmentLength);
+			
 			nSoundBufferPos += nSegmentLength;
 		}
 
@@ -122,6 +129,11 @@ void system_frame(int skip_render)
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 		if (nSegmentLength) {
+			if (sms.use_fm)	{
+				BurnYM2413Render(pSoundBuf, nSegmentLength);
+			} else {
+				memset(pSoundBuf, 0, nSegmentLength * 2 * sizeof(INT16));
+			}
 			SN76496Update(0, pSoundBuf, nSegmentLength);
 		}
 	}
@@ -144,7 +156,7 @@ void system_init(void)
 void system_shutdown(void)
 {
 #ifdef DEBUG
-    int i;
+    INT32 i;
 
     /*error("PC:%04X\tSP:%04X\n", z80_get_reg(Z80_PC), z80_get_reg(Z80_SP));
     error("AF:%04X\tAF:%04X\n", z80_get_reg(Z80_AF), z80_get_reg(Z80_AF2));

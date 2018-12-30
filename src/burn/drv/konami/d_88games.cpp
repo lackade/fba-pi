@@ -268,7 +268,7 @@ UINT8 __fastcall games88_sound_read(UINT16 address)
 
 		case 0xc000:
 		case 0xc001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 	}
 
 	return 0;
@@ -310,7 +310,7 @@ static void K051960Callback(INT32 *, INT32 *color, INT32 *priority, INT32 *)
 
 static void K051316Callback(INT32 *code,INT32 *color,INT32 *flags)
 {
-	*flags = *color & 0x40;
+	*flags = (*color & 0x40) ? 1 : 0;
 	*code |= ((*color & 0x07) << 8);
 	*color = 48 + ((*color & 0x38) >> 3) + ((*color & 0x80) >> 4);
 }
@@ -618,9 +618,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		konamiCpuScan(nAction);
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
-		UPD7759Scan(0, nAction, pnMin);
-		UPD7759Scan(0, nAction, pnMin);
+		BurnYM2151Scan(nAction, pnMin);
+		UPD7759Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
 
@@ -696,7 +695,7 @@ struct BurnDriver BurnDrvgames88 = {
 	"'88 Games\0", NULL, "Konami", "GX861",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, games88RomInfo, games88RomName, NULL, NULL, games88InputInfo, games88DIPInfo,
+	NULL, games88RomInfo, games88RomName, NULL, NULL, NULL, NULL, games88InputInfo, games88DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	304, 224, 4, 3
 };
@@ -758,7 +757,7 @@ struct BurnDriver BurnDrvKonami88 = {
 	"Konami '88\0", NULL, "Konami", "GX861",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, konami88RomInfo, konami88RomName, NULL, NULL, games88InputInfo, games88DIPInfo,
+	NULL, konami88RomInfo, konami88RomName, NULL, NULL, NULL, NULL, games88InputInfo, games88DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	304, 224, 4, 3
 };
@@ -820,7 +819,7 @@ struct BurnDriver BurnDrvHypsptsp = {
 	"Hyper Sports Special (Japan)\0", NULL, "Konami", "GX861",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 4, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, hypsptspRomInfo, hypsptspRomName, NULL, NULL, games88InputInfo, games88DIPInfo,
+	NULL, hypsptspRomInfo, hypsptspRomName, NULL, NULL, NULL, NULL, games88InputInfo, games88DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	304, 224, 4, 3
 };

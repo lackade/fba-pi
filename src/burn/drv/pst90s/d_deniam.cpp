@@ -160,7 +160,7 @@ UINT8 __fastcall deniam16_read_byte(UINT32 address)
 	switch (address)
 	{
 		case 0xc40001:
-			return MSM6295ReadStatus(0); // logicpr2
+			return MSM6295Read(0); // logicpr2
 
 		case 0xc40003:
 			return *coin_control;
@@ -194,7 +194,7 @@ void __fastcall deniam16_write_byte(UINT32 address, UINT8 data)
 
 		case 0xc40001:
 			if (nGame == 2) {
-				MSM6295Command(0, data);
+				MSM6295Write(0, data);
 			}
 		return;
 
@@ -229,7 +229,7 @@ void __fastcall deniam16_sound_out(UINT16 port, UINT8 data)
 		return;
 
 		case 0x05:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 
 		case 0x07:
@@ -246,7 +246,7 @@ UINT8 __fastcall deniam16_sound_in(UINT16 port)
 			return *soundlatch;
 
 		case 0x05:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 	}
 
 	return 0;
@@ -463,11 +463,11 @@ static INT32 DrvInit()
 
 	if (nGame != 2) {
 		BurnYM3812Init(1, 3125000, &deniam16YM3812IrqHandler, deniam16ZetSynchroniseStream, 0);
-		BurnTimerAttachZetYM3812(6250000);
+		BurnTimerAttachYM3812(&ZetConfig, 6250000);
 		BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 0.60, BURN_SND_ROUTE_BOTH);
 	} else {
 		BurnYM3812Init(1, 3125000, NULL, deniam16SekSynchroniseStream, 0);
-		BurnTimerAttachSekYM3812(12500000);
+		BurnTimerAttachYM3812(&SekConfig, 12500000);
 		BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 0.60, BURN_SND_ROUTE_BOTH);
 	}
 
@@ -818,7 +818,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SCAN_VAR(nCyclesDone[1]);
 
 		BurnYM3812Scan(nAction, pnMin);
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		deniam16_set_okibank(*okibank);
 	}
@@ -870,7 +870,7 @@ struct BurnDriver BurnDrvLogicpro = {
 	"Logic Pro (Japan)\0", NULL, "Deniam", "Deniam-16b Hardware",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, logicproRomInfo, logicproRomName, NULL, NULL, DrvInputInfo, Logicpr2DIPInfo,
+	NULL, logicproRomInfo, logicproRomName, NULL, NULL, NULL, NULL, DrvInputInfo, Logicpr2DIPInfo,
 	logicproInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };
@@ -902,7 +902,7 @@ struct BurnDriver BurnDrvCroquis = {
 	"Croquis (Germany)\0", NULL, "Deniam", "Deniam-16b Hardware",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, croquisRomInfo, croquisRomName, NULL, NULL, DrvInputInfo, Logicpr2DIPInfo,
+	NULL, croquisRomInfo, croquisRomName, NULL, NULL, NULL, NULL, DrvInputInfo, Logicpr2DIPInfo,
 	logicproInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };
@@ -957,7 +957,7 @@ struct BurnDriver BurnDrvKarianx = {
 	"Karian Cross (Rev. 1.0)\0", NULL, "Deniam", "Deniam-16b Hardware",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, karianxRomInfo, karianxRomName, NULL, NULL, DrvInputInfo, KarianxDIPInfo,
+	NULL, karianxRomInfo, karianxRomName, NULL, NULL, NULL, NULL, DrvInputInfo, KarianxDIPInfo,
 	karianxInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };
@@ -993,7 +993,7 @@ struct BurnDriver BurnDrvLogicpr2 = {
 	"Logic Pro 2 (Japan)\0", NULL, "Deniam", "Deniam-16c Hardware",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, logicpr2RomInfo, logicpr2RomName, NULL, NULL, DrvInputInfo, Logicpr2DIPInfo,
+	NULL, logicpr2RomInfo, logicpr2RomName, NULL, NULL, NULL, NULL, DrvInputInfo, Logicpr2DIPInfo,
 	logicpr2Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	320, 224, 4, 3
 };

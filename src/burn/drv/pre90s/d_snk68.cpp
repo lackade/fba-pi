@@ -1,11 +1,16 @@
+// FB Alpha SNK 68k-based (pre-Neo-Geo) driver module
+// Based on MAME driver by Bryan McPhail, Acho A. Tang, Nicola Salmoria
+
 #include "tiles_generic.h"
 #include "m68000_intf.h"
 #include "z80_intf.h"
 #include "burn_ym3812.h"
 #include "upd7759.h"
 
-// To Do:
-// 	Analog Inputs
+// Notes:
+//   March 11, 2016: hooked up rotational code to SAR and Ikari 3, left in old
+//   analogue rotational code (see #if 0's) just incase we need to base
+//   something else off of it in the future.
 
 static UINT8 DrvJoy1[8];
 static UINT8 DrvJoy2[8];
@@ -13,8 +18,10 @@ static UINT8 DrvJoy3[8];
 static UINT8 DrvInputs[8];
 static UINT8 DrvDips[2];
 static UINT8 DrvReset;
+#if 0
 static UINT32 nAnalogAxis[2] = {0,0};
 static UINT16 DrvAxis[2];
+#endif
 
 static INT32 Rotary1 = 0;
 static INT32 Rotary1OldVal = 0;
@@ -48,6 +55,16 @@ static INT32 soundlatch;
 static INT32 flipscreen;
 static INT32 sprite_flip;
 static INT32 pow_charbase;
+
+// Rotation stuff! -dink
+static UINT8  DrvFakeInput[6]       = {0, 0, 0, 0, 0, 0};
+static UINT8  nRotateHoldInput[2]   = {0, 0};
+static INT32  nRotate[2]            = {0, 0};
+static INT32  nRotateTarget[2]      = {0, 0};
+static INT32  nRotateTry[2]         = {0, 0};
+static UINT32 nRotateTime[2]        = {0, 0};
+static UINT8  game_rotates = 0;
+static UINT8  game_rotates_inverted = 0;
 
 #define A(a, b, c, d) { a, b, (UINT8*)(c), d }
 
@@ -91,8 +108,9 @@ static struct BurnInputInfo IkariInputList[] = {
 	{"P1 Button 1"  , BIT_DIGITAL  , DrvJoy1 + 4,	"p1 fire 1"},
 	{"P1 Button 2"  , BIT_DIGITAL  , DrvJoy1 + 5,	"p1 fire 2"},
 	{"P1 Button 3"  , BIT_DIGITAL  , DrvJoy1 + 6,	"p1 fire 3"},
+	{"P1 Button 4 (rotate)" , BIT_DIGITAL  , DrvFakeInput + 4,  "p1 fire 4" },
 
-	A("P1 Right / left",	BIT_ANALOG_REL, DrvAxis + 0,	"p1 z-axis"),
+	//A("P1 Right / left",	BIT_ANALOG_REL, DrvAxis + 0,	"p1 z-axis"),
 
 	{"P2 Coin",       BIT_DIGITAL  , DrvJoy3 + 5,	"p2 coin"  },
 	{"P2 Start",      BIT_DIGITAL  , DrvJoy2 + 7,	"p2 start" },
@@ -103,8 +121,9 @@ static struct BurnInputInfo IkariInputList[] = {
 	{"P2 Button 1"  , BIT_DIGITAL  , DrvJoy2 + 4,	"p2 fire 1"},
 	{"P2 Button 2"  , BIT_DIGITAL  , DrvJoy2 + 5,	"p2 fire 2"},
 	{"P2 Button 3"  , BIT_DIGITAL  , DrvJoy2 + 6,	"p2 fire 3"},
+	{"P2 Button 4 (rotate)" , BIT_DIGITAL  , DrvFakeInput + 5,  "p2 fire 4" },
 
-	A("P2 Right / left",	BIT_ANALOG_REL, DrvAxis + 1,	"p2 z-axis"),
+	//A("P2 Right / left",	BIT_ANALOG_REL, DrvAxis + 1,	"p2 z-axis"),
 
 	{"Service 1",	  BIT_DIGITAL,   DrvJoy3 + 0,   "service"  },
 
@@ -461,6 +480,197 @@ static struct BurnDIPInfo IkariDIPList[]=
 
 STDDIPINFO(Ikari)
 
+// Rotation-handler code
+
+static void RotateReset() {
+	for (INT32 playernum = 0; playernum < 2; playernum++) {
+		nRotate[playernum] = 0; // start out pointing straight up (0=up)
+		nRotateTarget[playernum] = -1;
+		nRotateTime[playernum] = 0;
+		nRotateHoldInput[0] = nRotateHoldInput[1] = 0;
+	}
+}
+
+static void RotateStateload() {
+	for (INT32 playernum = 0; playernum < 2; playernum++) {
+		nRotateTarget[playernum] = -1;
+	}
+}
+
+static UINT32 RotationTimer(void) {
+    return nCurrentFrame;
+}
+
+static void RotateRight(INT32 *v) {
+    (*v)--;
+    if (*v < 0) *v = 11;
+}
+
+static void RotateLeft(INT32 *v) {
+    (*v)++;
+    if (*v > 11) *v = 0;
+}
+
+static UINT8 Joy2RotateInvert(UINT8 *joy) {
+	if (joy[0] && joy[2]) return 1;    // up left
+	if (joy[0] && joy[3]) return 7;    // up right
+
+	if (joy[1] && joy[2]) return 3;    // down left
+	if (joy[1] && joy[3]) return 5;    // down right
+
+	if (joy[0]) return 0;    // up
+	if (joy[1]) return 4;    // down
+	if (joy[2]) return 2;    // left
+	if (joy[3]) return 6;    // right
+
+	return 0xff;
+}
+
+static UINT8 Joy2Rotate(UINT8 *joy) { // ugly code, but the effect is awesome. -dink
+	if (game_rotates_inverted)
+		return Joy2RotateInvert(joy);
+
+	if (joy[0] && joy[2]) return 7;    // up left
+	if (joy[0] && joy[3]) return 1;    // up right
+
+	if (joy[1] && joy[2]) return 5;    // down left
+	if (joy[1] && joy[3]) return 3;    // down right
+
+	if (joy[0]) return 0;    // up
+	if (joy[1]) return 4;    // down
+	if (joy[2]) return 6;    // left
+	if (joy[3]) return 2;    // right
+
+	return 0xff;
+}
+
+static int dialRotation(INT32 playernum) {
+    // p1 = 0, p2 = 1
+	UINT8 player[2] = { 0, 0 };
+	static UINT8 lastplayer[2][2] = { { 0, 0 }, { 0, 0 } };
+
+    if ((playernum != 0) && (playernum != 1)) {
+        bprintf(PRINT_NORMAL, _T("Strange Rotation address => %06X\n"), playernum);
+        return 0;
+    }
+    if (playernum == 0) {
+        player[0] = DrvFakeInput[0]; player[1] = DrvFakeInput[1];
+    }
+    if (playernum == 1) {
+        player[0] = DrvFakeInput[2]; player[1] = DrvFakeInput[3];
+    }
+
+    if (player[0] && (player[0] != lastplayer[playernum][0] || (RotationTimer() > nRotateTime[playernum]+0xf))) {
+		RotateLeft(&nRotate[playernum]);
+        //bprintf(PRINT_NORMAL, _T("Player %d Rotate Left => %06X\n"), playernum+1, nRotate[playernum]);
+		nRotateTime[playernum] = RotationTimer();
+		nRotateTarget[playernum] = -1;
+    }
+
+	if (player[1] && (player[1] != lastplayer[playernum][1] || (RotationTimer() > nRotateTime[playernum]+0xf))) {
+        RotateRight(&nRotate[playernum]);
+        //bprintf(PRINT_NORMAL, _T("Player %d Rotate Right => %06X\n"), playernum+1, nRotate[playernum]);
+        nRotateTime[playernum] = RotationTimer();
+		nRotateTarget[playernum] = -1;
+	}
+
+	lastplayer[playernum][0] = player[0];
+	lastplayer[playernum][1] = player[1];
+
+	return (nRotate[playernum]);
+}
+
+static UINT8 *rotate_gunpos[2] = {NULL, NULL};
+static UINT8 rotate_gunpos_multiplier = 1;
+
+// Gun-rotation memory locations - do not remove this tag. - dink :)
+// game     p1           p2           clockwise value in memory  multiplier
+// sar      0x40196      0x4019a      0 1 2 3 4 5 6 7
+// ikari3*  0x4004c      0x4005e      0 7 6 5 4 3 2 1
+
+static void RotateSetGunPosRAM(UINT8 *p1, UINT8 *p2, UINT8 multiplier) {
+	rotate_gunpos[0] = p1;
+	rotate_gunpos[1] = p2;
+	rotate_gunpos_multiplier = multiplier;
+}
+
+static INT32 get_distance(INT32 from, INT32 to) {
+// this function finds the easiest way to get from "from" to "to", wrapping at 0 and 7
+	INT32 countA = 0;
+	INT32 countB = 0;
+	INT32 fromtmp = from / rotate_gunpos_multiplier;
+	INT32 totmp = to / rotate_gunpos_multiplier;
+
+	while (1) {
+		fromtmp++;
+		countA++;
+		if(fromtmp>7) fromtmp = 0;
+		if(fromtmp == totmp || countA > 32) break;
+	}
+
+	fromtmp = from / rotate_gunpos_multiplier;
+	totmp = to / rotate_gunpos_multiplier;
+
+	while (1) {
+		fromtmp--;
+		countB++;
+		if(fromtmp<0) fromtmp = 7;
+		if(fromtmp == totmp || countB > 32) break;
+	}
+
+	if (game_rotates_inverted) {
+		return ((countA > countB) ? 0 : 1);
+	}
+
+	if (countA > countB) {
+		return 1; // go negative
+	} else {
+		return 0; // go positive
+	}
+}
+
+static void RotateDoTick() {
+	// since the game only allows for 1 rotation every other frame, we have to
+	// do this.
+	if (nCurrentFrame&1) return;
+
+	for (INT32 i = 0; i < 2; i++) {
+		if (rotate_gunpos[i] && (nRotateTarget[i] != -1) && (nRotateTarget[i] != (*rotate_gunpos[i] & 0xff))) {
+			if (get_distance(nRotateTarget[i], *rotate_gunpos[i] & 0xff)) {
+				RotateRight(&nRotate[i]); // --
+			} else {
+				RotateLeft(&nRotate[i]);  // ++
+			}
+			bprintf(0, _T("p%X target %X mempos %X nRotate %X.\n"), i, nRotateTarget[0], *rotate_gunpos[0] & 0xff, nRotate[0]);
+			nRotateTry[i]++;
+			if (nRotateTry[i] > 10) nRotateTarget[i] = -1; // don't get stuck in a loop if something goes horribly wrong here.
+		} else {
+			nRotateTarget[i] = -1;
+		}
+	}
+}
+
+static void SuperJoy2Rotate() {
+	for (INT32 i = 0; i < 2; i++) { // p1 = 0, p2 = 1
+		if (DrvFakeInput[4 + i]) { //  rotate-button had been pressed
+			UINT8 rot = Joy2Rotate(((!i) ? &DrvJoy1[0] : &DrvJoy2[0]));
+			if (rot != 0xff) {
+				nRotateTarget[i] = rot * rotate_gunpos_multiplier;
+			}
+			//DrvInput[i] &= ~0xf; // cancel out directionals since they are used to rotate here.
+			DrvInputs[i] = (DrvInputs[i] & ~0xf) | (nRotateHoldInput[i] & 0xf); // for midnight resistance! be able to duck + change direction of gun.
+			nRotateTry[i] = 0;
+		} else { // cache joystick UDLR if the rotate button isn't pressed.
+			// This feature is for Midnight Resistance, if you are crawling on the
+			// ground and need to rotate your gun WITHOUT getting up.
+			nRotateHoldInput[i] = DrvInputs[i];
+		}
+	}
+
+	RotateDoTick();
+}
+
+// end Rotation-handler
 
 static INT32 DrvDoReset()
 {
@@ -487,8 +697,12 @@ static INT32 DrvDoReset()
 	pow_charbase = 0;
 	invert_controls = 0;
 
+#if 0
 	nAnalogAxis[1] = 0;
 	nAnalogAxis[0] = 0;
+#endif
+
+	RotateReset();
 
 	return 0;
 }
@@ -569,7 +783,8 @@ void __fastcall pow_write_byte(UINT32 address, UINT8 data)
 
 UINT16 __fastcall pow_read_word(UINT32 address)
 {
-	bprintf (PRINT_NORMAL, _T("read %x, w\n"), address);
+	if (address != 0xe0000)
+		bprintf (PRINT_NORMAL, _T("read %x, w\n"), address);
 
 	return 0;
 }
@@ -616,13 +831,13 @@ UINT8 __fastcall sar_read_byte(UINT32 address)
 			return DrvInputs[(address >> 1) & 3] ^ invert_controls;
 
 		case 0x0c0000: {
-			INT32 RetVal = Rotary1;
+			INT32 RetVal = Rotary1 = dialRotation(0);
 			RetVal = (~(1 << RetVal)) & 0xff;
 			return (UINT8)RetVal;
 		}
 
 		case 0x0c8000: {
-			INT32 RetVal = Rotary2;
+			INT32 RetVal = Rotary2 = dialRotation(1);
 			RetVal = (~(1 << RetVal)) & 0xff;
 			return (UINT8)RetVal;
 		}
@@ -919,6 +1134,8 @@ static INT32 DrvInit(INT32 game)
 		case 1: // searchar
 			if (SarGfxDecode()) return 1;
 			sar_map_68k();
+			game_rotates = 1;
+			RotateSetGunPosRAM(Drv68KRam + (0x196), Drv68KRam + (0x19a), 1);
 		break;
 
 		case 2: // streets
@@ -929,6 +1146,9 @@ static INT32 DrvInit(INT32 game)
 		case 3: // ikari
 			if (IkariGfxDecode()) return 1;
 			sar_map_68k();
+			game_rotates = 1;
+			game_rotates_inverted = 1;
+			RotateSetGunPosRAM(Drv68KRam + (0x4c), Drv68KRam + (0x5e), 1);
 		break;
 	}
 
@@ -946,11 +1166,11 @@ static INT32 DrvInit(INT32 game)
 	ZetClose();
 
 	BurnYM3812Init(1, 4000000, &powFMIRQHandler, &powSynchroniseStream, 0);
-	BurnTimerAttachZetYM3812(4000000);
+	BurnTimerAttachYM3812(&ZetConfig, 4000000);
 	BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 1.00, BURN_SND_ROUTE_BOTH);
 	
 	UPD7759Init(0, UPD7759_STANDARD_CLOCK, DrvSnd0);
-	UPD7759SetRoute(0, 0.50, BURN_SND_ROUTE_BOTH);
+	UPD7759SetRoute(0, ((game_select == 1) ? 1.50 : 0.50), BURN_SND_ROUTE_BOTH);
 
 	DrvDoReset();
 
@@ -971,6 +1191,8 @@ static INT32 DrvExit()
 	BurnFree (Mem);
 
 	game_select = 0;
+	game_rotates = 0;
+	game_rotates_inverted = 0;
 
 	return 0;
 }
@@ -1253,13 +1475,16 @@ static INT32 DrvFrame()
 			DrvInputs[2] ^= DrvJoy3[i] << i;
 		}
 
+#if 0
 		nAnalogAxis[0] -= DrvAxis[0];
 		DrvInputs[6] = (~nAnalogAxis[0] >> 8) & 0xfe;
 
 		nAnalogAxis[1] -= DrvAxis[1];
 		DrvInputs[7] = (~nAnalogAxis[1] >> 8) & 0xfe;
+#endif
 	}
 	
+#if 0
 	if (game_select == 1 || game_select == 3) {
 		if ((DrvInputs[6] >> 4) < Rotary1OldVal) {
 			Rotary1++;
@@ -1282,6 +1507,11 @@ static INT32 DrvFrame()
 		Rotary2OldVal = DrvInputs[7] >> 4;
 		if (Rotary2 > 11) Rotary2 = 0;
 		if (Rotary2 < 0) Rotary2 = 11;
+	}
+#endif
+
+	if (game_rotates) {
+		SuperJoy2Rotate();
 	}
 
 	INT32 nTotalCycles[2] =  { ((game_select == 1) ? 9000000 : 10000000) / 60, 4000000 / 60 };
@@ -1337,19 +1567,27 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM3812Scan(nAction, pnMin);
-		UPD7759Scan(0, nAction, pnMin);
+		UPD7759Scan(nAction, pnMin);
 
 		SCAN_VAR(invert_controls);
 		SCAN_VAR(soundlatch);
 		SCAN_VAR(flipscreen);
 		SCAN_VAR(sprite_flip);
 		SCAN_VAR(pow_charbase);
+#if 0
 		SCAN_VAR(nAnalogAxis[0]);
 		SCAN_VAR(nAnalogAxis[1]);
+#endif
 		SCAN_VAR(Rotary1);
 		SCAN_VAR(Rotary1OldVal);
 		SCAN_VAR(Rotary2);
 		SCAN_VAR(Rotary2OldVal);
+		SCAN_VAR(nRotate);
+		SCAN_VAR(nRotateTry);
+
+		if (nAction & ACB_WRITE) {
+			RotateStateload();
+		}
 	}
 
 	return 0;
@@ -1359,7 +1597,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 // P.O.W. - Prisoners of War (US version 1)
 
 static struct BurnRomInfo powRomDesc[] = {
-	{ "dg1ver1.j14", 0x20000, 0x8e71a8af, 1 | BRF_PRG }, //  0 68k COde
+	{ "dg1ver1.j14", 0x20000, 0x8e71a8af, 1 | BRF_PRG }, //  0 68k Code
 	{ "dg2ver1.l14", 0x20000, 0x4287affc, 1 | BRF_PRG }, //  1
 
 	{ "dg8.e25",     0x10000, 0xd1d61da3, 2 | BRF_PRG }, //  2 Z80 Code
@@ -1402,7 +1640,7 @@ struct BurnDriver BurnDrvpow = {
 	"P.O.W. - Prisoners of War (US version 1)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_SCRFIGHT, 0,
-	NULL, powRomInfo, powRomName, NULL, NULL, DrvInputInfo, PowDIPInfo,
+	NULL, powRomInfo, powRomName, NULL, NULL, NULL, NULL, DrvInputInfo, PowDIPInfo,
 	powInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1449,7 +1687,7 @@ struct BurnDriver BurnDrvpowj = {
 	"Datsugoku - Prisoners of War (Japan)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SCRFIGHT, 0,
-	NULL, powjRomInfo, powjRomName, NULL, NULL, DrvInputInfo, PowjDIPInfo,
+	NULL, powjRomInfo, powjRomName, NULL, NULL, NULL, NULL, DrvInputInfo, PowjDIPInfo,
 	powInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1490,8 +1728,8 @@ struct BurnDriver BurnDrvsearchar = {
 	"searchar", NULL, NULL, NULL, "1989",
 	"SAR - Search And Rescue (World)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, searcharRomInfo, searcharRomName, NULL, NULL, IkariInputInfo, SarDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_RUNGUN, 0,
+	NULL, searcharRomInfo, searcharRomName, NULL, NULL, NULL, NULL, IkariInputInfo, SarDIPInfo,
 	searcharInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 224, 256, 3, 4
 };
@@ -1527,8 +1765,8 @@ struct BurnDriver BurnDrvsercharu = {
 	"searcharu", "searchar", NULL, NULL, "1989",
 	"SAR - Search And Rescue (US)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, sercharuRomInfo, sercharuRomName, NULL, NULL, IkariInputInfo, SarDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_RUNGUN, 0,
+	NULL, sercharuRomInfo, sercharuRomName, NULL, NULL, NULL, NULL, IkariInputInfo, SarDIPInfo,
 	searcharInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 224, 256, 3, 4
 };
@@ -1564,8 +1802,8 @@ struct BurnDriver BurnDrvsercharj = {
 	"searcharj", "searchar", NULL, NULL, "1989",
 	"SAR - Search And Rescue (Japan)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, sercharjRomInfo, sercharjRomName, NULL, NULL, IkariInputInfo, SarDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_RUNGUN, 0,
+	NULL, sercharjRomInfo, sercharjRomName, NULL, NULL, NULL, NULL, IkariInputInfo, SarDIPInfo,
 	searcharInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 224, 256, 3, 4
 };
@@ -1608,7 +1846,7 @@ struct BurnDriver BurnDrvstreetsm = {
 	"Street Smart (US version 2)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_VSFIGHT, 0,
-	NULL, streetsmRomInfo, streetsmRomName, NULL, NULL, DrvInputInfo, StreetsmDIPInfo,
+	NULL, streetsmRomInfo, streetsmRomName, NULL, NULL, NULL, NULL, DrvInputInfo, StreetsmDIPInfo,
 	streetsmInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1643,7 +1881,7 @@ struct BurnDriver BurnDrvstreets1 = {
 	"Street Smart (US version 1)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_VSFIGHT, 0,
-	NULL, streets1RomInfo, streets1RomName, NULL, NULL, DrvInputInfo, StreetsmDIPInfo,
+	NULL, streets1RomInfo, streets1RomName, NULL, NULL, NULL, NULL, DrvInputInfo, StreetsmDIPInfo,
 	searcharInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1678,7 +1916,7 @@ struct BurnDriver BurnDrvstreetsw = {
 	"Street Smart (World version 1)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_VSFIGHT, 0,
-	NULL, streetswRomInfo, streetswRomName, NULL, NULL, DrvInputInfo, StreetsjDIPInfo,
+	NULL, streetswRomInfo, streetswRomName, NULL, NULL, NULL, NULL, DrvInputInfo, StreetsjDIPInfo,
 	searcharInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1713,7 +1951,7 @@ struct BurnDriver BurnDrvstreetsj = {
 	"Street Smart (Japan version 1)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_VSFIGHT, 0,
-	NULL, streetsjRomInfo, streetsjRomName, NULL, NULL, DrvInputInfo, StreetsjDIPInfo,
+	NULL, streetsjRomInfo, streetsjRomName, NULL, NULL, NULL, NULL, DrvInputInfo, StreetsjDIPInfo,
 	searcharInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1768,7 +2006,7 @@ struct BurnDriver BurnDrvikari3 = {
 	"Ikari III - The Rescue (8-Way Joystick)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, ikari3RomInfo, ikari3RomName, NULL, NULL, IkariInputInfo, IkariDIPInfo,
+	NULL, ikari3RomInfo, ikari3RomName, NULL, NULL, NULL, NULL, IkariInputInfo, IkariDIPInfo,
 	ikari3Init, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1818,7 +2056,7 @@ struct BurnDriver BurnDrvikari3u = {
 	"Ikari III - The Rescue (US, Rotary Joystick)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, ikari3uRomInfo, ikari3uRomName, NULL, NULL, IkariInputInfo, IkariDIPInfo,
+	NULL, ikari3uRomInfo, ikari3uRomName, NULL, NULL, NULL, NULL, IkariInputInfo, IkariDIPInfo,
 	ikari3Init, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1868,7 +2106,7 @@ struct BurnDriver BurnDrvikari3j = {
 	"Ikari Three - The Rescue (Japan, Rotary Joystick)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, ikari3jRomInfo, ikari3jRomName, NULL, NULL, IkariInputInfo, IkariDIPInfo,
+	NULL, ikari3jRomInfo, ikari3jRomName, NULL, NULL, NULL, NULL, IkariInputInfo, IkariDIPInfo,
 	ikari3Init, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };
@@ -1885,29 +2123,17 @@ static struct BurnRomInfo ikari3kRomDesc[] = {
 
 	{ "ik3-7k.16l",     0x08000, 0x8bfb399b, 3 | BRF_GRA }, //  5 Characters
 	{ "ik3-8k.16m",     0x08000, 0x3f0fe576, 3 | BRF_GRA }, //  6
-
-	{ "ik3-13.bin",     0x20000, 0x9a56bd32, 4 | BRF_GRA }, //  7 Sprites
-	{ "ik3-12.bin",     0x20000, 0x0ce6a10a, 4 | BRF_GRA }, //  8
-	{ "ik3-11.bin",     0x20000, 0xe4e2be43, 4 | BRF_GRA }, //  9
-	{ "ik3-10.bin",     0x20000, 0xac222372, 4 | BRF_GRA }, // 10
-	{ "ik3-9.bin",      0x20000, 0xc33971c2, 4 | BRF_GRA }, // 11
-	{ "ik3-14.bin",     0x20000, 0x453bea77, 4 | BRF_GRA }, // 12
-	{ "ik3-15.bin",     0x20000, 0x781a81fc, 4 | BRF_GRA }, // 13
-	{ "ik3-16.bin",     0x20000, 0x80ba400b, 4 | BRF_GRA }, // 14
-	{ "ik3-17.bin",     0x20000, 0x0cc3ce4a, 4 | BRF_GRA }, // 15
-	{ "ik3-18.bin",     0x20000, 0xba106245, 4 | BRF_GRA }, // 16
-	{ "ik3-23.bin",     0x20000, 0xd0fd5c77, 4 | BRF_GRA }, // 17
-	{ "ik3-22.bin",     0x20000, 0x4878d883, 4 | BRF_GRA }, // 18
-	{ "ik3-21.bin",     0x20000, 0x50d0fbf0, 4 | BRF_GRA }, // 19
-	{ "ik3-20.bin",     0x20000, 0x9a851efc, 4 | BRF_GRA }, // 20
-	{ "ik3-19.bin",     0x20000, 0x4ebdba89, 4 | BRF_GRA }, // 21
-	{ "ik3-24.bin",     0x20000, 0xe9b26d68, 4 | BRF_GRA }, // 22
-	{ "ik3-25.bin",     0x20000, 0x073b03f1, 4 | BRF_GRA }, // 23
-	{ "ik3-26.bin",     0x20000, 0x9c613561, 4 | BRF_GRA }, // 24
-	{ "ik3-27.bin",     0x20000, 0x16dd227e, 4 | BRF_GRA }, // 25
-	{ "ik3-28.bin",     0x20000, 0x711715ae, 4 | BRF_GRA }, // 26
-
-	{ "ik3-6.18e",      0x20000, 0x59d256a4, 5 | BRF_SND }, // 27 upd7759 samples
+	
+	{ "ikari-880c_t54.c2", 0x80000, 0x6d728362, 4 | BRF_GRA }, //  7 Sprites
+	{ "ik11.c1",           0x20000, 0xc33971c2, 4 | BRF_GRA }, //  8
+	{ "ikari-880d_t52.b2", 0x80000, 0xe25380e6, 4 | BRF_GRA }, //  9
+	{ "ik10.b1",           0x20000, 0xba106245, 4 | BRF_GRA }, //  10
+	{ "ikari-880d_t53.d2", 0x80000, 0x5855d95e, 4 | BRF_GRA }, //  11
+	{ "ik12.d1",           0x20000, 0x4ebdba89, 4 | BRF_GRA }, //  12
+	{ "ikari-880c_t51.a2", 0x80000, 0x87607772, 4 | BRF_GRA }, //  13
+	{ "ik9.a1",            0x20000, 0x711715ae, 4 | BRF_GRA }, //  14
+	
+	{ "ik3-6.18e",      0x20000, 0x59d256a4, 5 | BRF_SND }, // 15 upd7759 samples
 };
 
 STD_ROM_PICK(ikari3k)
@@ -1918,7 +2144,7 @@ struct BurnDriver BurnDrvikari3k = {
 	"Ikari III - The Rescue (Korea, 8-Way Joystick)\0", NULL, "SNK", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, ikari3kRomInfo, ikari3kRomName, NULL, NULL, IkariInputInfo, IkariDIPInfo,
+	NULL, ikari3kRomInfo, ikari3kRomName, NULL, NULL, NULL, NULL, IkariInputInfo, IkariDIPInfo,
 	ikari3Init, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&DrvRecalc, 0x800, 256, 224, 4, 3
 };

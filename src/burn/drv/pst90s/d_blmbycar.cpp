@@ -1,3 +1,6 @@
+// FB Alpha Bomby Car driver module
+// Based on MAME driver by Luca Elia
+
 #include "tiles_generic.h"
 #include "m68000_intf.h"
 #include "msm6295.h"
@@ -296,7 +299,7 @@ UINT8 __fastcall Blmbycar68KReadByte(UINT32 a)
 		}
 		
 		case 0x70000f: {
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 		}
 		
 		default: {
@@ -413,7 +416,7 @@ void __fastcall Blmbycar68KWriteWord(UINT32 a, UINT16 d)
 		}
 		
 		case 0x70000e: {
-			MSM6295Command(0, d & 0xff);
+			MSM6295Write(0, d & 0xff);
 			return;
 		}
 		
@@ -744,7 +747,7 @@ static void DrawSprites(INT32 RenderPriority)
 	}
 }
 
-static void DrvDraw()
+static INT32 DrvDraw()
 {
 	BurnTransferClear();
 	DrvCalcPalette();
@@ -755,6 +758,8 @@ static void DrvDraw()
 	if (nBurnLayer & 0x08) DrvRenderFgLayer(1);
 	if (nSpriteEnable & 0x02) DrawSprites(1);
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
 static INT32 DrvFrame()
@@ -796,7 +801,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 		
 		SCAN_VAR(DrvInput);
 		SCAN_VAR(DrvDip);
@@ -817,8 +822,8 @@ struct BurnDriver BurnDrvBlmbycar = {
 	"Blomby Car\0", NULL, "ABM & Gecas", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, DrvRomInfo, DrvRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	BlmbycarInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, DrvRomInfo, DrvRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BlmbycarInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x300, 384, 256, 4, 3
 };
 
@@ -827,8 +832,8 @@ struct BurnDriver BurnDrvBlmbycaru = {
 	"Blomby Car (not encrypted)\0", NULL, "ABM & Gecas", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, DrvuRomInfo, DrvuRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, DrvuRomInfo, DrvuRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x300, 384, 256, 4, 3
 };
 
@@ -837,7 +842,7 @@ struct BurnDriver BurnDrvWatrball = {
 	"Water Balls\0", NULL, "ABM", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, WatrballRomInfo, WatrballRomName, NULL, NULL, DrvInputInfo, WatrballDIPInfo,
-	WatrballInit, DrvExit, DrvFrame, NULL, DrvScan,
+	NULL, WatrballRomInfo, WatrballRomName, NULL, NULL, NULL, NULL, DrvInputInfo, WatrballDIPInfo,
+	WatrballInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x300, 384, 240, 4, 3
 };

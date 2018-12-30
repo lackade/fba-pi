@@ -10,11 +10,15 @@ enum {
 };
 
 enum {
-    MAPPER_NONE         = 0,
-    MAPPER_SEGA         = 1,
-    MAPPER_CODIES       = 2,
+	MAPPER_NONE         = 0,
+	MAPPER_SEGA         = 1,
+	MAPPER_CODIES       = 2,
 	MAPPER_MSX          = 3,
-	MAPPER_MSX_NEMESIS  = 4
+	MAPPER_MSX_NEMESIS  = 4,
+	MAPPER_KOREA        = 5,
+	MAPPER_KOREA8K      = 6,
+	MAPPER_4PAK         = 7,
+	MAPPER_XIN1         = 8
 };
 
 enum {
@@ -54,19 +58,6 @@ enum {
 #define IS_GG       (sms.console & HWTYPE_GG)
 #define IS_MD       (sms.console & HWTYPE_MD)
 
-typedef unsigned char						UINT8;
-typedef signed char 						INT8;
-typedef unsigned short						UINT16;
-typedef signed short						INT16;
-typedef unsigned int						UINT32;
-typedef signed int							INT32;
-typedef unsigned char                       uint8;
-typedef signed char                         int8;
-typedef unsigned short int                  uint16;
-typedef signed short int                    int16;
-typedef unsigned long int                   uint32;
-typedef signed long int                     int32;
-
 enum {
     TERRITORY_DOMESTIC  = 0,
     TERRITORY_EXPORT    = 1
@@ -93,7 +84,7 @@ typedef struct
         UINT8 sctrl;    /* Serial mode control and status */
     } sio;
     struct {
-        int type;
+        INT32 type;
     } device[2];
 } sms_t;
 
@@ -106,6 +97,7 @@ void sms_reset(void);
 void sms_shutdown(void);
 void sms_mapper_w(INT32 address, UINT8 data);
 void sms_mapper8k_w(INT32 address, UINT8 data);
+void sms_mapper8kvirt_w(INT32 address, UINT8 data);
 
 /* port-map Function prototypes */
 UINT8 z80_read_unmapped(void);
@@ -115,8 +107,4 @@ void __fastcall ggms_port_w(UINT16 port, UINT8 data);
 UINT8 __fastcall ggms_port_r(UINT16 port);
 void __fastcall sms_port_w(UINT16 port, UINT8 data);
 UINT8 __fastcall sms_port_r(UINT16 port);
-void __fastcall smsj_port_w(UINT16 port, UINT8 data);
-UINT8 __fastcall smsj_port_r(UINT16 port);
-void __fastcall md_port_w(UINT16 port, UINT8 data);
-UINT8 __fastcall md_port_r(UINT16 port);
 #endif /* _SMS_H_ */

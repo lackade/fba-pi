@@ -1,11 +1,13 @@
 #include "burnint.h"
-#include "burn_sound.h"
+#include "dac.h"
 
 #define DAC_NUM		(8)	// Maximum DAC chips
 
 struct dac_info
 {
 	INT16	Output;
+	INT16	Output2;
+	INT32   Stereo;
 	double 	nVolume;
 	INT32 	nCurrentPosition;
 	INT32	Initialized;
@@ -24,6 +26,14 @@ static INT16 *rBuffer = NULL;
 static INT32 NumChips;
 
 static INT32 bAddSignal;
+
+static INT32 (*pCPUTotalCycles)() = NULL;
+static UINT32 nDACCPUMHZ = 0;
+
+static INT32 DACSyncInternal()
+{
+	return (INT32)(float)(nBurnSoundLen * (pCPUTotalCycles() / (nDACCPUMHZ / (nBurnFPS / 100.0000))));
+}
 
 static void UpdateStream(INT32 chip, INT32 length)
 {
@@ -49,7 +59,7 @@ static void UpdateStream(INT32 chip, INT32 length)
 	INT16 *rbuf = rBuffer + ptr->nCurrentPosition;
 
 	INT16 lOut = ((ptr->OutputDir & BURN_SND_ROUTE_LEFT ) == BURN_SND_ROUTE_LEFT ) ? ptr->Output : 0;
-	INT16 rOut = ((ptr->OutputDir & BURN_SND_ROUTE_RIGHT) == BURN_SND_ROUTE_RIGHT) ? ptr->Output : 0;
+	INT16 rOut = ((ptr->OutputDir & BURN_SND_ROUTE_RIGHT) == BURN_SND_ROUTE_RIGHT) ? ((ptr->Stereo) ? ptr->Output2 : ptr->Output) : 0;
 
 	ptr->nCurrentPosition += length;
 
@@ -131,17 +141,52 @@ void DACWrite(INT32 Chip, UINT8 Data)
 	ptr->Output = (INT32)(UnsignedVolTable[Data] * ptr->nVolume);
 }
 
+void DACWrite16(INT32 Chip, INT16 Data)
+{
+#if defined FBA_DEBUG
+	if (!DebugSnd_DACInitted) bprintf(PRINT_ERROR, _T("DACWrite16 called without init\n"));
+	if (Chip > NumChips) bprintf(PRINT_ERROR, _T("DACWrite16 called with invalid chip number %x\n"), Chip);
+#endif
+
+	struct dac_info *ptr;
+
+	ptr = &dac_table[Chip];
+
+	Data = (INT32)(Data * ptr->nVolume);
+
+	if (Data != ptr->Output) {
+		UpdateStream(Chip, ptr->pSyncCallback());
+		ptr->Output = Data;
+	}
+}
+
+void DACWrite16Stereo(INT32 Chip, INT16 Data, INT16 Data2)
+{
+#if defined FBA_DEBUG
+	if (!DebugSnd_DACInitted) bprintf(PRINT_ERROR, _T("DACWrite16Stereo called without init\n"));
+	if (Chip > NumChips) bprintf(PRINT_ERROR, _T("DACWrite16Stereo called with invalid chip number %x\n"), Chip);
+#endif
+
+	struct dac_info *ptr;
+
+	ptr = &dac_table[Chip];
+
+	Data = (INT32)(Data * ptr->nVolume);
+	Data2 = (INT32)(Data2 * ptr->nVolume);
+
+	if (Data != ptr->Output || Data2 != ptr->Output2) {
+		UpdateStream(Chip, ptr->pSyncCallback());
+		ptr->Output = Data;
+		ptr->Output2 = Data2;
+	}
+}
+
 void DACSignedWrite(INT32 Chip, UINT8 Data)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_DACInitted) bprintf(PRINT_ERROR, _T("DACSignedWrite called without init\n"));
 	if (Chip > NumChips) bprintf(PRINT_ERROR, _T("DACSignedWrite called with invalid chip number %x\n"), Chip);
 #endif
-
-	//as of nov.7 2014 no longer needed, keeping just in-case :)
-	//if (Data == 0x77 || Data == 0x7f || Data == 0x80)
-	//	return; // HACK: buzzing fix (armed formation, terra cresta, Soldier Girl Amazon, & possibly others.)
-
 	struct dac_info *ptr;
 
 	ptr = &dac_table[Chip];
@@ -158,6 +203,35 @@ static void DACBuildVolTables()
 		SignedVolTable[i] = i * 0x101 - 0x8000;
 	}
 }
+
+void DACStereoMode(INT32 Chip)
+{
+#if defined FBA_DEBUG
+	if (!DebugSnd_DACInitted) bprintf(PRINT_ERROR, _T("DACStereoMode called without init\n"));
+	if (Chip > NumChips) bprintf(PRINT_ERROR, _T("DACStereoMode called with invalid chip number %x\n"), Chip);
+#endif
+
+	struct dac_info *ptr;
+	ptr = &dac_table[Chip];
+
+	ptr->Stereo = 1;
+}
+
+void DACInit(INT32 Num, UINT32 Clock, INT32 bAdd, INT32 (*pCPUCyclesCB)(), INT32 nCpuMHZ)
+{
+	if (pCPUCyclesCB == NULL) {
+		bprintf(PRINT_ERROR, _T("DACInit pCPUCyclesCB is NULL.\n"));
+	}
+	if (nCpuMHZ == 0) {
+		bprintf(PRINT_ERROR, _T("DACInit nCPUMHZ is 0.\n"));
+	}
+
+	pCPUTotalCycles = pCPUCyclesCB;
+	nDACCPUMHZ = nCpuMHZ;
+
+	DACInit(Num, Clock, bAdd, DACSyncInternal);
+}
+
 
 void DACInit(INT32 Num, UINT32 /*Clock*/, INT32 bAdd, INT32 (*pSyncCB)())
 {
@@ -179,6 +253,7 @@ void DACInit(INT32 Num, UINT32 /*Clock*/, INT32 bAdd, INT32 (*pSyncCB)())
 	ptr->Initialized = 1;
 	ptr->nVolume = 1.00;
 	ptr->OutputDir = BURN_SND_ROUTE_BOTH;
+	ptr->Stereo = 0;
 	ptr->pSyncCallback = pSyncCB;
 
 	DACBuildVolTables(); // necessary to build for every chip?
@@ -213,6 +288,7 @@ void DACReset()
 
 		ptr->nCurrentPosition = 0;
 		ptr->Output = 0;
+		ptr->Output2 = 0;
 	}
 }
 
@@ -221,6 +297,8 @@ void DACExit()
 #if defined FBA_DEBUG
 	if (!DebugSnd_DACInitted) bprintf(PRINT_ERROR, _T("DACExit called without init\n"));
 #endif
+
+	if (!DebugSnd_DACInitted) return;
 
 	struct dac_info *ptr;
 
@@ -231,15 +309,20 @@ void DACExit()
 		ptr->pSyncCallback = NULL;
 	}
 
+	pCPUTotalCycles = NULL;
+	nDACCPUMHZ = 0;
+
 	NumChips = 0;
 	
 	DebugSnd_DACInitted = 0;
 
 	BurnFree (lBuffer);
 	BurnFree (rBuffer);
+	lBuffer = NULL;
+	rBuffer = NULL;
 }
 
-INT32 DACScan(INT32 nAction,INT32 *pnMin)
+void DACScan(INT32 nAction, INT32 *pnMin)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_DACInitted) bprintf(PRINT_ERROR, _T("DACScan called without init\n"));
@@ -256,8 +339,7 @@ INT32 DACScan(INT32 nAction,INT32 *pnMin)
 			ptr = &dac_table[i];
 
 			SCAN_VAR(ptr->Output);
+			SCAN_VAR(ptr->Output2);
 		}
 	}
-
-	return 0;
 }

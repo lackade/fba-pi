@@ -180,7 +180,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 // Minivader
 
 static struct BurnRomInfo minivadrRomDesc[] = {
-	{ "d26-01.bin",	0x2000, 0xa96c823d, BRF_ESS | BRF_PRG }, //  Z80 code
+	{ "d26-01.ic7",	0x2000, 0xa96c823d, BRF_ESS | BRF_PRG }, //  Z80 code
 };
 
 STD_ROM_PICK(minivadr)
@@ -191,7 +191,7 @@ struct BurnDriver BurnDrvminivadr = {
 	"Minivader\0", NULL, "Taito Corporation", "Minivader",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 1, HARDWARE_TAITO_MISC, GBF_SHOOT, 0,
-	NULL, minivadrRomInfo, minivadrRomName, NULL, NULL, DrvInputInfo, NULL,
+	NULL, minivadrRomInfo, minivadrRomName, NULL, NULL, NULL, NULL, DrvInputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, NULL, 0,
 	256, 224, 4, 3
 };

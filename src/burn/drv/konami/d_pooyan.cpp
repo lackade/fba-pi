@@ -4,6 +4,7 @@
 #include "tiles_generic.h"
 #include "z80_intf.h"
 #include "timeplt_snd.h"
+#include "resnet.h"
 
 static UINT8 *AllMem;
 static UINT8 *MemEnd;
@@ -20,23 +21,19 @@ static UINT8 *DrvSprRAM0;
 static UINT8 *DrvSprRAM1;
 static UINT8 *DrvVidRAM;
 
-static UINT32 *Palette;
 static UINT32 *DrvPalette;
 static UINT8  DrvRecalc;
-
-static INT16 *pFMBuffer;
-static INT16 *pAY8910Buffer[6];
 
 static UINT8 irqtrigger;
 static UINT8 irq_enable;
 static UINT8 flipscreen;
 
-static UINT8  DrvJoy1[8];
-static UINT8  DrvJoy2[8];
-static UINT8  DrvJoy3[8];
-static UINT8  DrvDips[2];
-static UINT8  DrvInputs[3];
-static UINT8  DrvReset;
+static UINT8 DrvJoy1[8];
+static UINT8 DrvJoy2[8];
+static UINT8 DrvJoy3[8];
+static UINT8 DrvDips[2];
+static UINT8 DrvInputs[3];
+static UINT8 DrvReset;
 
 static struct BurnInputInfo DrvInputList[] = {
 	{"P1 Coin",	BIT_DIGITAL  , DrvJoy1 + 0, "p1 coin"	},
@@ -209,12 +206,24 @@ static INT32 DrvDoReset()
 	flipscreen = 0;
 	irq_enable = 0;
 
+	HiscoreReset();
+
 	return 0;
 }
 
 static void DrvPaletteInit()
 {
 	UINT32 pal[0x20];
+
+	static const INT32 resistances_rg[3] = { 1000, 470, 220 };
+	static const INT32 resistances_b[2]  = { 470, 220 };
+
+	double rweights[3], gweights[3], bweights[2];
+
+	compute_resistor_weights(0, 0xff, -1.0,
+		3, &resistances_rg[0], rweights, 1000, 0,
+		3, &resistances_rg[0], gweights, 1000, 0,
+		2, &resistances_b[0],  bweights, 1000, 0);
 
 	for (INT32 i = 0; i < 0x20; i++)
 	{
@@ -224,24 +233,24 @@ static void DrvPaletteInit()
 		bit0 = (DrvColPROM[i] >> 0) & 0x01;
 		bit1 = (DrvColPROM[i] >> 1) & 0x01;
 		bit2 = (DrvColPROM[i] >> 2) & 0x01;
-		r = 33 * bit0 + 71 * bit1 + 151 * bit2;
+		r = combine_3_weights(rweights, bit0, bit1, bit2);
 
 		bit0 = (DrvColPROM[i] >> 3) & 0x01;
 		bit1 = (DrvColPROM[i] >> 4) & 0x01;
 		bit2 = (DrvColPROM[i] >> 5) & 0x01;
-		g = 33 * bit0 + 71 * bit1 + 151 * bit2;
+		g = combine_3_weights(gweights, bit0, bit1, bit2);
 
 		bit0 = (DrvColPROM[i] >> 6) & 0x01;
 		bit1 = (DrvColPROM[i] >> 7) & 0x01;
-		b = 80 * bit0 + 171 * bit1;
+		b = combine_2_weights(bweights, bit0, bit1);
 
-		pal[i] = (r << 16) | (g << 8) | b;
+		pal[i] = BurnHighCol(r, g, b, 0);
 	}
 
 	for (INT32 i = 0; i < 0x100; i++)
 	{
-		Palette[i + 0x000] = pal[(DrvColPROM[i + 0x020] & 0x0f) | 0x10];
-		Palette[i + 0x100] = pal[(DrvColPROM[i + 0x120] & 0x0f) | 0x00];
+		DrvPalette[i + 0x000] = pal[(DrvColPROM[i + 0x020] & 0x0f) | 0x10];
+		DrvPalette[i + 0x100] = pal[(DrvColPROM[i + 0x120] & 0x0f) | 0x00];
 	}
 }
 
@@ -281,7 +290,6 @@ static INT32 MemIndex()
 
 	DrvColPROM		= Next; Next += 0x00220;
 
-	Palette			= (UINT32*)Next; Next += 0x00200 * sizeof(UINT32);
 	DrvPalette		= (UINT32*)Next; Next += 0x00200 * sizeof(UINT32);
 
 	AllRam			= Next;
@@ -293,15 +301,6 @@ static INT32 MemIndex()
 	DrvVidRAM		= Next; Next += 0x000800;
 
 	RamEnd			= Next;
-
-	pFMBuffer		= (INT16 *)Next; Next += nBurnSoundLen * 6 * sizeof(INT16);
-
-	pAY8910Buffer[0]	= pFMBuffer + nBurnSoundLen * 0;
-	pAY8910Buffer[1]	= pFMBuffer + nBurnSoundLen * 1;
-	pAY8910Buffer[2]	= pFMBuffer + nBurnSoundLen * 2;
-	pAY8910Buffer[3]	= pFMBuffer + nBurnSoundLen * 3;
-	pAY8910Buffer[4]	= pFMBuffer + nBurnSoundLen * 4;
-	pAY8910Buffer[5]	= pFMBuffer + nBurnSoundLen * 5;
 
 	MemEnd			= Next;
 
@@ -342,20 +341,11 @@ static INT32 DrvInit()
 
 	ZetInit(0);
 	ZetOpen(0);
-	ZetMapArea(0x0000, 0x7fff, 0, DrvZ80ROM0);
-	ZetMapArea(0x0000, 0x7fff, 2, DrvZ80ROM0);
-	ZetMapArea(0x8000, 0x87ff, 0, DrvVidRAM);
-	ZetMapArea(0x8000, 0x87ff, 1, DrvVidRAM);
-	ZetMapArea(0x8000, 0x87ff, 2, DrvVidRAM);
-	ZetMapArea(0x8800, 0x8fff, 0, DrvZ80RAM0);
-	ZetMapArea(0x8800, 0x8fff, 1, DrvZ80RAM0);
-	ZetMapArea(0x8800, 0x8fff, 2, DrvZ80RAM0);
-	ZetMapArea(0x9000, 0x90ff, 0, DrvSprRAM0);
-	ZetMapArea(0x9000, 0x90ff, 1, DrvSprRAM0);
-	ZetMapArea(0x9000, 0x90ff, 2, DrvSprRAM0);
-	ZetMapArea(0x9400, 0x94ff, 0, DrvSprRAM1);
-	ZetMapArea(0x9400, 0x94ff, 1, DrvSprRAM1);
-	ZetMapArea(0x9400, 0x94ff, 2, DrvSprRAM1);
+	ZetMapMemory(DrvZ80ROM0,	0x0000, 0x7fff, MAP_ROM);
+	ZetMapMemory(DrvVidRAM,		0x8000, 0x87ff, MAP_RAM);
+	ZetMapMemory(DrvZ80RAM0,	0x8800, 0x8fff, MAP_RAM);
+	ZetMapMemory(DrvSprRAM0,	0x9000, 0x90ff, MAP_RAM);
+	ZetMapMemory(DrvSprRAM1,	0x9400, 0x94ff, MAP_RAM);
 	ZetSetWriteHandler(pooyan_main_write);
 	ZetSetReadHandler(pooyan_main_read);
 	ZetClose();
@@ -421,6 +411,33 @@ static void draw_layer()
 	}
 }
 
+static void RenderTileCPMP(INT32 code, INT32 color, INT32 sx, INT32 sy, INT32 flipx, INT32 flipy, INT32 width, INT32 height)
+{
+	UINT16 *dest = pTransDraw;
+	UINT8 *gfx = DrvGfxROM1;
+
+	INT32 flip = 0;
+	if (flipy) flip |= (height - 1) * width;
+	if (flipx) flip |= width - 1;
+
+	gfx += code * width * height;
+
+	for (INT32 y = 0; y < height; y++, sy++) {
+		if (sy < 0 || sy >= nScreenHeight) continue;
+
+		for (INT32 x = 0; x < width; x++, sx++) {
+			if (sx < 0 || sx >= nScreenWidth) continue;
+
+			INT32 pxl = gfx[((y * width) + x) ^ flip];
+
+			if (DrvPalette[pxl | (color << 4) | 0x100] == 0) continue; // 0 and 0x10 is transparent
+			dest[sy * nScreenWidth + sx] = pxl | (color << 4) | 0x100;
+		}
+		sx -= width;
+	}
+}
+
+
 static void draw_sprites()
 {
 	for (INT32 i = 0x10; i < 0x40; i += 2)
@@ -429,7 +446,7 @@ static void draw_sprites()
 		INT32 sy = 240 - DrvSprRAM1[1 + i];
 
 		INT32 code = DrvSprRAM0[i + 1] & 0x3f;
-		INT32 color = (DrvSprRAM1[i] & 0x0f) | 0x10;
+		INT32 color = (DrvSprRAM1[i] & 0x0f);// | 0x10;
 		INT32 flipx = ~DrvSprRAM1[i] & 0x40;
 		INT32 flipy = DrvSprRAM1[i] & 0x80;
 
@@ -437,33 +454,18 @@ static void draw_sprites()
 
 		sy -= 16;
 
-		if (flipy) {
-			if (flipx) {
-				Render16x16Tile_Mask_FlipXY_Clip(pTransDraw, code, sx, sy, color, 4, 0, 0, DrvGfxROM1);
-			} else {
-				Render16x16Tile_Mask_FlipY_Clip(pTransDraw,  code, sx, sy, color, 4, 0, 0, DrvGfxROM1);
-			}
-		} else {
-			if (flipx) {
-				Render16x16Tile_Mask_FlipX_Clip(pTransDraw,  code, sx, sy, color, 4, 0, 0, DrvGfxROM1);
-			} else {
-				Render16x16Tile_Mask_Clip(pTransDraw,        code, sx, sy, color, 4, 0, 0, DrvGfxROM1);
-			}
-		}
+		RenderTileCPMP(code, color, sx, sy, flipx, flipy, 16, 16);
 	}
 }
 
 static INT32 DrvDraw()
 {
 	if (DrvRecalc) {
-		for (INT32 i = 0; i < 0x200; i++) {
-			UINT32 col = Palette[i];
-			DrvPalette[i] = BurnHighCol((col >> 16)&0xff, (col >> 8)&0xff, col&0xff, 0);
-		}
+		DrvPaletteInit();
 	}
 
-	draw_layer();
-	draw_sprites();
+	if (nBurnLayer & 1) draw_layer();
+	if (nBurnLayer & 2) draw_sprites();
 
 	BurnTransferCopy(DrvPalette);
 
@@ -513,7 +515,7 @@ static INT32 DrvFrame()
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+			TimepltSndUpdate(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -522,7 +524,7 @@ static INT32 DrvFrame()
 	if (pBurnSoundOut) {
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-		TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+		TimepltSndUpdate(pSoundBuf, nSegmentLength);
 	}
 
 	if (pBurnDraw) {
@@ -532,7 +534,7 @@ static INT32 DrvFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -540,7 +542,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029521;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -589,8 +591,8 @@ struct BurnDriver BurnDrvPooyan = {
 	"pooyan", NULL, NULL, NULL, "1982",
 	"Pooyan\0", NULL, "Konami", "GX320",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, pooyanRomInfo, pooyanRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
+	NULL, pooyanRomInfo, pooyanRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };
@@ -625,8 +627,8 @@ struct BurnDriver BurnDrvPooyans = {
 	"pooyans", "pooyan", NULL, NULL, "1982",
 	"Pooyan (Stern)\0", NULL, "[Konami] (Stern license)", "GX320",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, pooyansRomInfo, pooyansRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
+	NULL, pooyansRomInfo, pooyansRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };
@@ -661,8 +663,8 @@ struct BurnDriver BurnDrvPootan = {
 	"pootan", "pooyan", NULL, NULL, "1982",
 	"Pootan\0", NULL, "bootleg", "GX320",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
-	NULL, pootanRomInfo, pootanRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
+	NULL, pootanRomInfo, pootanRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };

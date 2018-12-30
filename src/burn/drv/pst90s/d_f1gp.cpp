@@ -447,16 +447,6 @@ static void DrvFMIRQHandler(INT32, INT32 nStatus)
 	}
 }
 
-static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 5000000;
-}
-
-static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 5000000.0;
-}
-
 static INT32 DrvDoReset()
 {
 	DrvReset = 0;
@@ -735,7 +725,7 @@ static INT32 DrvInit(INT32 nGame)
 	ZetClose();
 
 	INT32 DrvSndROMLen = 0x100000;
-	BurnYM2610Init(8000000, DrvSndROM + 0x100000, &DrvSndROMLen, DrvSndROM, &DrvSndROMLen, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2610Init(8000000, DrvSndROM + 0x100000, &DrvSndROMLen, DrvSndROM, &DrvSndROMLen, &DrvFMIRQHandler, 0);
 	BurnTimerAttachZet(5000000);
 	BurnYM2610SetRoute(BURN_SND_YM2610_YM2610_ROUTE_1, 1.00, BURN_SND_ROUTE_LEFT);
 	BurnYM2610SetRoute(BURN_SND_YM2610_YM2610_ROUTE_2, 1.00, BURN_SND_ROUTE_RIGHT);
@@ -836,13 +826,13 @@ static void draw_16x16_zoom(UINT8 *gfx, INT32 code, INT32 color, INT32 sx, INT32
 	{
 		INT32 yy = sy + y;
 
-		if (ym[y ^ fy] == -1 || yy < 0 || yy >= nScreenHeight) continue;
+		if (ym[(y ^ fy) % 16] == -1 || yy < 0 || yy >= nScreenHeight) continue;
 
-		INT32 yyz = (ym[y ^ fy] << 4);
+		INT32 yyz = (ym[(y ^ fy) % 16] << 4);
 
 		for (INT32 x = 0; x < 16; x++)
 		{
-			INT16 xxz = xm[x ^ fx];
+			INT16 xxz = xm[(x ^ fx) % 16];
 			if (xxz == -1) continue;
 
 			INT32 xx = sx + x;
@@ -1292,7 +1282,7 @@ struct BurnDriver BurnDrvF1gp = {
 	"F-1 Grand Prix\0", NULL, "Video System Co.", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, f1gpRomInfo, f1gpRomName, NULL, NULL, F1gpInputInfo, F1gpDIPInfo,
+	NULL, f1gpRomInfo, f1gpRomName, NULL, NULL, NULL, NULL, F1gpInputInfo, F1gpDIPInfo,
 	F1gpInit, DrvExit, DrvFrame, F1gpDraw, DrvScan, &DrvRecalc, 0x401,
 	240, 320, 3, 4
 };
@@ -1341,7 +1331,7 @@ struct BurnDriverD BurnDrvF1gpb = {
 	"F-1 Grand Prix (Playmark bootleg)\0", NULL, "[Video System Co.] (Playmark bootleg)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_BOOTLEG, 1, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, f1gpbRomInfo, f1gpbRomName, NULL, NULL, F1gpInputInfo, F1gpDIPInfo,
+	NULL, f1gpbRomInfo, f1gpbRomName, NULL, NULL, NULL, NULL, F1gpInputInfo, F1gpDIPInfo,
 	F1gpbInit, DrvExit, DrvFrame, F1gpbDraw, DrvScan, &DrvRecalc, 0x401,
 	240, 320, 3, 4
 };
@@ -1384,7 +1374,7 @@ struct BurnDriver BurnDrvF1gp2 = {
 	"F-1 Grand Prix Part II\0", NULL, "Video System Co.", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, f1gp2RomInfo, f1gp2RomName, NULL, NULL, F1gp2InputInfo, F1gp2DIPInfo,
+	NULL, f1gp2RomInfo, f1gp2RomName, NULL, NULL, NULL, NULL, F1gp2InputInfo, F1gp2DIPInfo,
 	F1gp2Init, DrvExit, DrvFrame, F1gp2Draw, DrvScan, &DrvRecalc, 0x401,
 	224, 320, 3, 4
 };

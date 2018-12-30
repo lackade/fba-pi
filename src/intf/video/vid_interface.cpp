@@ -31,8 +31,8 @@ static struct VidOut *pVidOut[] = {
 	&VidOutDX9,
 	&VidOutDX9Alt,
 #elif defined (BUILD_SDL)
-	&VidOutSDLFX,
 	&VidOutSDLOpenGL,
+	&VidOutSDLFX,
 #elif defined (BUILD_PI)
 	&VidOutPi,
 #elif defined (_XBOX)
@@ -48,7 +48,18 @@ INT64 nVidBlitterOpt[VID_LEN] = {0, };			// Options for the blitter module (mean
 
 static InterfaceInfo VidInfo = { NULL, NULL, NULL };
 
+#if defined (BUILD_WIN32)
+#if defined BUILD_X64_EXE
+// set DDraw blitter as default for 64-bit builds (in case user doesn't have DX redistributable installed)
 UINT32 nVidSelect = 0;					// Which video output is selected
+#else
+// sec D3D7 Enhanced blitter as default
+UINT32 nVidSelect = 1;					// Which video output is selected
+#endif
+#else
+UINT32 nVidSelect = 0;					// Which video output is selected
+#endif
+
 static UINT32 nVidActive = 0;
 
 bool bVidOkay = false;
@@ -95,6 +106,9 @@ INT32 bVidDX9Bilinear = 1;							// 1 = enable bi-linear filtering (D3D9 Alt bli
 INT32 bVidHardwareVertex = 0;			// 1 = use hardware vertex processing
 INT32 bVidMotionBlur = 0;				// 1 = motion blur
 
+wchar_t HorScreen[32] = L"";
+wchar_t VerScreen[32] = L"";
+
 #ifdef BUILD_WIN32
  HWND hVidWnd = NULL;							// Actual window used for video
 #endif
@@ -117,9 +131,14 @@ INT32 nVidImageDepth = 0;							// Memory buffer bits per pixel
 
 UINT32 (__cdecl *VidHighCol) (INT32 r, INT32 g, INT32 b, INT32 i);
 static bool bVidRecalcPalette;
-
+												// Translation to native Bpp for games flagged with BDF_16BIT_ONLY
+static void VidDoFrameCallback();
+void (*pVidTransCallback)(void) = NULL;         // Callback for video driver, after BurnDrvFrame() / BurnDrvRedraw() (see win32/vid_d3d.cpp:vidFrame() for example)
 static UINT8* pVidTransImage = NULL;
 static UINT32* pVidTransPalette = NULL;
+static INT32 bSkipNextFrame = 0;
+
+TCHAR szPlaceHolder[MAX_PATH] = _T("");
 
 static UINT32 __cdecl HighCol15(INT32 r, INT32 g, INT32 b, INT32  /* i */)
 {
@@ -156,8 +175,24 @@ INT32 VidInit()
 
 #if defined (BUILD_WIN32) && defined (ENABLE_PREVIEW)
 	if (!bDrvOkay) {
-		//hbitmap = (HBITMAP)LoadImage(hAppInst, _T("BMP_SPLASH"), IMAGE_BITMAP, 304, 224, 0);
-		hbitmap = (HBITMAP)LoadImage(hAppInst, MAKEINTRESOURCE(BMP_SPLASH), IMAGE_BITMAP, 304, 224, 0);
+		if (_tcslen(szPlaceHolder)) {
+			LPTSTR p = _tcsrchr(szPlaceHolder, '.');
+			if (!_tcsicmp(p+1, _T("bmp"))) {
+				hbitmap = (HBITMAP)LoadImage(hAppInst, szPlaceHolder, IMAGE_BITMAP, 0, 0, LR_LOADFROMFILE);
+			} else {
+				if (!_tcsicmp(p+1, _T("png"))) {
+					FILE *fp = _tfopen(szPlaceHolder, _T("rb"));
+					if (fp) {
+						hbitmap = PNGLoadBitmap(hScrnWnd, fp, 0, 0, 0);
+						fclose(fp);
+					}
+				}
+			}
+		} else {
+			hbitmap = (HBITMAP)LoadImage(hAppInst, MAKEINTRESOURCE(BMP_SPLASH), IMAGE_BITMAP, 304, 224, 0);
+		}
+		
+		if (!hbitmap) hbitmap = (HBITMAP)LoadImage(hAppInst, MAKEINTRESOURCE(BMP_SPLASH), IMAGE_BITMAP, 304, 224, 0);
 		
 		GetObject(hbitmap, sizeof(BITMAP), &bitmap);
 
@@ -182,6 +217,7 @@ INT32 VidInit()
 
 				pVidTransPalette = (UINT32*)malloc(32768 * sizeof(UINT32));
 				pVidTransImage = (UINT8*)malloc(nVidImageWidth * nVidImageHeight * sizeof(INT16));
+				pVidTransCallback = VidDoFrameCallback;
 
 				BurnHighCol = HighCol15;
 
@@ -279,6 +315,9 @@ INT32 VidExit()
 			free(pVidTransImage);
 			pVidTransImage = NULL;
 		}
+		if (pVidTransCallback) {
+			pVidTransCallback = NULL;
+		}
 
 		return nRet;
 	} else {
@@ -286,14 +325,39 @@ INT32 VidExit()
 	}
 }
 
+static void VidDoFrameCallback()
+{
+		UINT16* pSrc = (UINT16*)pVidTransImage;
+		UINT8* pDest = pVidImage;
+
+		switch (nVidImageBPP) {
+			case 3: {
+				for (INT32 y = 0; y < nVidImageHeight; y++, pSrc += nVidImageWidth, pDest += nVidImagePitch) {
+					for (INT32 x = 0; x < nVidImageWidth; x++) {
+						UINT32 c = pVidTransPalette[pSrc[x] & 0x7fff];
+						*(pDest + (x * 3) + 0) = c & 0xFF;
+						*(pDest + (x * 3) + 1) = (c >> 8) & 0xFF;
+						*(pDest + (x * 3) + 2) = c >> 16;
+					}
+				}
+				break;
+			}
+			case 4: {
+				for (INT32 y = 0; y < nVidImageHeight; y++, pSrc += nVidImageWidth, pDest += nVidImagePitch) {
+					for (INT32 x = 0; x < nVidImageWidth; x++) {
+						((UINT32*)pDest)[x] = pVidTransPalette[pSrc[x] & 0x7fff];
+					}
+				}
+				break;
+			}
+		}
+}
+
 static INT32 VidDoFrame(bool bRedraw)
 {
 	INT32 nRet;
 	
-	if (pVidTransImage) {
-		UINT16* pSrc = (UINT16*)pVidTransImage;
-		UINT8* pDest = pVidImage;
-
+	if (pVidTransImage && pVidTransPalette) {
 		if (bVidRecalcPalette) {
 			for (INT32 r = 0; r < 256; r += 8) {
 				for (INT32 g = 0; g < 256; g += 8) {
@@ -311,29 +375,17 @@ static INT32 VidDoFrame(bool bRedraw)
 
 		nRet = pVidOut[nVidActive]->Frame(bRedraw);
 
+		if (bSkipNextFrame) {
+			// if ReInitialise(); is called from the machine's reset function, it will crash below.  This prevents that from happening. (Megadrive)
+			bSkipNextFrame = 0;
+			return 0;
+		}
+
 		pBurnDraw = NULL;
 		nBurnPitch = 0;
 
-		switch (nVidImageBPP) {
-			case 3: {
-				for (INT32 y = 0; y < nVidImageHeight; y++, pSrc += nVidImageWidth, pDest += nVidImagePitch) {
-					for (INT32 x = 0; x < nVidImageWidth; x++) {
-						UINT32 c = pVidTransPalette[pSrc[x]];
-						*(pDest + (x * 3) + 0) = c & 0xFF;
-						*(pDest + (x * 3) + 1) = (c >> 8) & 0xFF;
-						*(pDest + (x * 3) + 2) = c >> 16;
-					}
-				}
-				break;
-			}
-			case 4: {
-				for (INT32 y = 0; y < nVidImageHeight; y++, pSrc += nVidImageWidth, pDest += nVidImagePitch) {
-					for (INT32 x = 0; x < nVidImageWidth; x++) {
-						((UINT32*)pDest)[x] = pVidTransPalette[pSrc[x]];
-					}
-				}
-				break;
-			}
+		if (!pVidTransCallback) {
+			VidDoFrameCallback();
 		}
 	} else {
 		pBurnDraw = pVidImage;
@@ -352,10 +404,10 @@ INT32 VidReInitialise()
 {
 	if (pVidTransImage) {
 		free(pVidTransImage);
-		pVidTransImage = NULL;
+		pVidTransImage = (UINT8*)malloc(nVidImageWidth * nVidImageHeight * sizeof(INT16));
 	}
-	pVidTransImage = (UINT8*)malloc(nVidImageWidth * nVidImageHeight * sizeof(INT16));
-	
+	bSkipNextFrame = 1;
+
 	return 0;
 }
 

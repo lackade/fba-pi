@@ -22,8 +22,34 @@ int main(int /*argc*/, char** /*argv*/)
 #elif defined _MSC_VER
  #if _MSC_VER >= 1300 && _MSC_VER < 1310
 	printf("#define BUILD_COMP Visual C++ 2002\n");
- #elif _MSC_VER >= 1310 && _MSC_VER < 1320
+ #elif _MSC_VER >= 1310 && _MSC_VER < 1400
 	printf("#define BUILD_COMP Visual C++ 2003\n");
+ #elif _MSC_VER >= 1400 && _MSC_VER < 1500
+	printf("#define BUILD_COMP Visual C++ 2005\n");
+ #elif _MSC_VER >= 1500 && _MSC_VER < 1600
+	printf("#define BUILD_COMP Visual C++ 2008\n");
+ #elif _MSC_VER >= 1600 && _MSC_VER < 1700
+	printf("#define BUILD_COMP Visual C++ 2010\n");
+ #elif _MSC_VER >= 1700 && _MSC_VER < 1800
+  #if defined BUILD_VS_XP_TARGET
+    printf("#define BUILD_COMP Visual C++ 2012 (XP)\n");
+  #else
+	printf("#define BUILD_COMP Visual C++ 2012\n");
+  #endif
+ #elif _MSC_VER >= 1800 && _MSC_VER < 1900
+  #if defined BUILD_VS_XP_TARGET
+    printf("#define BUILD_COMP Visual C++ 2013 (XP)\n");
+  #else
+	printf("#define BUILD_COMP Visual C++ 2013\n");
+  #endif
+ #elif _MSC_VER >= 1900 && _MSC_VER < 1910
+  #if defined BUILD_VS_XP_TARGET
+    printf("#define BUILD_COMP Visual C++ 2015 (XP)\n");
+  #else
+	printf("#define BUILD_COMP Visual C++ 2015\n");
+  #endif
+ #elif _MSC_VER >= 1910 && _MSC_VER < 1920
+    printf("#define BUILD_COMP Visual C++ 2017\n");
  #else
 	printf("#define BUILD_COMP Visual C++ %i.%i\n", _MSC_VER / 100 - 6, _MSC_VER % 100 / 10);
  #endif

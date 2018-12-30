@@ -241,8 +241,10 @@ static void tp84_main_write(UINT16 address, UINT8 data)
 		return;
 
 		case 0x3800:
+			ZetOpen(0);
 			ZetSetVector(0xff);
-			ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
+			ZetSetIRQLine(0, CPU_IRQSTATUS_HOLD);
+			ZetClose();
 		return;
 
 		case 0x3a00:
@@ -290,7 +292,7 @@ static void tp84b_main_write(UINT16 address, UINT8 data)
 			watchdog = 0;
 		return;
 
-		case 0x1a80:
+		case 0x1a00:
 			palettebank = data;
 		return;
 
@@ -306,8 +308,10 @@ static void tp84b_main_write(UINT16 address, UINT8 data)
 		return;
 
 		case 0x1e00:
+			ZetOpen(0);
 			ZetSetVector(0xff);
-			ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
+			ZetSetIRQLine(0, CPU_IRQSTATUS_HOLD);
+			ZetClose();
 		return;
 
 		case 0x1e80:
@@ -374,12 +378,13 @@ static void __fastcall tp84_sound_write(UINT16 address, UINT8 data)
 		INT32 C = 0;
 		if (address & 0x008) C +=  47000;    //  47000pF = 0.047uF
 		if (address & 0x010) C += 470000;    // 470000pF = 0.47uF
+
 		filter_rc_set_RC(0, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(C));
-	
+
 		C = 0;
 		if (address & 0x080) C += 470000;    // 470000pF = 0.47uF
 		filter_rc_set_RC(1, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(C));
-	
+
 		C = 0;
 		if (address & 0x100) C += 470000;    // 470000pF = 0.47uF
 		filter_rc_set_RC(2, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(C));
@@ -410,7 +415,6 @@ static UINT8 __fastcall tp84_sound_read(UINT16 address)
 	switch (address)
 	{
 		case 0x6000:
-			ZetSetIRQLine(0, CPU_IRQSTATUS_NONE);
 			return soundlatch;
 
 		case 0x8000:
@@ -420,7 +424,7 @@ static UINT8 __fastcall tp84_sound_read(UINT16 address)
 	return 0;
 }
 
-static int DrvDoReset(INT32 clear_mem)
+static INT32 DrvDoReset(INT32 clear_mem)
 {
 	if (clear_mem) {
 		memset (AllRam, 0, RamEnd - AllRam);
@@ -438,6 +442,8 @@ static int DrvDoReset(INT32 clear_mem)
 	ZetReset();
 	ZetClose();
 
+	SN76496Reset();
+
 	palettebank = 0;
 	flipscreenx = 0;
 	flipscreeny = 0;
@@ -447,6 +453,8 @@ static int DrvDoReset(INT32 clear_mem)
 	sub_irqmask = 0;
 
 	watchdog = 0;
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -507,20 +515,20 @@ static INT32 MemIndex()
 
 	RamEnd			= Next;
 
-	pSoundBuffer[0]		= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pSoundBuffer[1]		= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pSoundBuffer[2]		= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
+	pSoundBuffer[0]		= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16) * 2;
+	pSoundBuffer[1]		= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16) * 2;
+	pSoundBuffer[2]		= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16) * 2;
 
 	MemEnd			= Next;
 
 	return 0;
 }
 
-static int DrvInit()
+static INT32 DrvInit()
 {
 	AllMem = NULL;
 	MemIndex();
-	int nLen = MemEnd - (UINT8 *)0;
+	INT32 nLen = MemEnd - (UINT8 *)0;
 	if ((AllMem = (UINT8 *)BurnMalloc(nLen)) == NULL) return 1;
 	memset(AllMem, 0, nLen);
 	MemIndex();
@@ -552,7 +560,7 @@ static int DrvInit()
 		DrvGfxDecode();
 	}
 
-	M6809Init(2);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvVidRAM0,		0x4000, 0x43ff, MAP_RAM);
 	M6809MapMemory(DrvVidRAM1,		0x4400, 0x47ff, MAP_RAM);
@@ -564,6 +572,7 @@ static int DrvInit()
 	M6809SetReadHandler(tp84_main_read);
 	M6809Close();
 
+	M6809Init(1);
 	M6809Open(1);
 	M6809MapMemory(DrvSprRAM,		0x6000, 0x67ff, MAP_RAM);
 	M6809MapMemory(DrvShareRAM,		0x8000, 0x87ff, MAP_RAM);
@@ -574,15 +583,15 @@ static int DrvInit()
 
 	ZetInit(0);
 	ZetOpen(0);
-	ZetMapMemory(DrvZ80ROM,			0x0000, 0x3fff, MAP_ROM);
+	ZetMapMemory(DrvZ80ROM,			0x0000, 0x1fff, MAP_ROM);
 	ZetMapMemory(DrvZ80RAM,			0x4000, 0x43ff, MAP_RAM);
 	ZetSetWriteHandler(tp84_sound_write);
 	ZetSetReadHandler(tp84_sound_read);
 	ZetClose();
 
-	SN76489AInit(0, 3579545, 0);
-	SN76489AInit(1, 3579545, 1);
-	SN76489AInit(2, 3579545, 1);
+	SN76489AInit(0, 3579545/2, 0);
+	SN76489AInit(1, 3579545/2, 0);
+	SN76489AInit(2, 3579545/2, 0);
 	SN76496SetRoute(0, 0.75, BURN_SND_ROUTE_BOTH);
 	SN76496SetRoute(1, 0.75, BURN_SND_ROUTE_BOTH);
 	SN76496SetRoute(2, 0.75, BURN_SND_ROUTE_BOTH);
@@ -590,6 +599,13 @@ static int DrvInit()
 	filter_rc_init(0, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(0), 0);
 	filter_rc_init(1, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(0), 1);
 	filter_rc_init(2, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(0), 1);
+
+	filter_rc_set_src_gain(0, 0.55);
+	filter_rc_set_src_gain(1, 0.55);
+	filter_rc_set_src_gain(2, 0.55);
+	filter_rc_set_src_stereo(0);
+	filter_rc_set_src_stereo(1);
+	filter_rc_set_src_stereo(2);
 
 	filter_rc_set_route(0, 1.00, BURN_SND_ROUTE_BOTH);
 	filter_rc_set_route(1, 1.00, BURN_SND_ROUTE_BOTH);
@@ -602,11 +618,11 @@ static int DrvInit()
 	return 0;
 }
 
-static int DrvbInit()
+static INT32 DrvbInit()
 {
 	AllMem = NULL;
 	MemIndex();
-	int nLen = MemEnd - (UINT8 *)0;
+	INT32 nLen = MemEnd - (UINT8 *)0;
 	if ((AllMem = (UINT8 *)BurnMalloc(nLen)) == NULL) return 1;
 	memset(AllMem, 0, nLen);
 	MemIndex();
@@ -655,15 +671,15 @@ static int DrvbInit()
 
 	ZetInit(0);
 	ZetOpen(0);
-	ZetMapMemory(DrvZ80ROM,			0x0000, 0x3fff, MAP_ROM);
+	ZetMapMemory(DrvZ80ROM,			0x0000, 0x1fff, MAP_ROM);
 	ZetMapMemory(DrvZ80RAM,			0x4000, 0x43ff, MAP_RAM);
 	ZetSetWriteHandler(tp84_sound_write);
 	ZetSetReadHandler(tp84_sound_read);
 	ZetClose();
 
-	SN76489AInit(0, 3579545, 0);
-	SN76489AInit(1, 3579545, 1);
-	SN76489AInit(2, 3579545, 1);
+	SN76489AInit(0, 3579545/2, 0);
+	SN76489AInit(1, 3579545/2, 0);
+	SN76489AInit(2, 3579545/2, 0);
 	SN76496SetRoute(0, 0.75, BURN_SND_ROUTE_BOTH);
 	SN76496SetRoute(1, 0.75, BURN_SND_ROUTE_BOTH);
 	SN76496SetRoute(2, 0.75, BURN_SND_ROUTE_BOTH);
@@ -671,6 +687,13 @@ static int DrvbInit()
 	filter_rc_init(0, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(0), 0);
 	filter_rc_init(1, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(0), 1);
 	filter_rc_init(2, FLT_RC_LOWPASS, 1000, 2200, 1000, CAP_P(0), 1);
+
+	filter_rc_set_src_gain(0, 0.55);
+	filter_rc_set_src_gain(1, 0.55);
+	filter_rc_set_src_gain(2, 0.55);
+	filter_rc_set_src_stereo(0);
+	filter_rc_set_src_stereo(1);
+	filter_rc_set_src_stereo(2);
 
 	filter_rc_set_route(0, 1.00, BURN_SND_ROUTE_BOTH);
 	filter_rc_set_route(1, 1.00, BURN_SND_ROUTE_BOTH);
@@ -683,7 +706,7 @@ static int DrvbInit()
 	return 0;
 }
 
-static int DrvExit()
+static INT32 DrvExit()
 {
 	GenericTilesExit();
 
@@ -896,8 +919,6 @@ static INT32 DrvFrame()
 	INT32 nCyclesTotal[3] = { 1536000 / 60, 1536000 / 60, 3579545 / 60 };
 	INT32 nCyclesDone[3] = { 0, 0, 0 };
 
-	ZetOpen(0);
-
 	for (INT32 i = 0; i < nInterleave; i++)
 	{
 		scanline = i;
@@ -905,28 +926,30 @@ static INT32 DrvFrame()
 		M6809Open(0);
 		INT32 nSegment = ((i + 1) * nCyclesTotal[0]) / nInterleave;
 		nCyclesDone[0] += M6809Run(nSegment - nCyclesDone[0]);
-		if (i == (nInterleave - 1)) M6809SetIRQLine(0, CPU_IRQSTATUS_AUTO);
+		if (i == 240) M6809SetIRQLine(0, CPU_IRQSTATUS_AUTO);
 		M6809Close();
 
 		M6809Open(1);
 		nSegment = ((i + 1) * nCyclesTotal[1]) / nInterleave;
 		nCyclesDone[1] += M6809Run(nSegment - nCyclesDone[1]);
-		if (i == (nInterleave - 1) && sub_irqmask) M6809SetIRQLine(0, CPU_IRQSTATUS_AUTO);
+		if (i == 240 && sub_irqmask) M6809SetIRQLine(0, CPU_IRQSTATUS_AUTO);
 		M6809Close();
 
+		ZetOpen(0);
 		nSegment = ((i + 1) * nCyclesTotal[2]) / nInterleave;
 		nCyclesDone[2] += ZetRun(nSegment - nCyclesDone[2]);
+		ZetClose();
 
 		memcpy (DrvSprBuf + i * 0x60, DrvSprRAM + 0x7a0, 0x60);
 
-		if (pBurnSoundOut) {
-			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+		if (pBurnSoundOut && (i%4)==3) {
+			INT32 nSegmentLength = nBurnSoundLen / (nInterleave / 4);
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 			memset (pSoundBuf, 0, nSegmentLength * sizeof(INT16) * 2);
 
-			SN76496UpdateToBuffer(0, pSoundBuffer[0], nSegmentLength);
-			SN76496UpdateToBuffer(1, pSoundBuffer[1], nSegmentLength);
-			SN76496UpdateToBuffer(2, pSoundBuffer[2], nSegmentLength);
+			SN76496Update(0, pSoundBuffer[0], nSegmentLength);
+			SN76496Update(1, pSoundBuffer[1], nSegmentLength);
+			SN76496Update(2, pSoundBuffer[2], nSegmentLength);
 
 			filter_rc_update(0, pSoundBuffer[0], pSoundBuf, nSegmentLength);
 			filter_rc_update(1, pSoundBuffer[1], pSoundBuf, nSegmentLength);
@@ -935,17 +958,15 @@ static INT32 DrvFrame()
 		}
 	}
 
-	ZetClose();
-
 	if (pBurnSoundOut) {
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 		if (nSegmentLength) {
 			memset (pSoundBuf, 0, nSegmentLength * sizeof(INT16) * 2);
 
-			SN76496UpdateToBuffer(0, pSoundBuffer[0], nSegmentLength);
-			SN76496UpdateToBuffer(1, pSoundBuffer[1], nSegmentLength);
-			SN76496UpdateToBuffer(2, pSoundBuffer[2], nSegmentLength);
+			SN76496Update(0, pSoundBuffer[0], nSegmentLength);
+			SN76496Update(1, pSoundBuffer[1], nSegmentLength);
+			SN76496Update(2, pSoundBuffer[2], nSegmentLength);
 
 			filter_rc_update(0, pSoundBuffer[0], pSoundBuf, nSegmentLength);
 			filter_rc_update(1, pSoundBuffer[1], pSoundBuf, nSegmentLength);
@@ -960,7 +981,7 @@ static INT32 DrvFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -968,7 +989,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029705;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 		ba.Data	  = AllRam;
 		ba.nLen	  = RamEnd - AllRam;
@@ -1027,8 +1048,8 @@ struct BurnDriver BurnDrvTp84 = {
 	"tp84", NULL, NULL, NULL, "1984",
 	"Time Pilot '84 (set 1)\0", NULL, "Konami", "GX388",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, tp84RomInfo, tp84RomName, NULL, NULL, Tp84InputInfo, Tp84DIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, tp84RomInfo, tp84RomName, NULL, NULL, NULL, NULL, Tp84InputInfo, Tp84DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x1000,
 	224, 256, 3, 4
 };
@@ -1068,8 +1089,8 @@ struct BurnDriver BurnDrvTp84a = {
 	"tp84a", "tp84", NULL, NULL, "1984",
 	"Time Pilot '84 (set 2)\0", NULL, "Konami", "GX388",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, tp84aRomInfo, tp84aRomName, NULL, NULL, Tp84InputInfo, Tp84aDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, tp84aRomInfo, tp84aRomName, NULL, NULL, NULL, NULL, Tp84InputInfo, Tp84aDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x1000,
 	224, 256, 3, 4
 };
@@ -1104,8 +1125,8 @@ struct BurnDriver BurnDrvTp84b = {
 	"tp84b", "tp84", NULL, NULL, "1984",
 	"Time Pilot '84 (set 3)\0", NULL, "Konami", "GX388",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, tp84bRomInfo, tp84bRomName, NULL, NULL, Tp84InputInfo, Tp84DIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, tp84bRomInfo, tp84bRomName, NULL, NULL, NULL, NULL, Tp84InputInfo, Tp84DIPInfo,
 	DrvbInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x1000,
 	224, 256, 3, 4
 };

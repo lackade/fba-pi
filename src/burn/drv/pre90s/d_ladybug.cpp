@@ -47,6 +47,9 @@ static UINT8 DrvDips[2];
 static UINT8 DrvInputs[4];
 static UINT8 DrvReset;
 
+// 4-Way input stuff
+static UINT8 fourwaymode     = 0;        // enabled or disabled (per-game)
+
 static struct BurnInputInfo LadybugInputList[] = {
 	{"P1 Coin",		BIT_DIGITAL,	DrvJoy4 + 0,	"p1 coin"	},
 	{"P1 Start",		BIT_DIGITAL,	DrvJoy1 + 5,	"p1 start"	},
@@ -754,20 +757,12 @@ static INT32 DrvInit(INT32 game_select)
 
 	ZetInit(0);
 	ZetOpen(0);
-	ZetMapArea(0x0000, 0x5fff, 0, DrvZ80ROM0);
-	ZetMapArea(0x0000, 0x5fff, 2, DrvZ80Ops0, DrvZ80ROM0);
-	ZetMapArea(0x6000, 0x6fff, 0, DrvZ80RAM0);
-	ZetMapArea(0x6000, 0x6fff, 1, DrvZ80RAM0);
-	ZetMapArea(0x6000, 0x6fff, 2, DrvZ80RAM0);
-	ZetMapArea(0x7000, 0x73ff, 0, DrvSprRAM);
-	ZetMapArea(0x7000, 0x73ff, 1, DrvSprRAM);
-	ZetMapArea(0x7000, 0x73ff, 2, DrvSprRAM);
-	ZetMapArea(0xd000, 0xd3ff, 0, DrvVidRAM);
-	ZetMapArea(0xd000, 0xd3ff, 1, DrvVidRAM);
-	ZetMapArea(0xd000, 0xd3ff, 2, DrvVidRAM);
-	ZetMapArea(0xd400, 0xd7ff, 0, DrvColRAM);
-	ZetMapArea(0xd400, 0xd7ff, 1, DrvColRAM);
-	ZetMapArea(0xd400, 0xd7ff, 2, DrvColRAM);
+	ZetMapMemory(DrvZ80ROM0, 0x0000, 0x5fff, MAP_ROM);
+	ZetMapMemory(DrvZ80Ops0, 0x0000, 0x5fff, MAP_FETCHOP); // dorodon encrypted opcodes
+	ZetMapMemory(DrvZ80RAM0, 0x6000, 0x6fff, MAP_RAM);
+	ZetMapMemory(DrvSprRAM, 0x7000, 0x73ff, MAP_RAM);
+	ZetMapMemory(DrvVidRAM, 0xd000, 0xd3ff, MAP_RAM);
+	ZetMapMemory(DrvColRAM, 0xd400, 0xd7ff, MAP_RAM);
 	ZetSetWriteHandler(ladybug_write);
 	ZetSetReadHandler(ladybug_read);
 	ZetClose();
@@ -776,8 +771,8 @@ static INT32 DrvInit(INT32 game_select)
 
 	SN76489Init(0, 4000000, 0);
 	SN76489Init(1, 4000000, 1);
-	SN76496SetRoute(0, 1.00, BURN_SND_ROUTE_BOTH);
-	SN76496SetRoute(1, 1.00, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(0, 0.60, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(1, 0.60, BURN_SND_ROUTE_BOTH);
 
 	GenericTilesInit();
 
@@ -821,34 +816,20 @@ static INT32 SraiderInit()
 
 	ZetInit(0);
 	ZetOpen(0);
-	ZetMapArea(0x0000, 0x5fff, 0, DrvZ80ROM0);
-	ZetMapArea(0x0000, 0x5fff, 2, DrvZ80ROM0);
-	ZetMapArea(0x6000, 0x6fff, 0, DrvZ80RAM0);
-	ZetMapArea(0x6000, 0x6fff, 1, DrvZ80RAM0);
-	ZetMapArea(0x6000, 0x6fff, 2, DrvZ80RAM0);
-	ZetMapArea(0x7000, 0x73ff, 0, DrvSprRAM);
-	ZetMapArea(0x7000, 0x73ff, 1, DrvSprRAM);
-	ZetMapArea(0x7000, 0x73ff, 2, DrvSprRAM);
-	ZetMapArea(0xd000, 0xd3ff, 0, DrvVidRAM);
-	ZetMapArea(0xd000, 0xd3ff, 1, DrvVidRAM);
-	ZetMapArea(0xd000, 0xd3ff, 2, DrvVidRAM);
-	ZetMapArea(0xd400, 0xd7ff, 0, DrvColRAM);
-	ZetMapArea(0xd400, 0xd7ff, 1, DrvColRAM);
-	ZetMapArea(0xd400, 0xd7ff, 2, DrvColRAM);
+	ZetMapMemory(DrvZ80ROM0, 0x0000, 0x5fff, MAP_ROM);
+	ZetMapMemory(DrvZ80RAM0, 0x6000, 0x6fff, MAP_RAM);
+	ZetMapMemory(DrvSprRAM, 0x7000, 0x73ff, MAP_RAM);
+	ZetMapMemory(DrvVidRAM, 0xd000, 0xd3ff, MAP_RAM);
+	ZetMapMemory(DrvColRAM, 0xd400, 0xd7ff, MAP_RAM);
 	ZetSetWriteHandler(sraider_main_write);
 	ZetSetReadHandler(ladybug_read);
 	ZetClose();
 
 	ZetInit(1);
 	ZetOpen(1);
-	ZetMapArea(0x0000, 0x5fff, 0, DrvZ80ROM1);
-	ZetMapArea(0x0000, 0x5fff, 2, DrvZ80ROM1);
-	ZetMapArea(0x6000, 0x63ff, 0, DrvZ80RAM1);
-	ZetMapArea(0x6000, 0x63ff, 1, DrvZ80RAM1);
-	ZetMapArea(0x6000, 0x63ff, 2, DrvZ80RAM1);
-	ZetMapArea(0xe000, 0xe0ff, 0, DrvGridRAM);
-	ZetMapArea(0xe000, 0xe0ff, 1, DrvGridRAM);
-	ZetMapArea(0xe000, 0xe0ff, 2, DrvGridRAM);
+	ZetMapMemory(DrvZ80ROM1, 0x0000, 0x5fff, MAP_ROM);
+	ZetMapMemory(DrvZ80RAM1, 0x6000, 0x63ff, MAP_RAM);
+	ZetMapMemory(DrvGridRAM, 0xe000, 0xe0ff, MAP_RAM);
 	ZetSetWriteHandler(sraider_sub_write);
 	ZetSetReadHandler(sraider_sub_read);
 	ZetSetOutHandler(sraider_sub_out);
@@ -859,15 +840,17 @@ static INT32 SraiderInit()
 	SN76489Init(2, 4000000, 1);
 	SN76489Init(3, 4000000, 1);
 	SN76489Init(4, 4000000, 1);
-	SN76496SetRoute(0, 1.00, BURN_SND_ROUTE_BOTH);
-	SN76496SetRoute(1, 1.00, BURN_SND_ROUTE_BOTH);
-	SN76496SetRoute(2, 1.00, BURN_SND_ROUTE_BOTH);
-	SN76496SetRoute(3, 1.00, BURN_SND_ROUTE_BOTH);
-	SN76496SetRoute(4, 1.00, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(0, 0.60, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(1, 0.60, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(2, 0.60, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(3, 0.60, BURN_SND_ROUTE_BOTH);
+	SN76496SetRoute(4, 0.60, BURN_SND_ROUTE_BOTH);
 
 	GenericTilesInit();
 
 	DrvDoReset();
+
+	fourwaymode = 1;
 
 	return 0;
 }
@@ -882,6 +865,8 @@ static INT32 DrvExit()
 	BurnFree (AllMem);
 
 	ladybug = 0;
+
+	fourwaymode = 0;
 
 	return 0;
 }
@@ -907,7 +892,20 @@ static void draw_layer()
 			Render8x8Tile_Mask_Clip(pTransDraw, code, sx, (sy * 8) - 32, color, 2, 0, 0, DrvGfxROM0);
 		}
 	}
-} 
+}
+
+static void boxizer(INT32 x, INT32 y, INT32 w, INT32 h, INT32 pxl) {
+	INT32 t = x;
+	while(h-- > 0) {
+		INT32 c = w; x = t;
+		while(c-- > 0) {
+			if (x < nScreenWidth && y < nScreenHeight)
+				pTransDraw[(y*nScreenWidth) + x] = pxl;
+			x++;
+		}
+		y++;
+	}
+}
 
 static void draw_grid()
 {
@@ -933,6 +931,20 @@ static void draw_grid()
 			}
 		}
 	}
+
+	for (INT32 i = 0; i < 0x100; i++)
+	{
+		if (DrvGridRAM[i] != 0)
+		{
+			UINT8 x = i;
+			int height = nScreenHeight;
+
+			if (*flipscreen)
+				x = ~x;
+
+			boxizer(x, 0, 1, height, 0x81);
+		}
+	}
 }
 
 static void draw_sprites()
@@ -951,7 +963,14 @@ static void draw_sprites()
 			if (DrvSprRAM[offs + i + 0] & 0x80)
 			{
 				INT32 size  = (DrvSprRAM[offs + i + 0] >> 6) & 0x01;
-				INT32 code  = (DrvSprRAM[offs + i + 1] >> 2) + ((DrvSprRAM[offs + i + 2] & 0x10) << (4 >> size));
+
+				INT32 code;
+				if (size) // 16
+					code = ((DrvSprRAM[offs + i + 1] >> 2) + 4 * (DrvSprRAM[offs + i + 2] & 0x10)) & 0x7f;
+				else // 8
+					code = (DrvSprRAM[offs + i + 1] + 16 * (DrvSprRAM[offs + i + 2] & 0x10)) & 0x1ff;
+
+				//INT32 code  = (DrvSprRAM[offs + i + 1] >> 2) + ((DrvSprRAM[offs + i + 2] & 0x10) << (4 >> size));
 				INT32 color = (DrvSprRAM[offs + i + 2] & 0x0f) + 8;
 				INT32 flipx =  DrvSprRAM[offs + i + 0] & 0x20;
 				INT32 flipy =  DrvSprRAM[offs + i + 0] & 0x10;
@@ -1125,7 +1144,11 @@ static INT32 DrvFrame()
 	{
 		INT32 previous = DrvInputs[3] ^ 0xff;
 
-		memset (DrvInputs, 0xff, 4);
+		DrvInputs[0] = 0x00; // p1. active=low conv. happens after the 4-way conv.
+		DrvInputs[1] = 0x00; // p2. ""
+		DrvInputs[2] = 0xff;
+		DrvInputs[3] = 0xff;
+
 		for (INT32 i = 0; i < 8; i++) {
 			DrvInputs[0] ^= (DrvJoy1[i] & 1) << i;
 			DrvInputs[1] ^= (DrvJoy2[i] & 1) << i;
@@ -1136,6 +1159,15 @@ static INT32 DrvFrame()
 		if ((previous & 2) != (~DrvInputs[3] & 2)) coin |= 2;
 		DrvInputs[1] &= 0x7f;
 	}
+
+	if (fourwaymode) {
+		// Convert to 4-way
+		ProcessJoystick(&DrvInputs[0], 0, 3,1,0,2, INPUT_4WAY);
+		ProcessJoystick(&DrvInputs[1], 1, 3,1,0,2, INPUT_4WAY);
+	}
+
+	DrvInputs[0] = ~DrvInputs[0]; // convert to active=low
+	DrvInputs[1] = ~DrvInputs[1];
 
 	ZetOpen(0);
 	if (coin & 1) Z80SetIrqLine(0x20, DrvJoy4[0] ? Z80_ASSERT_LINE : Z80_CLEAR_LINE);
@@ -1154,8 +1186,10 @@ static INT32 DrvFrame()
 
 	ZetClose();
 
-	SN76496Update(0, pBurnSoundOut, nBurnSoundLen);
-	SN76496Update(1, pBurnSoundOut, nBurnSoundLen);
+	if (pBurnSoundOut) {
+		SN76496Update(0, pBurnSoundOut, nBurnSoundLen);
+		SN76496Update(1, pBurnSoundOut, nBurnSoundLen);
+	}
 
 	if (pBurnDraw) {
 		DrvDraw();
@@ -1180,24 +1214,45 @@ static INT32 SraiderFrame()
 
 	INT32 nInterleave = 100;
 	INT32 nTotalCycles[2] = { 4000000 / 60, 4000000 / 60 };
+	INT32 nSoundBufferPos = 0;
 
 	for (INT32 i = 0; i < nInterleave; i++) {
 		ZetOpen(0);
 		ZetRun(nTotalCycles[0] / nInterleave);
-		if (i == (nInterleave - 1)) ZetSetIRQLine(0, CPU_IRQSTATUS_AUTO);
+		if (i == (nInterleave - 1)) ZetSetIRQLine(0, CPU_IRQSTATUS_HOLD);
 		ZetClose();
 
 		ZetOpen(1);
 		ZetRun(nTotalCycles[1] / nInterleave);
-		if (i == (nInterleave - 1)) ZetSetIRQLine(0, CPU_IRQSTATUS_AUTO);
+		if (i == (nInterleave - 1)) ZetSetIRQLine(0, CPU_IRQSTATUS_HOLD);
 		ZetClose();
+
+		if (pBurnSoundOut) {
+			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+
+			SN76496Update(0, pSoundBuf, nSegmentLength);
+			SN76496Update(1, pSoundBuf, nSegmentLength);
+			SN76496Update(2, pSoundBuf, nSegmentLength);
+			SN76496Update(3, pSoundBuf, nSegmentLength);
+			SN76496Update(4, pSoundBuf, nSegmentLength);
+
+			nSoundBufferPos += nSegmentLength;
+		}
 	}
 
-	SN76496Update(0, pBurnSoundOut, nBurnSoundLen);
-	SN76496Update(1, pBurnSoundOut, nBurnSoundLen);
-	SN76496Update(2, pBurnSoundOut, nBurnSoundLen);
-	SN76496Update(3, pBurnSoundOut, nBurnSoundLen);
-	SN76496Update(4, pBurnSoundOut, nBurnSoundLen);
+	if (pBurnSoundOut) {
+		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
+		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+		if (nSegmentLength) {
+			SN76496Update(0, pSoundBuf, nSegmentLength);
+			SN76496Update(1, pSoundBuf, nSegmentLength);
+			SN76496Update(2, pSoundBuf, nSegmentLength);
+			SN76496Update(3, pSoundBuf, nSegmentLength);
+			SN76496Update(4, pSoundBuf, nSegmentLength);
+		}
+	}
+
 
 	if (pBurnDraw) {
 		SraiderDraw();
@@ -1206,7 +1261,7 @@ static INT32 SraiderFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -1214,7 +1269,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029706;
 	}
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -1236,18 +1291,18 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 // Lady Bug
 
 static struct BurnRomInfo ladybugRomDesc[] = {
-	{ "l1.c4",		0x1000, 0xd09e0adb, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
-	{ "l2.d4",		0x1000, 0x88bc4a0a, 1 | BRF_PRG | BRF_ESS }, //  1
-	{ "l3.e4",		0x1000, 0x53e9efce, 1 | BRF_PRG | BRF_ESS }, //  2
-	{ "l4.h4",		0x1000, 0xffc424d7, 1 | BRF_PRG | BRF_ESS }, //  3
-	{ "l5.j4",		0x1000, 0xad6af809, 1 | BRF_PRG | BRF_ESS }, //  4
-	{ "l6.k4",		0x1000, 0xcf1acca4, 1 | BRF_PRG | BRF_ESS }, //  5
+	{ "l1.c4",			0x1000, 0xd09e0adb, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
+	{ "l2.d4",			0x1000, 0x88bc4a0a, 1 | BRF_PRG | BRF_ESS }, //  1
+	{ "l3.e4",			0x1000, 0x53e9efce, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "l4.h4",			0x1000, 0xffc424d7, 1 | BRF_PRG | BRF_ESS }, //  3
+	{ "l5.j4",			0x1000, 0xad6af809, 1 | BRF_PRG | BRF_ESS }, //  4
+	{ "l6.k4",			0x1000, 0xcf1acca4, 1 | BRF_PRG | BRF_ESS }, //  5
 
-	{ "l9.f7",		0x1000, 0x77b1da1e, 2 | BRF_GRA },           //  6 Characters
-	{ "l0.h7",		0x1000, 0xaa82e00b, 2 | BRF_GRA },           //  7
+	{ "l9.f7",			0x1000, 0x77b1da1e, 2 | BRF_GRA },           //  6 Characters
+	{ "l0.h7",			0x1000, 0xaa82e00b, 2 | BRF_GRA },           //  7
 
-	{ "l8.l7",		0x1000, 0x8b99910b, 3 | BRF_GRA },           //  8 Sprites
-	{ "l7.m7",		0x1000, 0x86a5b448, 3 | BRF_GRA },           //  9
+	{ "l8.l7",			0x1000, 0x8b99910b, 3 | BRF_GRA },           //  8 Sprites
+	{ "l7.m7",			0x1000, 0x86a5b448, 3 | BRF_GRA },           //  9
 
 	{ "10-2.k1",		0x0020, 0xdf091e52, 4 | BRF_GRA },           // 10 Color PROMs
 	{ "10-1.f4",		0x0020, 0x40640d8f, 4 | BRF_GRA },           // 11
@@ -1259,6 +1314,8 @@ STD_ROM_FN(ladybug)
 
 static INT32 LadybugInit()
 {
+	fourwaymode = 1;
+
 	return DrvInit(0);
 }
 
@@ -1267,7 +1324,7 @@ struct BurnDriver BurnDrvLadybug = {
 	"Lady Bug\0", NULL, "Universal", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_MAZE, 0,
-	NULL, ladybugRomInfo, ladybugRomName, NULL, NULL, LadybugInputInfo, LadybugDIPInfo,
+	NULL, ladybugRomInfo, ladybugRomName, NULL, NULL, NULL, NULL, LadybugInputInfo, LadybugDIPInfo,
 	LadybugInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	196, 240, 3, 4
 };
@@ -1279,15 +1336,15 @@ static struct BurnRomInfo ladybugbRomDesc[] = {
 	{ "lb1a.cpu",		0x1000, 0xec135e54, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
 	{ "lb2a.cpu",		0x1000, 0x3049c5c6, 1 | BRF_PRG | BRF_ESS }, //  1
 	{ "lb3a.cpu",		0x1000, 0xb0fef837, 1 | BRF_PRG | BRF_ESS }, //  2
-	{ "l4.h4",		0x1000, 0xffc424d7, 1 | BRF_PRG | BRF_ESS }, //  3
-	{ "l5.j4",		0x1000, 0xad6af809, 1 | BRF_PRG | BRF_ESS }, //  4
+	{ "l4.h4",			0x1000, 0xffc424d7, 1 | BRF_PRG | BRF_ESS }, //  3
+	{ "l5.j4",			0x1000, 0xad6af809, 1 | BRF_PRG | BRF_ESS }, //  4
 	{ "lb6a.cpu",		0x1000, 0x88c8002a, 1 | BRF_PRG | BRF_ESS }, //  5
 
-	{ "l9.f7",		0x1000, 0x77b1da1e, 2 | BRF_GRA },           //  6 Characters
-	{ "l0.h7",		0x1000, 0xaa82e00b, 2 | BRF_GRA },           //  7
+	{ "l9.f7",			0x1000, 0x77b1da1e, 2 | BRF_GRA },           //  6 Characters
+	{ "l0.h7",			0x1000, 0xaa82e00b, 2 | BRF_GRA },           //  7
 
-	{ "l8.l7",		0x1000, 0x8b99910b, 3 | BRF_GRA },           //  8 Sprites
-	{ "l7.m7",		0x1000, 0x86a5b448, 3 | BRF_GRA },           //  9
+	{ "l8.l7",			0x1000, 0x8b99910b, 3 | BRF_GRA },           //  8 Sprites
+	{ "l7.m7",			0x1000, 0x86a5b448, 3 | BRF_GRA },           //  9
 
 	{ "10-2.k1",		0x0020, 0xdf091e52, 4 | BRF_GRA },           // 10 Color PROMs
 	{ "10-1.f4",		0x0020, 0x40640d8f, 4 | BRF_GRA },           // 11
@@ -1302,62 +1359,69 @@ struct BurnDriver BurnDrvLadybugb = {
 	"Lady Bug (bootleg set 1)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_MAZE, 0,
-	NULL, ladybugbRomInfo, ladybugbRomName, NULL, NULL, LadybugInputInfo, LadybugDIPInfo,
+	NULL, ladybugbRomInfo, ladybugbRomName, NULL, NULL, NULL, NULL, LadybugInputInfo, LadybugDIPInfo,
 	LadybugInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	196, 240, 3, 4
 };
 
 
-// Lady Bug (bootleg set 2)
+// Coccinelle (bootleg of Lady Bug, set 2)
 
-static struct BurnRomInfo ladybgb2RomDesc[] = {
+static struct BurnRomInfo ladybugb2RomDesc[] = {
 	{ "lb1b.cpu",		0x1000, 0x35d61e65, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
 	{ "lb2b.cpu",		0x1000, 0xa13e0fe4, 1 | BRF_PRG | BRF_ESS }, //  1
 	{ "lb3b.cpu",		0x1000, 0xee8ac716, 1 | BRF_PRG | BRF_ESS }, //  2
-	{ "l4.h4",		0x1000, 0xffc424d7, 1 | BRF_PRG | BRF_ESS }, //  3
-	{ "l5.j4",		0x1000, 0xad6af809, 1 | BRF_PRG | BRF_ESS }, //  4
+	{ "l4.h4",			0x1000, 0xffc424d7, 1 | BRF_PRG | BRF_ESS }, //  3
+	{ "l5.j4",			0x1000, 0xad6af809, 1 | BRF_PRG | BRF_ESS }, //  4
 	{ "lb6b.cpu",		0x1000, 0xdc906e89, 1 | BRF_PRG | BRF_ESS }, //  5
 
-	{ "l9.f7",		0x1000, 0x77b1da1e, 2 | BRF_GRA },           //  6 Characters
-	{ "l0.h7",		0x1000, 0xaa82e00b, 2 | BRF_GRA },           //  7
+	{ "l9.f7",			0x1000, 0x77b1da1e, 2 | BRF_GRA },           //  6 Characters
+	{ "l0.h7",			0x1000, 0xaa82e00b, 2 | BRF_GRA },           //  7
 
-	{ "l8.l7",		0x1000, 0x8b99910b, 3 | BRF_GRA },           //  8 Sprites
-	{ "l7.m7",		0x1000, 0x86a5b448, 3 | BRF_GRA },           //  9
+	{ "l8.l7",			0x1000, 0x8b99910b, 3 | BRF_GRA },           //  8 Sprites
+	{ "l7.m7",			0x1000, 0x86a5b448, 3 | BRF_GRA },           //  9
 
 	{ "10-2.k1",		0x0020, 0xdf091e52, 4 | BRF_GRA },           // 10 Color PROMs
 	{ "10-1.f4",		0x0020, 0x40640d8f, 4 | BRF_GRA },           // 11
 	{ "10-3.c4",		0x0020, 0x27fa3a50, 4 | BRF_OPT },           // 12
 };
 
-STD_ROM_PICK(ladybgb2)
-STD_ROM_FN(ladybgb2)
+STD_ROM_PICK(ladybugb2)
+STD_ROM_FN(ladybugb2)
 
-struct BurnDriver BurnDrvLadybgb2 = {
-	"ladybgb2", "ladybug", NULL, NULL, "1981",
-	"Lady Bug (bootleg set 2)\0", NULL, "bootleg", "Miscellaneous",
+struct BurnDriver BurnDrvLadybugb2 = {
+	"ladybugb2", "ladybug", NULL, NULL, "1981",
+	"Coccinelle (bootleg of Lady Bug, set 2)\0", NULL, "bootleg (Model Racing)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_MAZE, 0,
-	NULL, ladybgb2RomInfo, ladybgb2RomName, NULL, NULL, LadybugInputInfo, LadybugDIPInfo,
+	NULL, ladybugb2RomInfo, ladybugb2RomName, NULL, NULL, NULL, NULL, LadybugInputInfo, LadybugDIPInfo,
 	LadybugInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	196, 240, 3, 4
 };
+
+static INT32 SnapJackInit()
+{
+	fourwaymode = 0;
+
+	return DrvInit(0);
+}
 
 
 // Snap Jack
 
 static struct BurnRomInfo snapjackRomDesc[] = {
-	{ "sj1.c4",		0x1000, 0x6b30fcda, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
-	{ "sj2.d4",		0x1000, 0x1f1088d1, 1 | BRF_PRG | BRF_ESS }, //  1
-	{ "sj3.e4",		0x1000, 0xedd65f3a, 1 | BRF_PRG | BRF_ESS }, //  2
-	{ "sj4.h4",		0x1000, 0xf4481192, 1 | BRF_PRG | BRF_ESS }, //  3
-	{ "sj5.j4",		0x1000, 0x1bff7d05, 1 | BRF_PRG | BRF_ESS }, //  4
-	{ "sj6.k4",		0x1000, 0x21793edf, 1 | BRF_PRG | BRF_ESS }, //  5
+	{ "sj1.c4",			0x1000, 0x6b30fcda, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
+	{ "sj2.d4",			0x1000, 0x1f1088d1, 1 | BRF_PRG | BRF_ESS }, //  1
+	{ "sj3.e4",			0x1000, 0xedd65f3a, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "sj4.h4",			0x1000, 0xf4481192, 1 | BRF_PRG | BRF_ESS }, //  3
+	{ "sj5.j4",			0x1000, 0x1bff7d05, 1 | BRF_PRG | BRF_ESS }, //  4
+	{ "sj6.k4",			0x1000, 0x21793edf, 1 | BRF_PRG | BRF_ESS }, //  5
 
-	{ "sj9.f7",		0x1000, 0xff2011c7, 2 | BRF_GRA },           //  6 Characters
-	{ "sj0.h7",		0x1000, 0xf097babb, 2 | BRF_GRA },           //  7
+	{ "sj9.f7",			0x1000, 0xff2011c7, 2 | BRF_GRA },           //  6 Characters
+	{ "sj0.h7",			0x1000, 0xf097babb, 2 | BRF_GRA },           //  7
 
-	{ "sj8.l7",		0x1000, 0xb7f105b6, 3 | BRF_GRA },           //  8 Sprites
-	{ "sj7.m7",		0x1000, 0x1cdb03a8, 3 | BRF_GRA },           //  9
+	{ "sj8.l7",			0x1000, 0xb7f105b6, 3 | BRF_GRA },           //  8 Sprites
+	{ "sj7.m7",			0x1000, 0x1cdb03a8, 3 | BRF_GRA },           //  9
 
 	{ "10-2.k1",		0x0020, 0xcbbd9dd1, 4 | BRF_GRA },           // 10 Color PROMs
 	{ "10-1.f4",		0x0020, 0x5b16fbd2, 4 | BRF_GRA },           // 11
@@ -1371,9 +1435,9 @@ struct BurnDriver BurnDrvSnapjack = {
 	"snapjack", NULL, NULL, NULL, "1982",
 	"Snap Jack\0", NULL, "Universal", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_PLATFORM, 0,
-	NULL, snapjackRomInfo, snapjackRomName, NULL, NULL, LadybugInputInfo, SnapjackDIPInfo,
-	LadybugInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_PLATFORM | GBF_ACTION, 0,
+	NULL, snapjackRomInfo, snapjackRomName, NULL, NULL, NULL, NULL, LadybugInputInfo, SnapjackDIPInfo,
+	SnapJackInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	240, 196, 4, 3
 };
 
@@ -1381,17 +1445,17 @@ struct BurnDriver BurnDrvSnapjack = {
 // Cosmic Avenger
 
 static struct BurnRomInfo cavengerRomDesc[] = {
-	{ "1.c4",		0x1000, 0x9e0cc781, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
-	{ "2.d4",		0x1000, 0x5ce5b950, 1 | BRF_PRG | BRF_ESS }, //  1
-	{ "3.e4",		0x1000, 0xbc28218d, 1 | BRF_PRG | BRF_ESS }, //  2
-	{ "4.h4",		0x1000, 0x2b32e9f5, 1 | BRF_PRG | BRF_ESS }, //  3
-	{ "5.j4",		0x1000, 0xd117153e, 1 | BRF_PRG | BRF_ESS }, //  4
-	{ "6.k4",		0x1000, 0xc7d366cb, 1 | BRF_PRG | BRF_ESS }, //  5
+	{ "1.c4",			0x1000, 0x9e0cc781, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
+	{ "2.d4",			0x1000, 0x5ce5b950, 1 | BRF_PRG | BRF_ESS }, //  1
+	{ "3.e4",			0x1000, 0xbc28218d, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "4.h4",			0x1000, 0x2b32e9f5, 1 | BRF_PRG | BRF_ESS }, //  3
+	{ "5.j4",			0x1000, 0xd117153e, 1 | BRF_PRG | BRF_ESS }, //  4
+	{ "6.k4",			0x1000, 0xc7d366cb, 1 | BRF_PRG | BRF_ESS }, //  5
 
-	{ "9.f7",		0x1000, 0x63357785, 2 | BRF_GRA },           //  6 Characters
-	{ "0.h7",		0x1000, 0x52ad1133, 2 | BRF_GRA },           //  7
+	{ "9.f7",			0x1000, 0x63357785, 2 | BRF_GRA },           //  6 Characters
+	{ "0.h7",			0x1000, 0x52ad1133, 2 | BRF_GRA },           //  7
 
-	{ "8.l7",		0x1000, 0xb022bf2d, 3 | BRF_GRA },           //  8 Sprites
+	{ "8.l7",			0x1000, 0xb022bf2d, 3 | BRF_GRA },           //  8 Sprites
 
 	{ "10-2.k1",		0x0020, 0x42a24dd5, 4 | BRF_GRA },           //  9 Color PROMs
 	{ "10-1.f4",		0x0020, 0xd736b8de, 4 | BRF_GRA },           // 10
@@ -1403,6 +1467,8 @@ STD_ROM_FN(cavenger)
 
 static INT32 CavengerInit()
 {
+	fourwaymode = 0;
+
 	return DrvInit(1);
 }
 
@@ -1411,7 +1477,7 @@ struct BurnDriver BurnDrvCavenger = {
 	"Cosmic Avenger\0", NULL, "Universal", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_HORSHOOT, 0,
-	NULL, cavengerRomInfo, cavengerRomName, NULL, NULL, LadybugInputInfo, CavengerDIPInfo,
+	NULL, cavengerRomInfo, cavengerRomName, NULL, NULL, NULL, NULL, LadybugInputInfo, CavengerDIPInfo,
 	CavengerInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	240, 196, 4, 3
 };
@@ -1443,6 +1509,7 @@ STD_ROM_FN(dorodon)
 
 static INT32 DorodonInit()
 {
+	fourwaymode = 1;
 	return DrvInit(2);
 }
 
@@ -1451,7 +1518,7 @@ struct BurnDriver BurnDrvDorodon = {
 	"Dorodon (set 1)\0", NULL, "Falcon", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_MAZE, 0,
-	NULL, dorodonRomInfo, dorodonRomName, NULL, NULL, LadybugInputInfo, DorodonDIPInfo,
+	NULL, dorodonRomInfo, dorodonRomName, NULL, NULL, NULL, NULL, LadybugInputInfo, DorodonDIPInfo,
 	DorodonInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	196, 240, 3, 4
 };
@@ -1460,15 +1527,15 @@ struct BurnDriver BurnDrvDorodon = {
 // Dorodon (set 2)
 
 static struct BurnRomInfo dorodon2RomDesc[] = {
-	{ "1.3fg",		0x2000, 0x4d05d6f8, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
-	{ "2.3h",		0x2000, 0x27b43b09, 1 | BRF_PRG | BRF_ESS }, //  1
-	{ "3.3k",		0x2000, 0x38d2f295, 1 | BRF_PRG | BRF_ESS }, //  2
+	{ "1.3fg",			0x2000, 0x4d05d6f8, 1 | BRF_PRG | BRF_ESS }, //  0 Z80 Code
+	{ "2.3h",			0x2000, 0x27b43b09, 1 | BRF_PRG | BRF_ESS }, //  1
+	{ "3.3k",			0x2000, 0x38d2f295, 1 | BRF_PRG | BRF_ESS }, //  2
 
-	{ "6.6a",		0x1000, 0x2a2d8b9c, 2 | BRF_GRA },           //  3 Characters
-	{ "7.6bc",		0x1000, 0xd14f95fa, 2 | BRF_GRA },           //  4
+	{ "6.6a",			0x1000, 0x2a2d8b9c, 2 | BRF_GRA },           //  3 Characters
+	{ "7.6bc",			0x1000, 0xd14f95fa, 2 | BRF_GRA },           //  4
 
-	{ "5.3t",		0x1000, 0x54c04f58, 3 | BRF_GRA },           //  5 Sprites
-	{ "4.3r",		0x1000, 0x1ebb6493, 3 | BRF_GRA },           //  6
+	{ "5.3t",			0x1000, 0x54c04f58, 3 | BRF_GRA },           //  5 Sprites
+	{ "4.3r",			0x1000, 0x1ebb6493, 3 | BRF_GRA },           //  6
 
 	{ "dorodon.bp4",	0x0100, 0xf865c135, 4 | BRF_PRG | BRF_ESS }, //  7 Protection PROMs
 	{ "dorodon.bp3",	0x0100, 0x47b2f0bb, 4 | BRF_PRG | BRF_ESS }, //  8
@@ -1486,7 +1553,7 @@ struct BurnDriver BurnDrvDorodon2 = {
 	"Dorodon (set 2)\0", NULL, "Falcon", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_MAZE, 0,
-	NULL, dorodon2RomInfo, dorodon2RomName, NULL, NULL, LadybugInputInfo, DorodonDIPInfo,
+	NULL, dorodon2RomInfo, dorodon2RomName, NULL, NULL, NULL, NULL, LadybugInputInfo, DorodonDIPInfo,
 	DorodonInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x60,
 	196, 240, 3, 4
 };
@@ -1524,7 +1591,7 @@ struct BurnDriver BurnDrvSraider = {
 	"Space Raider\0", NULL, "Universal", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_PRE90S, GBF_SHOOT, 0,
-	NULL, sraiderRomInfo, sraiderRomName, NULL, NULL, SraiderInputInfo, SraiderDIPInfo,
+	NULL, sraiderRomInfo, sraiderRomName, NULL, NULL, NULL, NULL, SraiderInputInfo, SraiderDIPInfo,
 	SraiderInit, DrvExit, SraiderFrame, SraiderDraw, DrvScan, &DrvRecalc, 0x82,
-	196, 240, 3, 4
+	192, 240, 3, 4
 };

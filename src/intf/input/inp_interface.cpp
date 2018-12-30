@@ -171,16 +171,11 @@ INT32 InputSetCooperativeLevel(const bool bExclusive, const bool bForeground)
 	return pInputInOut[nInputSelect]->SetCooperativeLevel(bExclusive, bForeground);
 }
 
-static INT32 nAutoFireCounter = 0;
 static bool bLastAF[1000];
 INT32 nAutoFireRate = 12;
 
-static inline int AutofirePick() {
-    int c = nAutoFireCounter % nAutoFireRate;
-    if (nAutoFireCounter <= 2)
-        return 1;
-    else
-	return (c>nAutoFireRate-4);
+static inline INT32 AutofirePick() {
+	return ((nCurrentFrame % nAutoFireRate) > nAutoFireRate-4);
 }
 
 // This will process all PC-side inputs and optionally update the emulated game side.
@@ -255,12 +250,21 @@ INT32 InputMake(bool bCopy)
 				}
 				break;
 			}
-			case GIT_MOUSEAXIS:						// Mouse axis
-				pgi->Input.nVal = (UINT16)(CinpMouseAxis(pgi->Input.MouseAxis.nMouse, pgi->Input.MouseAxis.nAxis) * nAnalogSpeed);
+			case GIT_MOUSEAXIS:	{					// Mouse axis
+				INT32 nMouse = CinpMouseAxis(pgi->Input.MouseAxis.nMouse, pgi->Input.MouseAxis.nAxis) * nAnalogSpeed;
+				// Clip axis to 16 bits (signed)
+				if (nMouse < -32768) {
+					nMouse = -32768;
+				}
+				if (nMouse >  32767) {
+					nMouse =  32767;
+				}
+				pgi->Input.nVal = (UINT16)nMouse;
 				if (bCopy) {
 					*(pgi->Input.pShortVal) = pgi->Input.nVal;
 				}
 				break;
+			}
 			case GIT_JOYAXIS_FULL:	{				// Joystick axis
 				INT32 nJoy = CinpJoyAxis(pgi->Input.JoyAxis.nJoy, pgi->Input.JoyAxis.nAxis);
 
@@ -268,7 +272,7 @@ INT32 InputMake(bool bCopy)
 					nJoy *= nAnalogSpeed;
 					nJoy >>= 13;
 
-					// Clip axis to 8 bits
+					// Clip axis to 16 bits (signed)
 					if (nJoy < -32768) {
 						nJoy = -32768;
 					}
@@ -340,8 +344,6 @@ INT32 InputMake(bool bCopy)
 			}
 		}
 	}
-
-        nAutoFireCounter++;
 
 	for (i = 0; i < nMacroCount; i++, pgi++) {
 		if (pgi->Macro.nMode == 1 && pgi->Macro.nSysMacro == 0) { // Macro is defined
@@ -434,7 +436,7 @@ INT32 InputFind(const INT32 nFlags)
 				}
 
 				// While the movement is within the threshold, treat it as no movement
-				if (nJoyDelta > -0x0100 || nJoyDelta < 0x0100) {
+				if (nJoyDelta > -0x0100 && nJoyDelta < 0x0100) {
 					nDelay++;
 					if (nDelay > 64) {
 						return -1;

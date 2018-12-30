@@ -241,7 +241,7 @@ static UINT8 __fastcall exzisus_sound_read(UINT16 address)
 	{
 		case 0x9000:
 		case 0x9001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 
 		case 0xa001:
 			return TC0140SYTSlaveCommRead();
@@ -276,6 +276,8 @@ static INT32 DrvDoReset()
 	BurnYM2151Reset();
 	TC0140SYTReset();
 	ZetClose();
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -680,7 +682,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	if (nAction & ACB_DRIVER_DATA) {
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
+		BurnYM2151Scan(nAction, pnMin);
 		TC0140SYTScan(nAction);
 	}
 
@@ -746,8 +748,8 @@ struct BurnDriver BurnDrvExzisus = {
 	"exzisus", NULL, NULL, NULL, "1987",
 	"Exzisus (Japan, dedicated)\0", NULL, "Taito Corporation", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_TAITO_MISC, GBF_HORSHOOT, 0,
-	NULL, exzisusRomInfo, exzisusRomName, NULL, NULL, ExzisusInputInfo, ExzisusDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_TAITO_MISC, GBF_HORSHOOT, 0,
+	NULL, exzisusRomInfo, exzisusRomName, NULL, NULL, NULL, NULL, ExzisusInputInfo, ExzisusDIPInfo,
 	exzisusInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 224, 4, 3
 };
@@ -796,8 +798,8 @@ struct BurnDriver BurnDrvExzisusa = {
 	"exzisusa", "exzisus", NULL, NULL, "1987",
 	"Exzisus (Japan, conversion)\0", NULL, "Taito Corporation", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_TAITO_MISC, GBF_HORSHOOT, 0,
-	NULL, exzisusaRomInfo, exzisusaRomName, NULL, NULL, ExzisusInputInfo, ExzisusDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_TAITO_MISC, GBF_HORSHOOT, 0,
+	NULL, exzisusaRomInfo, exzisusaRomName, NULL, NULL, NULL, NULL, ExzisusInputInfo, ExzisusDIPInfo,
 	exzisusaInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 224, 4, 3
 };
@@ -841,8 +843,8 @@ struct BurnDriver BurnDrvExzisust = {
 	"exzisust", "exzisus", NULL, NULL, "1987",
 	"Exzisus (TAD license)\0", NULL, "Taito Corporation (TAD license)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_TAITO_MISC, GBF_HORSHOOT, 0,
-	NULL, exzisustRomInfo, exzisustRomName, NULL, NULL, ExzisusInputInfo, ExzisusDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_TAITO_MISC, GBF_HORSHOOT, 0,
+	NULL, exzisustRomInfo, exzisustRomName, NULL, NULL, NULL, NULL, ExzisusInputInfo, ExzisusDIPInfo,
 	exzisusaInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 224, 4, 3
 };

@@ -253,7 +253,7 @@ void es8712Init(INT32 device, UINT8 *rom, INT32 sample_rate, INT32 addSignal)
 	chip->addSignal = addSignal;
 
 	if (tbuf[device] == NULL) {
-		tbuf[device] = (INT16*)malloc(sample_rate * sizeof(INT16));
+		tbuf[device] = (INT16*)BurnMalloc(sample_rate * sizeof(INT16));
 	}
 }
 
@@ -282,17 +282,16 @@ void es8712Exit(INT32 device)
 	if (!DebugSnd_ES8712Initted) bprintf(PRINT_ERROR, _T("es8712Exit called without init\n"));
 #endif
 
+	if (!DebugSnd_ES8712Initted) return;
+
 	if (device >= MAX_ES8712_CHIPS) return;
 
 	chip = &chips[device];
 
 	memset (chip, 0, sizeof(_es8712_state));
 
-	if (tbuf[device] != NULL) {
-		free (tbuf[device]);
-		tbuf[device] = NULL;
-	}
-	
+	BurnFree (tbuf[device]);
+		
 	DebugSnd_ES8712Initted = 0;
 }
 
@@ -448,28 +447,28 @@ void es8712Write(INT32 device, INT32 offset, UINT8 data)
 
 ***********************************************************************************************/
 
-INT32 es8712Scan(INT32 device, INT32 nAction)
+void es8712Scan(INT32 nAction, INT32 *)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_ES8712Initted) bprintf(PRINT_ERROR, _T("es8712Scan called without init\n"));
 #endif
 
-	if (device >= MAX_ES8712_CHIPS) return 1;
+	if (nAction & ACB_DRIVER_DATA)
+	{
+		for (INT32 i = 0; i < MAX_ES8712_CHIPS; i++)
+		{
+			chip = &chips[i];
 
-	if (nAction & ACB_DRIVER_DATA) {
-		chip = &chips[device];
-
-		SCAN_VAR(chip->playing);
-		SCAN_VAR(chip->base_offset);
-		SCAN_VAR(chip->sample);
-		SCAN_VAR(chip->count);
-		SCAN_VAR(chip->signal);
-		SCAN_VAR(chip->step);
-		SCAN_VAR(chip->start);
-		SCAN_VAR(chip->end);
-		SCAN_VAR(chip->repeat);
-		SCAN_VAR(chip->bank_offset);
+			SCAN_VAR(chip->playing);
+			SCAN_VAR(chip->base_offset);
+			SCAN_VAR(chip->sample);
+			SCAN_VAR(chip->count);
+			SCAN_VAR(chip->signal);
+			SCAN_VAR(chip->step);
+			SCAN_VAR(chip->start);
+			SCAN_VAR(chip->end);
+			SCAN_VAR(chip->repeat);
+			SCAN_VAR(chip->bank_offset);
+		}
 	}
-
-	return 0;
 }

@@ -22,8 +22,6 @@ static UINT8 *DrvM6809RAM;
 static UINT8 *DrvZ80RAM;
 static UINT8 *DrvSprRAM;
 
-static INT16 *pAY8910Buffer[6];
-
 static UINT32 *DrvPalette;
 static UINT8  DrvRecalc;
 
@@ -253,6 +251,8 @@ static INT32 DrvDoReset(INT32 clear_ram)
 	irq_enable = 0;
 	watchdog = 0;
 
+	HiscoreReset();
+
 	return 0;
 }
 
@@ -280,13 +280,6 @@ static INT32 MemIndex()
 	DrvZ80RAM		= Next; Next += 0x000400;
 
 	RamEnd			= Next;
-
-	pAY8910Buffer[0]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[1]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[2]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[3]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[4]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[5]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
 
 	MemEnd			= Next;
 
@@ -367,7 +360,7 @@ static INT32 DrvInit()
 		}
 	}
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvSprRAM,		0x4000, 0x47ff, MAP_RAM);
 	M6809MapMemory(DrvColRAM,		0x4800, 0x4bff, MAP_RAM);
@@ -538,7 +531,7 @@ static INT32 DrvFrame()
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+			TimepltSndUpdate(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -549,7 +542,7 @@ static INT32 DrvFrame()
 	if (pBurnSoundOut) {
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-		TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+		TimepltSndUpdate(pSoundBuf, nSegmentLength);
 	}
 
 	if (pBurnDraw) {
@@ -576,6 +569,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		BurnAcb(&ba);
 
 		M6809Scan(nAction);
+		ZetScan(nAction);
+
 		TimepltSndScan(nAction, pnMin);
 
 		SCAN_VAR(irq_enable);
@@ -628,8 +623,8 @@ struct BurnDriver BurnDrvRocnrope = {
 	"rocnrope", NULL, NULL, NULL, "1983",
 	"Roc'n Rope\0", NULL, "Konami", "GX364",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
-	NULL, rocnropeRomInfo, rocnropeRomName, NULL, NULL, RocnropeInputInfo, RocnropeDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
+	NULL, rocnropeRomInfo, rocnropeRomName, NULL, NULL, NULL, NULL, RocnropeInputInfo, RocnropeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };
@@ -669,8 +664,8 @@ struct BurnDriver BurnDrvRocnropek = {
 	"rocnropek", "rocnrope", NULL, NULL, "1983",
 	"Roc'n Rope (Kosuka)\0", NULL, "Konami / Kosuka", "GX364",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
-	NULL, rocnropekRomInfo, rocnropekRomName, NULL, NULL, RocnropeInputInfo, RocnropeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
+	NULL, rocnropekRomInfo, rocnropekRomName, NULL, NULL, NULL, NULL, RocnropeInputInfo, RocnropeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };
@@ -712,8 +707,8 @@ struct BurnDriver BurnDrvRopeman = {
 	"ropeman", "rocnrope", NULL, NULL, "1983",
 	"Ropeman (bootleg of Roc'n Rope)\0", NULL, "bootleg", "GX364",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
-	NULL, ropemanRomInfo, ropemanRomName, NULL, NULL, RocnropeInputInfo, RocnropeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_ORIENTATION_VERTICAL | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_PLATFORM, 0,
+	NULL, ropemanRomInfo, ropemanRomName, NULL, NULL, NULL, NULL, RocnropeInputInfo, RocnropeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 256, 3, 4
 };

@@ -174,6 +174,11 @@ static void h6280_init(int index, int clock, const void *config, int (*irqcallba
 }
 #endif
 
+void h6280_irqcallback(int (*irqcallback)(int))
+{
+	h6280.irq_callback = irqcallback;
+}
+
 void h6280Reset(void)
 {
 #if defined FBA_DEBUG
@@ -181,11 +186,8 @@ void h6280Reset(void)
 	if (nh6280CpuActive == -1) bprintf(PRINT_ERROR, _T("h6280Reset called with no CPU open\n"));
 #endif
 
-	int (*save_irqcallback)(int);
-	int i;
-
 	/* wipe out the h6280 structure */
-	save_irqcallback = h6280.irq_callback;
+	int (*save_irqcallback)(int) = h6280.irq_callback;
 	memset(&h6280, 0, sizeof(h6280_Regs));
 	h6280.irq_callback = save_irqcallback;
 
@@ -208,7 +210,7 @@ void h6280Reset(void)
 	h6280.timer_load = 128 * 1024;
 
     /* clear pending interrupts */
-	for (i = 0; i < 3; i++)
+	for (INT32 i = 0; i < 3; i++)
 		h6280.irq_state[i] = CLEAR_LINE;
 	h6280.nmi_state = CLEAR_LINE;
 
@@ -305,7 +307,7 @@ int h6280TotalCycles()
 	if (nh6280CpuActive == -1) bprintf(PRINT_ERROR, _T("h6280TotalCycles called with no CPU open\n"));
 #endif
 
-	return h6280.h6280_totalcycles;
+	return h6280.h6280_totalcycles + (h6280.h6280_iCycles - h6280_ICount);;
 }
 
 void h6280RunEnd()
@@ -335,6 +337,10 @@ void h6280_set_irq_line(int irqline, int state)
 	}
 	else if (irqline < 3)
 	{
+		if (state == CPU_IRQSTATUS_HOLD) {
+			state = CPU_IRQSTATUS_ACK;
+			h6280.irq_hold = 1;
+		}
 		/* If the state has not changed, just return */
 		if ( h6280.irq_state[irqline] == state )
 			return;

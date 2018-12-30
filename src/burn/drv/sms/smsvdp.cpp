@@ -3,12 +3,10 @@
     Video Display Processor (VDP) emulation.
 */
 #include "smsshared.h"
-#include "tiles_generic.h"
-#include "driver.h"
 #include "z80_intf.h"
 #include "smshvc.h"
 
-static const uint8 tms_crom[] =
+static const UINT8 tms_crom[] =
 {
     0x00, 0x00, 0x08, 0x0C,
     0x10, 0x30, 0x01, 0x3C,
@@ -16,10 +14,15 @@ static const uint8 tms_crom[] =
     0x04, 0x33, 0x15, 0x3F
 };
 
+static UINT32 TMS9928A_palette[16] = {
+	0x000000, 0x000000, 0x21c842, 0x5edc78, 0x5455ed, 0x7d76fc, 0xd4524d, 0x42ebf5,
+	0xfc5554, 0xff7978, 0xd4c154, 0xe6ce80, 0x21b03b, 0xc95bba, 0xcccccc, 0xffffff
+};
+
 /* Mark a pattern as dirty */
 #define MARK_BG_DIRTY(addr)                                \
 {                                                          \
-    int name = (addr >> 5) & 0x1FF;                        \
+    INT32 name = (addr >> 5) & 0x1FF;                        \
     if(bg_name_dirty[name] == 0)                           \
     {                                                      \
         bg_name_list[bg_list_index] = name;                \
@@ -31,7 +34,7 @@ static const uint8 tms_crom[] =
 
 /* VDP context */
 vdp_t vdp;
-
+UINT32 smsvdp_tmsmode;
 
 /* Initialize VDP emulation */
 void vdp_init(void)
@@ -48,26 +51,38 @@ void vdp_shutdown(void)
 /* Reset VDP emulation */
 void vdp_reset(void)
 {
-    memset(&vdp, 0, sizeof(vdp_t));
-    vdp.extended = 0;
-    vdp.height = 192;
+	memset(&vdp, 0, sizeof(vdp_t));
+	vdp.extended = 0;
+	vdp.height = 192;
 
-    bitmap.viewport.x = (IS_GG) ? 48 : 0;    // 44 for (vdp.reg[0] & 0x20 && IS_GG)
-    bitmap.viewport.y = (IS_GG) ? 24 : 0;
-    bitmap.viewport.w = (IS_GG) ? 160 : 256;
-    bitmap.viewport.h = (IS_GG) ? 144 : 192;
-    bitmap.viewport.changed = 1;
+	if (IS_SMS)
+	{
+		vdp.reg[0]  = 0x36;
+		vdp.reg[1]  = 0x80;
+		vdp.reg[2]  = 0xFF;
+		vdp.reg[3]  = 0xFF;
+		vdp.reg[4]  = 0xFF;
+		vdp.reg[5]  = 0xFF;
+		vdp.reg[6]  = 0xFB;
+		vdp.reg[10] = 0xFF;
+	}
+
+	bitmap.viewport.x = (IS_GG) ? 48 : 0;    // 44 for (vdp.reg[0] & 0x20 && IS_GG)
+	bitmap.viewport.y = (IS_GG) ? 24 : 0;
+	bitmap.viewport.w = (IS_GG) ? 160 : 256;
+	bitmap.viewport.h = (IS_GG) ? 144 : 192;
+	bitmap.viewport.changed = 1;
 }
 
 
 void viewport_check(void)
 {
-    int i;
+    INT32 i;
 
-    int m1 = (vdp.reg[1] >> 4) & 1;
-    int m3 = (vdp.reg[1] >> 3) & 1;
-    int m2 = (vdp.reg[0] >> 1) & 1;
-    int m4 = (vdp.reg[0] >> 2) & 1;
+    INT32 m1 = (vdp.reg[1] >> 4) & 1;
+    INT32 m3 = (vdp.reg[1] >> 3) & 1;
+    INT32 m2 = (vdp.reg[0] >> 1) & 1;
+    INT32 m4 = (vdp.reg[0] >> 2) & 1;
 
     vdp.mode = (m4 << 3 | m3 << 2 | m2 << 1 | m1 << 0);
 
@@ -76,7 +91,8 @@ void viewport_check(void)
     {
         if(m4)
         {
-            /* Restore SMS palette */
+			smsvdp_tmsmode = 0;
+			/* Restore SMS palette */
             for(i = 0; i < PALETTE_SIZE; i++)
             {
                 palette_sync(i, 1);
@@ -84,26 +100,30 @@ void viewport_check(void)
         }
         else
         {
+			smsvdp_tmsmode = 1;
             /* Load TMS9918 palette */
             for(i = 0; i < PALETTE_SIZE; i++)
             {
-                int r, g, b;
-    
-                r = (tms_crom[i & 0x0F] >> 0) & 3;
-                g = (tms_crom[i & 0x0F] >> 2) & 3;
-                b = (tms_crom[i & 0x0F] >> 4) & 3;
-        
-                r = sms_cram_expand_table[r];
-                g = sms_cram_expand_table[g];
-                b = sms_cram_expand_table[b];
-            
-                bitmap.pal.color[i][0] = r;
-                bitmap.pal.color[i][1] = g;
-                bitmap.pal.color[i][2] = b;
-            
-                pixel[i] = MAKE_PIXEL(r, g, b);
-            
-                bitmap.pal.dirty[i] = bitmap.pal.update = 1;
+				INT32 r, g, b;
+
+				/*r = (tms_crom[i & 0x0F] >> 0) & 3;
+				g = (tms_crom[i & 0x0F] >> 2) & 3;
+				b = (tms_crom[i & 0x0F] >> 4) & 3;
+
+				r = sms_cram_expand_table[r];
+				g = sms_cram_expand_table[g];
+				b = sms_cram_expand_table[b];*/
+				r = TMS9928A_palette[i & 0x0f] >> 16;
+				g = TMS9928A_palette[i & 0x0f] >> 8;
+				b = TMS9928A_palette[i & 0x0f] >> 0;
+
+				bitmap.pal.color[i][0] = r;
+				bitmap.pal.color[i][1] = g;
+				bitmap.pal.color[i][2] = b;
+
+				pixel[i] = MAKE_PIXEL(r, g, b);
+
+				bitmap.pal.dirty[i] = bitmap.pal.update = 1;
             }
         }
     }
@@ -177,7 +197,7 @@ void viewport_check(void)
 }
 
 
-void vdp_reg_w(uint8 r, uint8 d)
+void vdp_reg_w(UINT8 r, UINT8 d)
 {
     /* Store register data */
     vdp.reg[r] = d;
@@ -236,9 +256,9 @@ void vdp_reg_w(uint8 r, uint8 d)
 }
 
 
-void vdp_write(int offset, uint8 data)
+void vdp_write(INT32 offset, UINT8 data)
 {
-    int index;
+    INT32 index;
 
     switch(offset & 1)
     {
@@ -257,6 +277,7 @@ void vdp_write(int offset, uint8 data)
                         vdp.vram[index] = data;
                         MARK_BG_DIRTY(vdp.addr);
                     }
+					vdp.buffer = data;
                     break;
         
                 case 3: /* CRAM write */
@@ -266,6 +287,7 @@ void vdp_write(int offset, uint8 data)
                         vdp.cram[index] = data;
                         palette_sync(index, 0);
                     }
+					vdp.buffer = data;
                     break;
             }
             vdp.addr = (vdp.addr + 1) & 0x3FFF;
@@ -292,8 +314,8 @@ void vdp_write(int offset, uint8 data)
         
                 if(vdp.code == 2)
                 {
-                    int r = (data & 0x0F);
-                    int d = vdp.latch;
+                    INT32 r = (data & 0x0F);
+                    INT32 d = vdp.latch;
                     vdp_reg_w(r, d);
                 }
             }
@@ -301,9 +323,9 @@ void vdp_write(int offset, uint8 data)
     }
 }
 
-uint8 vdp_read(int offset)
+UINT8 vdp_read(INT32 offset)
 {
-    uint8 temp;
+    UINT8 temp;
 
     switch(offset & 1)
     {
@@ -328,9 +350,9 @@ uint8 vdp_read(int offset)
     return 0;
 }
 
-uint8 vdp_counter_r(int offset)
+UINT8 vdp_counter_r(INT32 offset)
 {
-    int cpixel;
+    //INT32 cpixel;
 
     switch(offset & 1)
     {
@@ -338,8 +360,9 @@ uint8 vdp_counter_r(int offset)
             return vc_table[sms.display][vdp.extended][vdp.line & 0x1FF];
 
         case 1: /* H Counter */
-            cpixel = (((ZetTotalCycles() % CYCLES_PER_LINE) / 4) * 3) * 2;
-            return hc_table[0][(cpixel >> 1) & 0x01FF];
+            //cpixel = (((ZetTotalCycles() % CYCLES_PER_LINE) / 4) * 3) * 2;
+			//return hc_table[0][(cpixel >> 1) & 0x01FF];
+			return hc_table[0][ZetTotalCycles() % CYCLES_PER_LINE];
     }
 
     /* Just to please the compiler */
@@ -351,9 +374,9 @@ uint8 vdp_counter_r(int offset)
 /* Game Gear VDP handlers                                                   */
 /*--------------------------------------------------------------------------*/
 
-void gg_vdp_write(int offset, uint8 data)
+void gg_vdp_write(INT32 offset, UINT8 data)
 {
-    int index;
+    INT32 index;
 
     switch(offset & 1)
     {
@@ -370,6 +393,7 @@ void gg_vdp_write(int offset, uint8 data)
                         vdp.vram[index] = data;
                         MARK_BG_DIRTY(vdp.addr);
                     }
+					vdp.buffer = data;
                     break;
         
                 case 3: /* CRAM write */
@@ -384,6 +408,7 @@ void gg_vdp_write(int offset, uint8 data)
                     {
                         vdp.cram_latch = (vdp.cram_latch & 0xFF00) | ((data & 0xFF) << 0);
                     }
+					vdp.buffer = data;
                     break;
             }
             vdp.addr = (vdp.addr + 1) & 0x3FFF;
@@ -410,8 +435,8 @@ void gg_vdp_write(int offset, uint8 data)
         
                 if(vdp.code == 2)
                 {
-                    int r = (data & 0x0F);
-                    int d = vdp.latch;
+                    INT32 r = (data & 0x0F);
+                    INT32 d = vdp.latch;
                     vdp_reg_w(r, d);
                 }
             }
@@ -423,9 +448,9 @@ void gg_vdp_write(int offset, uint8 data)
 /* MegaDrive / Genesis VDP handlers                                         */
 /*--------------------------------------------------------------------------*/
 
-void md_vdp_write(int offset, uint8 data)
+void md_vdp_write(INT32 offset, UINT8 data)
 {
-    int index;
+    INT32 index;
 
     switch(offset & 1)
     {
@@ -443,6 +468,7 @@ void md_vdp_write(int offset, uint8 data)
                         vdp.vram[index] = data;
                         MARK_BG_DIRTY(vdp.addr);
                     }
+					vdp.buffer = data;
                     break;
         
                 case 2: /* CRAM write */
@@ -453,6 +479,7 @@ void md_vdp_write(int offset, uint8 data)
                         vdp.cram[index] = data;
                         palette_sync(index, 0);
                     }
+					vdp.buffer = data;
                     break;
             }
             vdp.addr = (vdp.addr + 1) & 0x3FFF;
@@ -478,8 +505,8 @@ void md_vdp_write(int offset, uint8 data)
         
                 if(vdp.code == 2)
                 {
-                    int r = (data & 0x0F);
-                    int d = vdp.latch;
+                    INT32 r = (data & 0x0F);
+                    INT32 d = vdp.latch;
                     vdp_reg_w(r, d);
                 }
             }
@@ -491,9 +518,9 @@ void md_vdp_write(int offset, uint8 data)
 /* TMS9918 VDP handlers                                                     */
 /*--------------------------------------------------------------------------*/
 
-void tms_write(int offset, int data)
+void tms_write(INT32 offset, INT32 data)
 {
-    int index;
+    INT32 index;
 
     switch(offset & 1)
     {
@@ -538,8 +565,8 @@ void tms_write(int offset, int data)
         
                 if(vdp.code == 2)
                 {
-                    int r = (data & 0x07);
-                    int d = vdp.latch;
+                    INT32 r = (data & 0x07);
+                    INT32 d = vdp.latch;
                     vdp_reg_w(r, d);
                 }
             }

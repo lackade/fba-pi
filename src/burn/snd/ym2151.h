@@ -49,10 +49,14 @@
 ** 'clock' is the chip clock in Hz
 ** 'rate' is sampling rate
 */
-int YM2151Init(int num, int clock, int rate);
+//int YM2151Init(int num, int clock, int rate);
+int YM2151Init(int num, int clock, int rate, void (*timer_cb)(INT32, double));
+
+int ym2151_timer_over(int num, int timer); // for fm timer
 
 /* shutdown the YM2151 emulators*/
 void YM2151Shutdown(void);
+void YM2151SetTimerInterleave(double d);
 
 /* reset all chip registers for YM2151 number 'num'*/
 void YM2151ResetChip(int num);

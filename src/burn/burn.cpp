@@ -2,14 +2,17 @@
 
 #include "version.h"
 #include "burnint.h"
+#include "timer.h"
 #include "burn_sound.h"
 #include "driverlist.h"
 
+#ifndef __LIBRETRO__
 // filler function, used if the application is not printing debug messages
 static INT32 __cdecl BurnbprintfFiller(INT32, TCHAR* , ...) { return 0; }
 // pointer to burner printing function
 #ifndef bprintf
 INT32 (__cdecl *bprintf)(INT32 nStatus, TCHAR* szFormat, ...) = BurnbprintfFiller;
+#endif
 #endif
 
 INT32 nBurnVer = BURN_VERSION;		// Version number of the library
@@ -20,8 +23,6 @@ UINT32 nBurnDrvSelect[8] = { ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U, ~0U }; // Which 
 									
 bool bBurnUseMMX;
 #if defined BUILD_A68K
-bool bBurnUseASMCPUEmulation = true;
-#else
 bool bBurnUseASMCPUEmulation = false;
 #endif
 
@@ -189,6 +190,7 @@ extern "C" TCHAR* BurnDrvGetText(UINT32 i)
 
 	if (!(i & DRV_ASCIIONLY)) {
 		switch (i & 0xFF) {
+#ifndef __LIBRETRO__
 			case DRV_FULLNAME:
 				pszStringW = pDriver[nBurnDrvActive]->szFullNameW;
 				
@@ -228,6 +230,7 @@ extern "C" TCHAR* BurnDrvGetText(UINT32 i)
 
 				}
 				break;
+#endif // __LIBRETRO__
 			case DRV_COMMENT:
 				pszStringW = pDriver[nBurnDrvActive]->szCommentW;
 				break;
@@ -468,6 +471,16 @@ extern "C" INT32 BurnDrvGetSampleName(char** pszName, UINT32 i, INT32 nAka)		// 
 	return pDriver[nBurnDrvActive]->GetSampleName(pszName, i, nAka);
 }
 
+extern "C" INT32 BurnDrvGetHDDInfo(struct BurnHDDInfo* pri, UINT32 i)		// Forward to drivers function
+{
+	return pDriver[nBurnDrvActive]->GetHDDInfo(pri, i);
+}
+
+extern "C" INT32 BurnDrvGetHDDName(char** pszName, UINT32 i, INT32 nAka)		// Forward to drivers function
+{
+	return pDriver[nBurnDrvActive]->GetHDDName(pszName, i, nAka);
+}
+
 // Get the screen size
 extern "C" INT32 BurnDrvGetVisibleSize(INT32* pnWidth, INT32* pnHeight)
 {
@@ -588,6 +601,11 @@ extern "C" INT32 BurnDrvInit()
 
 		bprintf(PRINT_IMPORTANT, _T("*** Starting emulation of %s - %s.\n"), BurnDrvGetText(DRV_NAME), BurnDrvGetText(DRV_FULLNAME));
 
+#ifdef BUILD_A68K
+		if (bBurnUseASMCPUEmulation)
+			bprintf(PRINT_ERROR, _T("*** WARNING: Assembly MC68000 core is enabled for this session!\n"));
+#endif
+
 		// Then print the alternative titles
 
 		if (nName > 1) {
@@ -613,19 +631,22 @@ extern "C" INT32 BurnDrvInit()
 
 	CheatInit();
 	HiscoreInit();
-	BurnStateInit();	
+	BurnStateInit();
 	BurnInitMemoryManager();
+	BurnRandomInit();
+	BurnSoundDCFilterReset();
 
 	nReturnValue = pDriver[nBurnDrvActive]->Init();	// Forward to drivers function
 
 	nMaxPlayers = pDriver[nBurnDrvActive]->Players;
-	
+
+	nCurrentFrame = 0;
+
 #if defined (FBA_DEBUG)
 	if (!nReturnValue) {
 		starttime = clock();
 		nFramesEmulated = 0;
 		nFramesRendered = 0;
-		nCurrentFrame = 0;
 	} else {
 		starttime = 0;
 	}
@@ -846,6 +867,51 @@ INT32 BurnAreaScan(INT32 nAction, INT32* pnMin)
 }
 
 // ----------------------------------------------------------------------------
+// State-able random generator, based on early BSD LCG rand
+static UINT64 nBurnRandSeed = 0;
+
+UINT16 BurnRandom()
+{
+	if (!nBurnRandSeed) { // for the rare rollover-to-0 occurance
+		nBurnRandSeed = 0x2d1e0f;
+	}
+
+	nBurnRandSeed = nBurnRandSeed * 1103515245 + 12345;
+
+	return (UINT32)(nBurnRandSeed / 65536) % 0x10000;
+}
+
+void BurnRandomScan(INT32 nAction)
+{
+	if (nAction & ACB_DRIVER_DATA) {
+		SCAN_VAR(nBurnRandSeed);
+	}
+}
+
+void BurnRandomSetSeed(UINT64 nSeed)
+{
+	nBurnRandSeed = nSeed;
+}
+
+void BurnRandomInit()
+{ // for states & input recordings - init before emulation starts
+	nBurnRandSeed = time(NULL);
+}
+
+// ----------------------------------------------------------------------------
+// Handy FM default callbacks
+
+INT32 BurnSynchroniseStream(INT32 nSoundRate)
+{
+	return (INT64)BurnTimerCPUTotalCycles() * nSoundRate / BurnTimerCPUClockspeed;
+}
+
+double BurnGetTime()
+{
+	return (double)BurnTimerCPUTotalCycles() / BurnTimerCPUClockspeed;
+}
+
+// ----------------------------------------------------------------------------
 // Wrappers for MAME-specific function calls
 
 #include "driver.h"
@@ -883,7 +949,7 @@ static BurnPostloadFunction BurnPostload[8];
 static void BurnStateRegister(const char* module, INT32 instance, const char* name, void* val, UINT32 size)
 {
 	// Allocate new node
-	BurnStateEntry* pNewEntry = (BurnStateEntry*)malloc(sizeof(BurnStateEntry));
+	BurnStateEntry* pNewEntry = (BurnStateEntry*)BurnMalloc(sizeof(BurnStateEntry));
 	if (pNewEntry == NULL) {
 		return;
 	}
@@ -911,9 +977,7 @@ void BurnStateExit()
 
 		do {
 			pNextEntry = pCurrentEntry->pNext;
-			if (pCurrentEntry) {
-				free(pCurrentEntry);
-			}
+			BurnFree(pCurrentEntry);
 		} while ((pCurrentEntry = pNextEntry) != 0);
 	}
 

@@ -103,8 +103,6 @@ static void set_oki_bank(INT32 data)
 {
 	*DrvOkiBank = data;
 	memcpy (MSM6295ROM, DrvSndROM + (data << 12), 0x40000);
-
-bprintf (PRINT_NORMAL, _T("%2.2x\n"), data);
 }
 
 void __fastcall pirates_write_byte(UINT32 address, UINT8 data)
@@ -122,8 +120,6 @@ void __fastcall pirates_write_byte(UINT32 address, UINT8 data)
 		return;
 	}
 
-//bprintf (PRINT_NORMAL, _T("%5.5x, %2.2x\n"), address, data);
-
 	switch (address)
 	{
 		case 0x600000:
@@ -134,7 +130,7 @@ void __fastcall pirates_write_byte(UINT32 address, UINT8 data)
 
 		case 0xa00000:
 		case 0xa00001:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 	}
 }
@@ -154,8 +150,6 @@ void __fastcall pirates_write_word(UINT32 address, UINT16 data)
 		return;
 	}
 
-//bprintf (PRINT_NORMAL, _T("%5.5x, %4.4x\n"), address, data);
-
 	switch (address)
 	{
 		case 0x600000:
@@ -168,7 +162,7 @@ void __fastcall pirates_write_word(UINT32 address, UINT16 data)
 		return;
 
 		case 0xa00000:
-			MSM6295Command(0, data & 0xff);
+			MSM6295Write(0, data & 0xff);
 		return;
 	}
 }
@@ -176,8 +170,6 @@ void __fastcall pirates_write_word(UINT32 address, UINT16 data)
 UINT8 __fastcall pirates_read_byte(UINT32 address)
 {
 	genix_hack();
-//bprintf (PRINT_NORMAL, _T("%5.5x, b\n"), address);
-
 
 	switch (address)
 	{
@@ -190,7 +182,7 @@ UINT8 __fastcall pirates_read_byte(UINT32 address)
 			return DrvInputs[1] >> ((~address & 1) << 3);
 
 		case 0xa00001:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 	}
 
 	return 0;
@@ -199,7 +191,6 @@ UINT8 __fastcall pirates_read_byte(UINT32 address)
 UINT16 __fastcall pirates_read_word(UINT32 address)
 {
 	genix_hack();
-//bprintf (PRINT_NORMAL, _T("%5.5x, w\n"), address);
 
 	switch (address)
 	{
@@ -391,7 +382,7 @@ static INT32 DrvInit()
 		DrvGfxDecode();
 	}
 
-	if (!strcmp(BurnDrvGetTextA(DRV_NAME), "pirates")) {
+	if (!strcmp(BurnDrvGetTextA(DRV_NAME), "pirates") || !strcmp(BurnDrvGetTextA(DRV_NAME), "piratesb")) {
 		*((UINT16*)(Drv68KROM + 0x62c0)) = 0x6006; // bypass protection
 	} else {
 		is_genix = 1;
@@ -413,8 +404,8 @@ static INT32 DrvInit()
 	SekSetReadWordHandler(0,	 pirates_read_word);
 	SekClose();
 
-	MSM6295Init(0, 1333333 / (132 + 39), 0); // otherwise too fast!
-	MSM6295SetRoute(0, 1.00, BURN_SND_ROUTE_BOTH);
+	MSM6295Init(0, 1333333 / MSM6295_PIN7_LOW, 0);
+	MSM6295SetRoute(0, 0.80, BURN_SND_ROUTE_BOTH);
 
 	GenericTilesInit();
 
@@ -536,7 +527,7 @@ static INT32 DrvDraw()
 	if (nBurnLayer & 1)
 		draw_layer(0x2a80, 0x100, 0);
 	else
-		memset (pTransDraw, 0, nScreenWidth * nScreenHeight * 2);
+		BurnTransferClear();
 
 	if (nBurnLayer & 2) draw_layer(0x1380, 0x080, 1);
 
@@ -598,7 +589,7 @@ static INT32 DrvFrame()
 	return 0;
 }
 
-static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
+static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
@@ -606,7 +597,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		*pnMin = 0x029698;
 	}
 
-	if (nAction & ACB_MEMORY_RAM) {	
+	if (nAction & ACB_MEMORY_RAM) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = AllRam;
@@ -618,16 +609,18 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
 
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 	}
 
-	set_oki_bank(*DrvOkiBank);
+	if (nAction & ACB_WRITE) {
+		set_oki_bank(*DrvOkiBank);
+	}
 
 	return 0;
 }
 
 
-// Pirates
+// Pirates (set 1)
 
 static struct BurnRomInfo piratesRomDesc[] = {
 	{ "r_449b.bin",		0x80000, 0x224aeeda, 1 | BRF_PRG | BRF_ESS }, //  0 68k Code
@@ -651,10 +644,44 @@ STD_ROM_FN(pirates)
 
 struct BurnDriver BurnDrvPirates = {
 	"pirates", NULL, NULL, NULL, "1994",
-	"Pirates\0", NULL, "NIX", "Miscellaneous",
+	"Pirates (set 1)\0", NULL, "NIX", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_MISC, 0,
-	NULL, piratesRomInfo, piratesRomName, NULL, NULL, PiratesInputInfo, PiratesDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_SHOOT, 0,
+	NULL, piratesRomInfo, piratesRomName, NULL, NULL, NULL, NULL, PiratesInputInfo, PiratesDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x2000,
+	288, 224, 4, 3
+};
+
+
+// Pirates (set 2)
+// shows 'Copyright 1995' instead of (c)1994 Nix, but isn't unprotected, various changes to the names in the credis + a few other minor alterations
+
+static struct BurnRomInfo piratesbRomDesc[] = {
+	{ "u15",			0x80000, 0x0cfd6415, 1 | BRF_PRG | BRF_ESS }, //  0 68k Code
+	{ "u16",			0x80000, 0x98cece02, 1 | BRF_PRG | BRF_ESS }, //  1
+
+	{ "u34",			0x80000, 0x89fda216, 2 | BRF_GRA },           //  2 Tiles
+	{ "u35",			0x80000, 0x40e069b4, 2 | BRF_GRA },           //  3
+	{ "u48",			0x80000, 0x26d78518, 2 | BRF_GRA },           //  4
+	{ "u49",			0x80000, 0xf31696ea, 2 | BRF_GRA },           //  5
+
+	{ "u69",			0x80000, 0xc78a276f, 3 | BRF_GRA },           //  6 Sprites
+	{ "u70",			0x80000, 0x9f0bad96, 3 | BRF_GRA },           //  7
+	{ "u71",			0x80000, 0x0bb7c816, 3 | BRF_GRA },           //  8
+	{ "u72",			0x80000, 0x1c41bd2c, 3 | BRF_GRA },           //  9
+
+	{ "u31",			0x80000, 0x63a739ec, 4 | BRF_SND },           // 10 Oki Samples
+};
+
+STD_ROM_PICK(piratesb)
+STD_ROM_FN(piratesb)
+
+struct BurnDriver BurnDrvPiratesb = {
+	"piratesb", "pirates", NULL, NULL, "1995",
+	"Pirates (set 2)\0", NULL, "NIX", "Miscellaneous",
+	NULL, NULL, NULL, NULL,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_SHOOT, 0,
+	NULL, piratesbRomInfo, piratesbRomName, NULL, NULL, NULL, NULL, PiratesInputInfo, PiratesDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x2000,
 	288, 224, 4, 3
 };
@@ -686,8 +713,8 @@ struct BurnDriver BurnDrvGenix = {
 	"genix", NULL, NULL, NULL, "1994",
 	"Genix Family\0", NULL, "NIX", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_MISC, 0,
-	NULL, genixRomInfo, genixRomName, NULL, NULL, PiratesInputInfo, PiratesDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_SHOOT, 0,
+	NULL, genixRomInfo, genixRomName, NULL, NULL, NULL, NULL, PiratesInputInfo, PiratesDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x2000,
 	288, 224, 4, 3
 };

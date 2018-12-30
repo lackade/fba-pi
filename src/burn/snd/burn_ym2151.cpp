@@ -1,10 +1,14 @@
+// FBAlpha YM-2151 sound core interface
 #include "burnint.h"
-#include "burn_sound.h"
 #include "burn_ym2151.h"
+
+// Irq Callback timing notes..
+// Due to the way the internal timing of the ym2151 works, BurnYM2151Render()
+// should not be called more than ~65 times per frame.  See DrvFrame() in
+// drv/konami/d_surpratk.cpp for a simple and effective work-around.
 
 void (*BurnYM2151Render)(INT16* pSoundBuf, INT32 nSegmentLength);
 
-UINT8 BurnYM2151Registers[0x0100];
 UINT32 nBurnCurrentYM2151Register;
 
 static INT32 nBurnYM2151SoundRate;
@@ -19,6 +23,8 @@ static UINT32 nSamplesRendered;
 
 static double YM2151Volumes[2];
 static INT32 YM2151RouteDirs[2];
+
+static INT32 YM2151BurnTimer = 0;
 
 static void YM2151RenderResample(INT16* pSoundBuf, INT32 nSegmentLength)
 {
@@ -147,7 +153,9 @@ void BurnYM2151Reset()
 	if (!DebugSnd_YM2151Initted) bprintf(PRINT_ERROR, _T("BurnYM2151Reset called without init\n"));
 #endif
 
-	memset(&BurnYM2151Registers, 0, sizeof(BurnYM2151Registers));
+	if (YM2151BurnTimer)
+		BurnTimerReset();
+
 	YM2151ResetChip(0);
 }
 
@@ -157,25 +165,32 @@ void BurnYM2151Exit()
 	if (!DebugSnd_YM2151Initted) bprintf(PRINT_ERROR, _T("BurnYM2151Exit called without init\n"));
 #endif
 
+	if (!DebugSnd_YM2151Initted) return;
+
 	BurnYM2151SetIrqHandler(NULL);
 	BurnYM2151SetPortHandler(NULL);
 
 	YM2151Shutdown();
 
-	if (pBuffer) {
-		free(pBuffer);
-		pBuffer = NULL;
-	}
+	if (YM2151BurnTimer)
+		BurnTimerExit();
+
+	BurnFree(pBuffer);
 	
 	DebugSnd_YM2151Initted = 0;
 }
 
 INT32 BurnYM2151Init(INT32 nClockFrequency)
 {
+	return BurnYM2151Init(nClockFrequency, 0);
+}
+
+INT32 BurnYM2151Init(INT32 nClockFrequency, INT32 use_timer)
+{
 	DebugSnd_YM2151Initted = 1;
 	
 	if (nBurnSoundRate <= 0) {
-		YM2151Init(1, nClockFrequency, 11025);
+		YM2151Init(1, nClockFrequency, 11025, NULL);
 		return 0;
 	}
 
@@ -193,17 +208,23 @@ INT32 BurnYM2151Init(INT32 nClockFrequency)
 		BurnYM2151Render = YM2151RenderNormal;
 	}
 
-	YM2151Init(1, nClockFrequency, nBurnYM2151SoundRate);
+	if (use_timer)
+	{
+		bprintf(0, _T("YM2151: Using FM-Timer.\n"));
+		YM2151BurnTimer = 1;
+		BurnTimerInit(&ym2151_timer_over, NULL);
+	}
 
-	pBuffer = (INT16*)malloc(65536 * 2 * sizeof(INT16));
+	YM2151Init(1, nClockFrequency, nBurnYM2151SoundRate, (YM2151BurnTimer) ? BurnOPMTimerCallback : NULL);
+
+	pBuffer = (INT16*)BurnMalloc(65536 * 2 * sizeof(INT16));
 	memset(pBuffer, 0, 65536 * 2 * sizeof(INT16));
 
 	nSampleSize = (UINT32)nBurnYM2151SoundRate * (1 << 16) / nBurnSoundRate;
 	nFractionalPosition = 4 << 16;
 	nSamplesRendered = 0;
 	nBurnPosition = 0;
-	memset(&BurnYM2151Registers, 0, sizeof(BurnYM2151Registers));
-	
+
 	// default routes
 	YM2151Volumes[BURN_SND_YM2151_YM2151_ROUTE_1] = 1.00;
 	YM2151Volumes[BURN_SND_YM2151_YM2151_ROUTE_2] = 1.00;
@@ -211,6 +232,18 @@ INT32 BurnYM2151Init(INT32 nClockFrequency)
 	YM2151RouteDirs[BURN_SND_YM2151_YM2151_ROUTE_2] = BURN_SND_ROUTE_BOTH;
 
 	return 0;
+}
+
+// Some games make heavy use of the B timer, to increase the accuracy of
+// this timer, call this with the number of times per frame BurnYM2151Render()
+// is called.  See drv/dataeast/d_rohga for example usage.
+void BurnYM2151SetInterleave(INT32 nInterleave)
+{
+#if defined FBA_DEBUG
+	if (!DebugSnd_YM2151Initted) bprintf(PRINT_ERROR, _T("BurnYM2151SetInterleave called without init\n"));
+#endif
+
+	YM2151SetTimerInterleave(nInterleave * (nBurnFPS / 100));
 }
 
 void BurnYM2151SetRoute(INT32 nIndex, double nVolume, INT32 nRouteDir)
@@ -224,7 +257,7 @@ void BurnYM2151SetRoute(INT32 nIndex, double nVolume, INT32 nRouteDir)
 	YM2151RouteDirs[nIndex] = nRouteDir;
 }
 
-void BurnYM2151Scan(INT32 nAction)
+void BurnYM2151Scan(INT32 nAction, INT32 *pnMin)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_YM2151Initted) bprintf(PRINT_ERROR, _T("BurnYM2151Scan called without init\n"));
@@ -235,20 +268,9 @@ void BurnYM2151Scan(INT32 nAction)
 	}
 
 	SCAN_VAR(nBurnCurrentYM2151Register);
-	SCAN_VAR(BurnYM2151Registers);
-	SCAN_VAR(YM2151Volumes);
-	SCAN_VAR(YM2151RouteDirs);
-	SCAN_VAR(nBurnYM2151SoundRate);
-	SCAN_VAR(nBurnPosition);
-	SCAN_VAR(nSampleSize);
-	SCAN_VAR(nFractionalPosition);
-	SCAN_VAR(nSamplesRendered);
 
-	BurnYM2151Scan_int(nAction); // Properly scan the YM2151's internal registers
+	BurnYM2151Scan_int(nAction); // Scan the YM2151's internal registers
 
-        /*if (nAction & ACB_WRITE) { // Restore the operator connections, see burn_ym2151.h BurnYM2151WriteRegister() for more info.
-		for (INT32 i = 0; i < 0x0100; i++) {
-			YM2151WriteReg(0, i, BurnYM2151Registers[i]);
-		}
-	}*/
+	if (YM2151BurnTimer)
+		BurnTimerScan(nAction, pnMin);
 }

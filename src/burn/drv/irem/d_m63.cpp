@@ -4,10 +4,7 @@
 #include "tiles_generic.h"
 #include "z80_intf.h"
 #include "i8039.h"
-#include "driver.h"
-extern "C" {
 #include "ay8910.h"
-}
 
 static UINT8 *AllMem;
 static UINT8 *MemEnd;
@@ -37,8 +34,6 @@ static UINT8 *interrupt_enable;
 static UINT8 *flipscreen;
 static UINT8 *palette_bank;
 static UINT8 *sound_status;
-
-static INT16 *pAY8910Buffer[6];
 
 static UINT8 m63_sound_p1;
 static UINT8 m63_sound_p2;
@@ -496,7 +491,9 @@ static INT32 DrvDoReset()
 	ZetReset();
 	ZetClose();
 
+	I8039Open(0);
 	I8039Reset();
+	I8039Close();
 
 	AY8910Reset(0);
 	AY8910Reset(1);
@@ -553,7 +550,7 @@ static INT32 MemIndex()
 	DrvGfxROM1		= Next; Next += 0x010000;
 	DrvGfxROM2		= Next; Next += 0x020000;
 
-	DrvSampleROM		= Next; Next += 0x010000;
+	DrvSampleROM	= Next; Next += 0x010000;
 
 	DrvSndROM		= Next; Next += 0x002000;
 
@@ -572,16 +569,12 @@ static INT32 MemIndex()
 	DrvScrRAM		= Next; Next += 0x000100;
 
 	soundlatch		= Next; Next += 0x000001;
-	interrupt_enable	= Next; Next += 0x000001;
+	interrupt_enable= Next; Next += 0x000001;
 	flipscreen		= Next; Next += 0x000001;
-	palette_bank		= Next; Next += 0x000001;
-	sound_status		= Next; Next += 0x000001;
+	palette_bank	= Next; Next += 0x000001;
+	sound_status	= Next; Next += 0x000001;
 
 	RamEnd			= Next;
-
-	for (INT32 i = 0; i < 6; i++) {
-		pAY8910Buffer[i]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	}
 
 	MemEnd			= Next;
 
@@ -603,15 +596,17 @@ static INT32 DrvInit(void (*pMapMainCPU)(), INT32 (*pRomLoadCallback)(), INT32 s
 
 	pMapMainCPU();
 
-	I8039Init(NULL);
+	I8039Init(0);
+	I8039Open(0);
 	I8039SetProgramReadHandler(m63_sound_read);
 	I8039SetCPUOpReadHandler(m63_sound_read);
 	I8039SetCPUOpReadArgHandler(m63_sound_read);
 	I8039SetIOReadHandler(m63_sound_read_port);
 	I8039SetIOWriteHandler(m63_sound_write_port);
+	I8039Close();
 
-	AY8910Init(0, 1500000, nBurnSoundRate, NULL, NULL, NULL, NULL);
-	AY8910Init(1, 1500000, nBurnSoundRate, NULL, NULL, NULL, NULL);
+	AY8910Init(0, 1500000, 0);
+	AY8910Init(1, 1500000, 1);
 	AY8910SetAllRoutes(0, 0.25, BURN_SND_ROUTE_BOTH);
 	AY8910SetAllRoutes(1, 1.00, BURN_SND_ROUTE_BOTH);
 
@@ -871,6 +866,7 @@ static INT32 DrvFrame()
 	INT32 nInterleave = 100;
 
 	ZetOpen(0);
+	I8039Open(0);
 
 	for (INT32 i = 0; i < nInterleave; i++)
 	{
@@ -886,13 +882,13 @@ static INT32 DrvFrame()
 
 	if (*interrupt_enable) ZetNmi();
 
-	ZetClose();
-
 	if (pBurnSoundOut) {
-		AY8910Render(&pAY8910Buffer[0], pBurnSoundOut, nBurnSoundLen, 0);
-
+		AY8910Render(pBurnSoundOut, nBurnSoundLen);
 		sample_render(pBurnSoundOut, nBurnSoundLen);
 	}
+
+	I8039Close();
+	ZetClose();
 
 	if (pBurnDraw) {
 		DrvDraw();
@@ -972,10 +968,10 @@ STD_ROM_FN(wilytowr)
 
 struct BurnDriver BurnDrvWilytowr = {
 	"wilytowr", NULL, NULL, NULL, "1984",
-	"Wily Tower\0", NULL, "Irem", "M63",
+	"Wily Tower\0", NULL, "Irem", "Irem M63",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_IREM_M63, GBF_PLATFORM, 0,
-	NULL, wilytowrRomInfo, wilytowrRomName, NULL, NULL, WilytowrInputInfo, WilytowrDIPInfo,
+	NULL, wilytowrRomInfo, wilytowrRomName, NULL, NULL, NULL, NULL, WilytowrInputInfo, WilytowrDIPInfo,
 	wilytowrInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x104,
 	256, 224, 4, 3
 };
@@ -1020,10 +1016,10 @@ STD_ROM_FN(atomboy)
 
 struct BurnDriver BurnDrvAtomboy = {
 	"atomboy", "wilytowr", NULL, NULL, "1985",
-	"Atomic Boy (revision B)\0", NULL, "Irem (Memetron license)", "M63",
+	"Atomic Boy (revision B)\0", NULL, "Irem (Memetron license)", "Irem M63",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_IREM_M63, GBF_PLATFORM, 0,
-	NULL, atomboyRomInfo, atomboyRomName, NULL, NULL, WilytowrInputInfo, WilytowrDIPInfo,
+	NULL, atomboyRomInfo, atomboyRomName, NULL, NULL, NULL, NULL, WilytowrInputInfo, WilytowrDIPInfo,
 	atomboyInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x104,
 	256, 224, 4, 3
 };
@@ -1068,10 +1064,10 @@ STD_ROM_FN(atomboya)
 
 struct BurnDriver BurnDrvAtomboya = {
 	"atomboya", "wilytowr", NULL, NULL, "1985",
-	"Atomic Boy (revision A)\0", NULL, "Irem (Memetron license)", "M63",
+	"Atomic Boy (revision A)\0", NULL, "Irem (Memetron license)", "Irem M63",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_IREM_M63, GBF_PLATFORM, 0,
-	NULL, atomboyaRomInfo, atomboyaRomName, NULL, NULL, WilytowrInputInfo, WilytowrDIPInfo,
+	NULL, atomboyaRomInfo, atomboyaRomName, NULL, NULL, NULL, NULL, WilytowrInputInfo, WilytowrDIPInfo,
 	atomboyInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x104,
 	256, 224, 4, 3
 };
@@ -1119,10 +1115,10 @@ STD_ROM_FN(fghtbskt)
 
 struct BurnDriver BurnDrvFghtbskt = {
 	"fghtbskt", NULL, NULL, NULL, "1984",
-	"Fighting Basketball\0", NULL, "Paradise Co. Ltd.", "M63",
+	"Fighting Basketball\0", NULL, "Paradise Co. Ltd.", "Irem M63",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_IREM_M63, GBF_SPORTSMISC, 0,
-	NULL, fghtbsktRomInfo, fghtbsktRomName, NULL, NULL, FghtbsktInputInfo, FghtbsktDIPInfo,
+	NULL, fghtbsktRomInfo, fghtbsktRomName, NULL, NULL, NULL, NULL, FghtbsktInputInfo, FghtbsktDIPInfo,
 	fghtbsktInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	256, 224, 4, 3
 };

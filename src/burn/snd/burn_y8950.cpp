@@ -1,12 +1,5 @@
 #include "burnint.h"
-#include "burn_sound.h"
 #include "burn_y8950.h"
-#include "m68000_intf.h"
-#include "z80_intf.h"
-#include "m6809_intf.h"
-#include "hd6309_intf.h"
-#include "m6800_intf.h"
-#include "m6502_intf.h"
 
 // Timer Related
 
@@ -182,98 +175,17 @@ INT32 BurnTimerInitY8950(INT32 (*pOverCallback)(INT32, INT32), double (*pTimeCal
 	return 0;
 }
 
-INT32 BurnTimerAttachSekY8950(INT32 nClockspeed)
+
+INT32 BurnTimerAttachY8950(cpu_core_config *ptr, INT32 nClockspeed)
 {
 	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = SekTotalCycles;
-	pCPURun = SekRun;
-	pCPURunEnd = SekRunEnd;
+	pCPUTotalCycles = ptr->totalcycles;
+	pCPURun = ptr->run;
+	pCPURunEnd = ptr->runend;
 
 	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
 
-	return 0;
-}
-
-INT32 BurnTimerAttachZetY8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = ZetTotalCycles;
-	pCPURun = ZetRun;
-	pCPURunEnd = ZetRunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6809Y8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6809TotalCycles;
-	pCPURun = M6809Run;
-	pCPURunEnd = M6809RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachHD6309Y8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = HD6309TotalCycles;
-	pCPURun = HD6309Run;
-	pCPURunEnd = HD6309RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6800Y8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6800TotalCycles;
-	pCPURun = M6800Run;
-	pCPURunEnd = M6800RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachHD63701Y8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6800TotalCycles;
-	pCPURun = HD63701Run;
-	pCPURunEnd = HD63701RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6803Y8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6800TotalCycles;
-	pCPURun = M6803Run;
-	pCPURunEnd = M6803RunEnd;
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
-
-	return 0;
-}
-
-INT32 BurnTimerAttachM6502Y8950(INT32 nClockspeed)
-{
-	nCPUClockspeed = nClockspeed;
-	pCPUTotalCycles = M6502TotalCycles;
-	pCPURun = M6502Run;
-	pCPURunEnd = M6502RunEnd; // doesn't do anything...
-
-	nTicksExtra = MAKE_TIMER_TICKS(1, nCPUClockspeed) - 1;
+//	bprintf(PRINT_NORMAL, _T("--- timer cpu speed %iHz, one cycle = %i ticks.\n"), nClockspeed, MAKE_TIMER_TICKS(1, BurnTimerCPUClockspeed));
 
 	return 0;
 }
@@ -539,6 +451,9 @@ void BurnY8950Exit()
 #if defined FBA_DEBUG
 	if (!DebugSnd_Y8950Initted) bprintf(PRINT_ERROR, _T("BurnY8950Exit called without init\n"));
 #endif
+
+	// Crash prevention.
+	if (!DebugSnd_Y8950Initted) return;
 
 	Y8950Shutdown();
 

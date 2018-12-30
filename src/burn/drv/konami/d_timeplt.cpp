@@ -32,8 +32,6 @@ static UINT8 *DrvSprTmp;
 static UINT32 *DrvPalette;
 static UINT8  DrvRecalc;
 
-static INT16 *pAY8910Buffer[6];
-
 static UINT8 nmi_enable;
 static UINT8 last_sound_irq;
 
@@ -350,6 +348,8 @@ static INT32 DrvDoReset(INT32 clear_ram)
 
 	watchdog = 0;
 
+	HiscoreReset();
+
 	return 0;
 }
 
@@ -380,13 +380,6 @@ static INT32 MemIndex()
 	DrvSprRAM		= Next; Next += 0x000200;
 
 	RamEnd			= Next;
-
-	pAY8910Buffer[0]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[1]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[2]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[3]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[4]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[5]	= (INT16*)Next; Next += nBurnSoundLen * sizeof(INT16);
 
 	MemEnd			= Next;
 
@@ -542,6 +535,7 @@ static INT32 DrvInit(INT32 game)
 	ZetClose();
 
 	TimepltSndInit(DrvZ80ROM1, DrvZ80RAM1, 1);
+	TimepltSndSrcGain(0.55); // quench distortion when ship blows up
 
 //	tc8830fInit(512000, DrvSndROM, 0x20000, 1);
 //	tc8830fSetAllRoutes(0.60, BURN_SND_ROUTE_BOTH);
@@ -760,7 +754,7 @@ static INT32 DrvFrame()
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+			TimepltSndUpdate(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -769,7 +763,7 @@ static INT32 DrvFrame()
 	if (pBurnSoundOut) {
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-		TimepltSndUpdate(pAY8910Buffer, pSoundBuf, nSegmentLength);
+		TimepltSndUpdate(pSoundBuf, nSegmentLength);
 //		tc8830fUpdate(pBurnSoundOut, nBurnSoundLen);
 	}
 
@@ -839,8 +833,8 @@ struct BurnDriver BurnDrvTimeplt = {
 	"timeplt", NULL, NULL, NULL, "1982",
 	"Time Pilot\0", NULL, "Konami", "GX393",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, timepltRomInfo, timepltRomName, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, timepltRomInfo, timepltRomName, NULL, NULL, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
 	timepltInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };
@@ -873,8 +867,8 @@ struct BurnDriver BurnDrvTimeplta = {
 	"timeplta", "timeplt", NULL, NULL, "1982",
 	"Time Pilot (Atari)\0", NULL, "Konami (Atari license)", "GX393",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, timepltaRomInfo, timepltaRomName, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, timepltaRomInfo, timepltaRomName, NULL, NULL, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
 	timepltInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };
@@ -907,8 +901,8 @@ struct BurnDriver BurnDrvTimepltc = {
 	"timepltc", "timeplt", NULL, NULL, "1982",
 	"Time Pilot (Centuri)\0", NULL, "Konami (Centuri license)", "GX393",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, timepltcRomInfo, timepltcRomName, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, timepltcRomInfo, timepltcRomName, NULL, NULL, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
 	timepltInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };
@@ -941,8 +935,8 @@ struct BurnDriver BurnDrvSpaceplt = {
 	"spaceplt", "timeplt", NULL, NULL, "1982",
 	"Space Pilot\0", NULL, "bootleg", "GX393",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
-	NULL, spacepltRomInfo, spacepltRomName, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VERSHOOT, 0,
+	NULL, spacepltRomInfo, spacepltRomName, NULL, NULL, NULL, NULL, TimepltInputInfo, TimepltDIPInfo,
 	timepltInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };
@@ -981,8 +975,8 @@ struct BurnDriver BurnDrvPsurge = {
 	"psurge", NULL, NULL, NULL, "1988",
 	"Power Surge\0", NULL, "Vision Electronics", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_PREFIX_KONAMI, GBF_MAZE, 0,
-	NULL, psurgeRomInfo, psurgeRomName, NULL, NULL, TimepltInputInfo, PsurgeDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_MAZE, 0,
+	NULL, psurgeRomInfo, psurgeRomName, NULL, NULL, NULL, NULL, TimepltInputInfo, PsurgeDIPInfo,
 	psurgeInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };
@@ -1024,8 +1018,8 @@ struct BurnDriver BurnDrvChkun = {
 	"chkun", NULL, NULL, NULL, "1988",
 	"Chance Kun (Japan)\0", NULL, "Peni Soft", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_CASINO, 0,
-	NULL, chkunRomInfo, chkunRomName, NULL, NULL, ChkunInputInfo, ChkunDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_CASINO, 0,
+	NULL, chkunRomInfo, chkunRomName, NULL, NULL, NULL, NULL, ChkunInputInfo, ChkunDIPInfo,
 	chkunInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };
@@ -1064,8 +1058,8 @@ struct BurnDriver BurnDrvBikkuric = {
 	"bikkuric", NULL, NULL, NULL, "1987",
 	"Bikkuri Card (Japan)\0", NULL, "Peni Soft", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PREFIX_KONAMI, GBF_CASINO, 0,
-	NULL, bikkuricRomInfo, bikkuricRomName, NULL, NULL, BikkuricInputInfo, BikkuricDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_CASINO, 0,
+	NULL, bikkuricRomInfo, bikkuricRomName, NULL, NULL, NULL, NULL, BikkuricInputInfo, BikkuricDIPInfo,
 	bikkuricInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x180,
 	224, 256, 3, 4
 };

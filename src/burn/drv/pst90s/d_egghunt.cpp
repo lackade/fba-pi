@@ -177,12 +177,7 @@ UINT8 __fastcall egghunt_main_read_port(UINT16 port)
 
 static void set_oki_bank(INT32 data)
 {
-	MSM6295ROM = DrvSndROM0 + ((data & 0x10) >> 4) * 0x40000;
-
-	for (INT32 nChannel = 0; nChannel < 4; nChannel++) {
-		MSM6295SampleInfo[0][nChannel] = MSM6295ROM + (nChannel << 8);
-		MSM6295SampleData[0][nChannel] = MSM6295ROM + (nChannel << 16);
-	}
+	MSM6295SetBank(0, DrvSndROM0 + ((data & 0x10) >> 4) * 0x40000, 0x00000, 0x3ffff);
 }
 
 void __fastcall egghunt_sound_write(UINT16 address, UINT8 data)
@@ -195,7 +190,7 @@ void __fastcall egghunt_sound_write(UINT16 address, UINT8 data)
 		return;
 
 		case 0xe004:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 	}
 }
@@ -212,7 +207,7 @@ UINT8 __fastcall egghunt_sound_read(UINT16 address)
 			return oki_bank;
 
 		case 0xe004:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 	}
 
 	return 0;
@@ -506,7 +501,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	if (nAction & ACB_DRIVER_DATA) {
 		ZetScan(nAction);
 
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(oki_bank);
 		SCAN_VAR(gfx_bank);
@@ -553,7 +548,7 @@ struct BurnDriver BurnDrvEgghunt = {
 	"Egg Hunt\0", NULL, "Invi Image", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, egghuntRomInfo, egghuntRomName, NULL, NULL, EgghuntInputInfo, EgghuntDIPInfo,
+	NULL, egghuntRomInfo, egghuntRomName, NULL, NULL, NULL, NULL, EgghuntInputInfo, EgghuntDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	384, 240, 4, 3
 };

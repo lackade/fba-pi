@@ -148,13 +148,13 @@ UINT8 __fastcall silkroad_read_byte(UINT32 address)
 			return DrvDips[0];
 
 		case 0xc00025:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0xc0002d:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 
 		case 0xc00031:
-			return MSM6295ReadStatus(1);
+			return MSM6295Read(1);
 	}
 
 	return 0;
@@ -165,7 +165,7 @@ void __fastcall silkroad_write_byte(UINT32 address, UINT8 data)
 	switch (address)
 	{
 		case 0xc00025:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 
 		case 0xc00029:
@@ -177,7 +177,15 @@ void __fastcall silkroad_write_byte(UINT32 address, UINT8 data)
 		return;
 
 		case 0xc00031:
-			MSM6295Command(1, data);
+			MSM6295Write(1, data);
+		return;
+
+		case 0xc00034:
+		case 0xc00035:
+		case 0xc00036:
+		case 0xc00037:
+			if ((data & 0x03) < 2)
+				MSM6295SetBank(0, DrvSndROM0 + ((data & 0x01) * 0x40000), 0, 0x3ffff);
 		return;
 	}
 }
@@ -315,16 +323,7 @@ static INT32 DrvDoReset()
 
 	BurnYM2151Reset();
 
-	MSM6295Reset(0);
-	MSM6295Reset(1);
-
-	for (INT32 nChannel = 0; nChannel < 4; nChannel++) {
-		MSM6295SampleInfo[0][nChannel] = DrvSndROM0 + (nChannel << 8);
-		MSM6295SampleData[0][nChannel] = DrvSndROM0 + (nChannel << 16);
-
-		MSM6295SampleInfo[1][nChannel] = DrvSndROM1 + (nChannel << 8);
-		MSM6295SampleData[1][nChannel] = DrvSndROM1 + (nChannel << 16);
-	}
+	MSM6295Reset();
 
 	return 0;
 }
@@ -406,6 +405,8 @@ static INT32 DrvInit()
 	BurnYM2151SetRoute(BURN_SND_YM2151_YM2151_ROUTE_2, 1.00, BURN_SND_ROUTE_RIGHT);
 	MSM6295Init(0, 1056000 / 132, 1);
 	MSM6295Init(1, 2112000 / 132, 1);
+	MSM6295SetBank(0, DrvSndROM0, 0, 0x3ffff);
+	MSM6295SetBank(1, DrvSndROM1, 0, 0x3ffff);
 	MSM6295SetRoute(0, 0.45, BURN_SND_ROUTE_BOTH);
 	MSM6295SetRoute(1, 0.45, BURN_SND_ROUTE_BOTH);
 
@@ -428,8 +429,7 @@ static INT32 DrvExit()
 	SekExit();
 
 	BurnYM2151Exit();
-	MSM6295Exit(0);
-	MSM6295Exit(1);
+	MSM6295Exit();
 
 	GenericTilesExit();
 
@@ -614,8 +614,7 @@ static INT32 DrvFrame()
 
 	if (pBurnSoundOut) {
 		BurnYM2151Render(pBurnSoundOut, nBurnSoundLen);
-		MSM6295Render(0, pBurnSoundOut, nBurnSoundLen);
-		MSM6295Render(1, pBurnSoundOut, nBurnSoundLen);
+		MSM6295Render(pBurnSoundOut, nBurnSoundLen);
 	}
 
 	if (pBurnDraw) {
@@ -644,9 +643,8 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
 
-		BurnYM2151Scan(nAction);
-		MSM6295Scan(0, nAction);
-		MSM6295Scan(1, nAction);
+		BurnYM2151Scan(nAction, pnMin);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(DrvInputs[0]);
 		SCAN_VAR(DrvInputs[1]);
@@ -690,7 +688,7 @@ struct BurnDriver BurnDrvSilkroad = {
 	"The Legend of Silkroad\0", NULL, "Unico", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_SCRFIGHT, 0,
-	NULL, silkroadRomInfo, silkroadRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	NULL, silkroadRomInfo, silkroadRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, NULL, 0x1001,
 	380, 224, 4, 3
 };
@@ -726,7 +724,7 @@ struct BurnDriver BurnDrvSilkroada = {
 	"The Legend of Silkroad (larger roms)\0", NULL, "Unico", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_SCRFIGHT, 0,
-	NULL, silkroadaRomInfo, silkroadaRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	NULL, silkroadaRomInfo, silkroadaRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
 	DrvaInit, DrvExit, DrvFrame, DrvDraw, DrvScan, NULL, 0x1001,
 	380, 224, 4, 3
 };

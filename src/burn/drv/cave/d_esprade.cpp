@@ -29,6 +29,7 @@ static INT32 nCurrentCPU;
 static INT32 nCyclesDone[2];
 static INT32 nCyclesTotal[2];
 static INT32 nCyclesSegment;
+static INT32 nCyclesExtra;
 
 static struct BurnInputInfo espradeInputList[] = {
 	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 8,	"p1 coin"},
@@ -299,6 +300,10 @@ static INT32 DrvDoReset()
 
 	YMZ280BReset();
 
+	nCyclesExtra = 0;
+
+	HiscoreReset();
+
 	return 0;
 }
 
@@ -393,7 +398,8 @@ static INT32 DrvFrame()
 
 		nCyclesSegment = nNext - nCyclesDone[nCurrentCPU];
 		if (!CheckSleep(nCurrentCPU)) {									// See if this CPU is busywaiting
-			nCyclesDone[nCurrentCPU] += SekRun(nCyclesSegment);
+			nCyclesDone[nCurrentCPU] += SekRun(nCyclesSegment+nCyclesExtra);
+			nCyclesExtra = 0;
 		} else {
 			nCyclesDone[nCurrentCPU] += SekIdle(nCyclesSegment);
 		}
@@ -412,6 +418,7 @@ static INT32 DrvFrame()
 		}
 	}
 
+	nCyclesExtra = SekTotalCycles() - nCyclesTotal[0];
 	SekClose();
 
 	return 0;
@@ -519,7 +526,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 
 		SekScan(nAction);				// scan 68000 states
 
-		YMZ280BScan();
+		YMZ280BScan(nAction, pnMin);
 
 		SCAN_VAR(nVideoIRQ);
 		SCAN_VAR(nSoundIRQ);
@@ -684,8 +691,8 @@ struct BurnDriver BurnDrvEsprade = {
 	"esprade", NULL, NULL, NULL, "1998",
 	"ESP Ra.De. - A.D.2018 Tokyo (International, ver. 98/04/22)\0", NULL, "Atlus / Cave", "Cave",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
-	NULL, espradeRomInfo, espradeRomName, NULL, NULL, espradeInputInfo, espradeDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY | BDF_HISCORE_SUPPORTED, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
+	NULL, espradeRomInfo, espradeRomName, NULL, NULL, NULL, NULL, espradeInputInfo, espradeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 240, 320, 3, 4
 };
@@ -694,8 +701,8 @@ struct BurnDriver BurnDrvEspradej = {
 	"espradej", "esprade", NULL, NULL, "1998",
 	"ESP Ra.De. (Japan, ver. 98/04/21)\0", NULL, "Atlus / Cave", "Cave",
 	L"ESP Ra.De. \u30A8\u30B9\u30D7\u30EC\u30A4\u30C9 (Japan, ver. 98/04/21)\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
-	NULL, espradejRomInfo, espradejRomName, NULL, NULL, espradeInputInfo, espradeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY | BDF_HISCORE_SUPPORTED, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
+	NULL, espradejRomInfo, espradejRomName, NULL, NULL, NULL, NULL, espradeInputInfo, espradeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 240, 320, 3, 4
 };
@@ -704,8 +711,8 @@ struct BurnDriver BurnDrvEspradejo = {
 	"espradejo", "esprade", NULL, NULL, "1998",
 	"ESP Ra.De. (Japan, ver. 98/04/14)\0", NULL, "Atlus / Cave", "Cave",
 	L"ESP Ra.De. \u30A8\u30B9\u30D7\u30EC\u30A4\u30C9 (Japan, ver. 98/04/14)\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
-	NULL, espradejoRomInfo, espradejoRomName, NULL, NULL, espradeInputInfo, espradeDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY | BDF_HISCORE_SUPPORTED, 2, HARDWARE_CAVE_68K_ONLY, GBF_VERSHOOT, 0,
+	NULL, espradejoRomInfo, espradejoRomName, NULL, NULL, NULL, NULL, espradeInputInfo, espradeDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 240, 320, 3, 4
 };

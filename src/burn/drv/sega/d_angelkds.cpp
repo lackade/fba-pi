@@ -45,7 +45,7 @@ static UINT8 DrvJoy2[8];
 static UINT8 DrvJoy3[8];
 static UINT8 DrvDips[3];
 static UINT8 DrvReset;
-static UINT16 DrvInputs[3];
+static UINT8 DrvInputs[3];
 
 static struct BurnInputInfo AngelkdsInputList[] = {
 	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 0,	"p1 coin"	},
@@ -404,21 +404,7 @@ static INT32 DrvDoReset()
 
 static void DrvFMIRQHandler(INT32, INT32 nStatus)
 {
-	if (nStatus & 1) {
-		ZetSetIRQLine(0xff, CPU_IRQSTATUS_ACK);
-	} else {
-		ZetSetIRQLine(0,    CPU_IRQSTATUS_NONE);
-	}
-}
-
-static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 4000000;
-}
-
-static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 4000000.0;
+	ZetSetIRQLine(0, (nStatus) ? CPU_IRQSTATUS_ACK : CPU_IRQSTATUS_NONE);
 }
 
 static INT32 MemIndex()
@@ -700,7 +686,7 @@ static INT32 DrvInit(INT32 game)
 	ZetSetInHandler(main_to_sound_in_port);
 	ZetClose();
 
-	BurnYM2203Init(2, 4000000, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(2, 4000000, &DrvFMIRQHandler, 0);
 	BurnTimerAttachZet(4000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.45, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.65, BURN_SND_ROUTE_BOTH);
@@ -983,8 +969,8 @@ struct BurnDriver BurnDrvAngelkds = {
 	"angelkds", NULL, NULL, NULL, "1988",
 	"Angel Kids (Japan)\0", NULL, "Sega / Nasco?", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_SEGA_MISC, GBF_MISC, 0,
-	NULL, angelkdsRomInfo, angelkdsRomName, NULL, NULL, AngelkdsInputInfo, AngelkdsDIPInfo,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_SEGA_MISC, GBF_BREAKOUT, 0,
+	NULL, angelkdsRomInfo, angelkdsRomName, NULL, NULL, NULL, NULL, AngelkdsInputInfo, AngelkdsDIPInfo,
 	angelkdsInit, DrvExit, DrvFrame, DrvDraw, DrvScan, NULL, 0x100,
 	240, 256, 3, 4
 };
@@ -1031,7 +1017,7 @@ struct BurnDriver BurnDrvSpcpostn = {
 	"Space Position (Japan)\0", NULL, "Sega / Nasco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_SEGA_MISC, GBF_RACING, 0,
-	NULL, spcpostnRomInfo, spcpostnRomName, NULL, NULL, SpcpostnInputInfo, SpcpostnDIPInfo,
+	NULL, spcpostnRomInfo, spcpostnRomName, NULL, NULL, NULL, NULL, SpcpostnInputInfo, SpcpostnDIPInfo,
 	spcpostnInit, DrvExit, DrvFrame, DrvDraw, DrvScan, NULL, 0x100,
 	240, 256, 3, 4
 };

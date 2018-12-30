@@ -30,8 +30,6 @@ static UINT8 *DrvSprBuf;
 static UINT32 *DrvPalette;
 static UINT8 DrvRecalc;
 
-static INT16 *SoundBuffer;
-
 static UINT8 *flipscreen;
 
 static UINT8 DrvJoy1[16];
@@ -99,7 +97,7 @@ static struct BurnDIPInfo CbusterDIPList[]=
 	{0x13, 0x01, 0x40, 0x40, "Off"			},
 	{0x13, 0x01, 0x40, 0x00, "On"			},
 
-	{0   , 0xfe, 0   ,    0, "Lives"		},
+	{0   , 0xfe, 0   ,    4, "Lives"		},
 	{0x14, 0x01, 0x03, 0x01, "1"			},
 	{0x14, 0x01, 0x03, 0x00, "2"			},
 	{0x14, 0x01, 0x03, 0x03, "3"			},
@@ -111,18 +109,18 @@ static struct BurnDIPInfo CbusterDIPList[]=
 	{0x14, 0x01, 0x0c, 0x04, "Hard"			},
 	{0x14, 0x01, 0x0c, 0x00, "Hardest"		},
 
-	{0   , 0xfe, 0   ,    4, "Allow Continue"	},
+	{0   , 0xfe, 0   ,    2, "Allow Continue"	},
 	{0x14, 0x01, 0x40, 0x00, "No"			},
 	{0x14, 0x01, 0x40, 0x40, "Yes"			},
 
-	{0   , 0xfe, 0   ,    0, "Demo Sounds"		},
+	{0   , 0xfe, 0   ,    2, "Demo Sounds"		},
 	{0x14, 0x01, 0x80, 0x80, "Off"			},
 	{0x14, 0x01, 0x80, 0x00, "On"			},
 };
 
 STDDIPINFO(Cbuster)
 
-void __fastcall cbuster_main_write_word(UINT32 address, UINT16 data)
+static void __fastcall cbuster_main_write_word(UINT32 address, UINT16 data)
 {
 	deco16_write_control_word(0, address, 0xb5000, data)
 	deco16_write_control_word(1, address, 0xb6000, data)
@@ -136,29 +134,12 @@ void __fastcall cbuster_main_write_word(UINT32 address, UINT16 data)
 
 		case 0xbc002:
 			deco16_soundlatch = data & 0xff;
-			//h6280SetIRQLine(0, CPU_IRQSTATUS_ACK);
-
-			// tempo fluctuation hack
-		    static UINT8 last_latch = 0;
-			static INT32 latch_repeat = 0;
-			if (deco16_soundlatch == 0x1b && last_latch == 0x1b) {
-				latch_repeat++;
-			} else latch_repeat = 0;
-			last_latch = deco16_soundlatch;
-
-			if (latch_repeat) {
-				if (latch_repeat%8 == 0) {
-					h6280SetIRQLine(0, CPU_IRQSTATUS_ACK);
-				}
-			} else {
-				h6280SetIRQLine(0, CPU_IRQSTATUS_ACK);
-			}
-			// end tempo fluctuation hack
+			h6280SetIRQLine(0, CPU_IRQSTATUS_ACK);
 		return;
 	}
 }
 
-void __fastcall cbuster_main_write_byte(UINT32 address, UINT8 data)
+static void __fastcall cbuster_main_write_byte(UINT32 address, UINT8 data)
 {
 	switch (address)
 	{
@@ -193,7 +174,7 @@ void __fastcall cbuster_main_write_byte(UINT32 address, UINT8 data)
 	}
 }
 
-UINT16 __fastcall cbuster_main_read_word(UINT32 address)
+static UINT16 __fastcall cbuster_main_read_word(UINT32 address)
 {
 	switch (address)
 	{
@@ -217,7 +198,7 @@ UINT16 __fastcall cbuster_main_read_word(UINT32 address)
 	return 0;
 }
 
-UINT8 __fastcall cbuster_main_read_byte(UINT32 address)
+static UINT8 __fastcall cbuster_main_read_byte(UINT32 address)
 {
 	switch (address)
 	{
@@ -320,9 +301,6 @@ static INT32 MemIndex()
 	flipscreen	= Next; Next += 0x000001;
 
 	RamEnd		= Next;
-	
-	SoundBuffer = (INT16*)Next; Next += nBurnSoundLen * 2 * sizeof(INT16);
-
 	MemEnd		= Next;
 
 	return 0;
@@ -446,8 +424,10 @@ static INT32 DrvInit()
 	SekSetReadByteHandler(0,		cbuster_main_read_byte);
 	SekClose();
 
-	deco16SoundInit(DrvHucROM, DrvHucRAM, 8055000 / 3, 1, NULL, 0.45, 1006875, 0.75, 2013750, 0.60);
+	deco16SoundInit(DrvHucROM, DrvHucRAM, 8055000, 1, NULL, 0.45, 1006875, 0.75, 2013750, 0.60);
 	BurnYM2203SetAllRoutes(0, 0.60, BURN_SND_ROUTE_BOTH);
+
+	deco16_music_tempofix = 1;
 
 	GenericTilesInit();
 
@@ -619,7 +599,7 @@ static INT32 DrvFrame()
 
 	INT32 nInterleave = 232;
 	INT32 nSoundBufferPos = 0;
-	INT32 nCyclesTotal[2] = { 12000000 / 58, 8055000 / 3 / 58 };
+	INT32 nCyclesTotal[2] = { 12000000 / 58, 8055000 / 58 };
 	INT32 nCyclesDone[2] = { 0, 0 };
 
 	h6280NewFrame();
@@ -632,38 +612,36 @@ static INT32 DrvFrame()
 	for (INT32 i = 0; i < nInterleave; i++)
 	{
 		nCyclesDone[0] += SekRun(nCyclesTotal[0] / nInterleave);
-		nCyclesDone[1] += h6280Run(nCyclesTotal[1] / nInterleave);
+		BurnTimerUpdate((i + 1) * nCyclesTotal[1] / nInterleave);
+
 
 		if (i == 206) deco16_vblank = 0x08;
-		
-		INT32 nSegmentLength = nBurnSoundLen / nInterleave;
-		INT16* pSoundBuf = SoundBuffer + (nSoundBufferPos << 1);
-		deco16SoundUpdate(pSoundBuf, nSegmentLength);
-		nSoundBufferPos += nSegmentLength;
+
+		if (pBurnSoundOut) {
+			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+			deco16SoundUpdate(pSoundBuf, nSegmentLength);
+			nSoundBufferPos += nSegmentLength;
+		}
 	}
 
 	SekSetIRQLine(4, CPU_IRQSTATUS_AUTO);
 	BurnTimerEndFrame(nCyclesTotal[1]);
 
 	if (pBurnSoundOut) {
-		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
-		
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
-		INT16* pSoundBuf = SoundBuffer + (nSoundBufferPos << 1);
+		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 
 		if (nSegmentLength) {
 			deco16SoundUpdate(pSoundBuf, nSegmentLength);
 		}
-		
-		for (INT32 i = 0; i < nBurnSoundLen; i++) {
-			pBurnSoundOut[(i << 1) + 0] = BURN_SND_CLIP(pBurnSoundOut[(i << 1) + 0] + SoundBuffer[(i << 1) + 0]);
-			pBurnSoundOut[(i << 1) + 1] = BURN_SND_CLIP(pBurnSoundOut[(i << 1) + 1] + SoundBuffer[(i << 1) + 1]);
-		}
+
+		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
 	}
 
 	h6280Close();
 	SekClose();
-	
+
 	if (pBurnDraw) {
 		DrvDraw();
 	}
@@ -689,7 +667,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
-		
+
 		deco16SoundScan(nAction, pnMin);
 
 		deco16Scan();
@@ -737,7 +715,7 @@ struct BurnDriver BurnDrvCbuster = {
 	"Crude Buster (World FX version)\0",NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_SCRFIGHT, 0,
-	NULL, cbusterRomInfo, cbusterRomName, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
+	NULL, cbusterRomInfo, cbusterRomName, NULL, NULL, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 240, 4, 3
 };
@@ -781,7 +759,7 @@ struct BurnDriver BurnDrvCbusterw = {
 	"Crude Buster (World FU version)\0", NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_SCRFIGHT, 0,
-	NULL, cbusterwRomInfo, cbusterwRomName, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
+	NULL, cbusterwRomInfo, cbusterwRomName, NULL, NULL, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 240, 4, 3
 };
@@ -825,7 +803,7 @@ struct BurnDriver BurnDrvCbusterj = {
 	"Crude Buster (Japan FR revision 1)\0", NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_SCRFIGHT, 0,
-	NULL, cbusterjRomInfo, cbusterjRomName, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
+	NULL, cbusterjRomInfo, cbusterjRomName, NULL, NULL, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 240, 4, 3
 };
@@ -869,7 +847,7 @@ struct BurnDriver BurnDrvTwocrude = {
 	"Two Crude (US FT revision 1)\0", NULL, "Data East USA", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_SCRFIGHT, 0,
-	NULL, twocrudeRomInfo, twocrudeRomName, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
+	NULL, twocrudeRomInfo, twocrudeRomName, NULL, NULL, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 240, 4, 3
 };
@@ -913,7 +891,7 @@ struct BurnDriver BurnDrvTwocrudea = {
 	"Two Crude (US FT version)\0", NULL, "Data East USA", "DECO IC16",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_PLATFORM | GBF_SCRFIGHT, 0,
-	NULL, twocrudeaRomInfo, twocrudeaRomName, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
+	NULL, twocrudeaRomInfo, twocrudeaRomName, NULL, NULL, NULL, NULL, CbusterInputInfo, CbusterDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 240, 4, 3
 };

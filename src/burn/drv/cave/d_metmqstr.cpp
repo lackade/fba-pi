@@ -92,11 +92,9 @@ UINT8 __fastcall metmqstrReadByte(UINT32 sekAddress)
 void __fastcall metmqstrWriteByte(UINT32 sekAddress, UINT8 byteValue)
 {
 	switch (sekAddress) {
-			if (~byteValue & 0x0100) {
 		case 0xd00000:
 			EEPROMWrite(byteValue & 0x04, byteValue & 0x02, byteValue & 0x08);
 			break;
-			}
 		default: {
 			bprintf(PRINT_NORMAL, _T("Attempt to write byte value %x to location %x\n"), byteValue, sekAddress);
 
@@ -210,10 +208,10 @@ void __fastcall metmqstrWriteWord(UINT32 sekAddress, UINT16 wordValue)
 		
 		case 0xd00000:
 			if (~wordValue & 0x0100) {
-			wordValue >>= 8;
-			EEPROMWrite(wordValue & 0x04, wordValue & 0x02, wordValue & 0x08);
-			break;
+				wordValue >>= 8;
+				EEPROMWrite(wordValue & 0x04, wordValue & 0x02, wordValue & 0x08);
 			}
+			break;
 		default: {
 			bprintf(PRINT_NORMAL, _T("Attempt to write word value %x to location %x\n"), wordValue, sekAddress);
 
@@ -239,7 +237,7 @@ UINT8 __fastcall metmqstrZIn(UINT16 nAddress)
 			return SoundLatch >> 8;
 		
 		case 0x51:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 			
 		default: {
 			bprintf(PRINT_NORMAL, _T("Z80 Port Read %x\n"), nAddress);
@@ -270,7 +268,7 @@ void __fastcall metmqstrZOut(UINT16 nAddress, UINT8 nValue)
 			break;
 			
 		case 0x60: {
-			MSM6295Command(0, nValue);
+			MSM6295Write(0, nValue);
 			return;
 		}
 		
@@ -284,7 +282,7 @@ void __fastcall metmqstrZOut(UINT16 nAddress, UINT8 nValue)
 		}
 		
 		case 0x80: {
-			MSM6295Command(1, nValue);
+			MSM6295Write(1, nValue);
 			return;
 		}
 		
@@ -328,8 +326,7 @@ static INT32 DrvExit()
 	EEPROMExit();
 	
 	BurnYM2151Exit();
-	MSM6295Exit(0);
-	MSM6295Exit(1);
+	MSM6295Exit();
 
 	CaveTileExit();
 	CaveSpriteExit();
@@ -363,8 +360,7 @@ static INT32 DrvDoReset()
 	ZetClose();
 	
 	BurnYM2151Reset();
-	MSM6295Reset(0);
-	MSM6295Reset(1);
+	MSM6295Reset();
 
 	EEPROMReset();
 	
@@ -496,8 +492,7 @@ static INT32 DrvFrame()
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 			BurnYM2151Render(pSoundBuf, nSegmentLength);
-			MSM6295Render(0, pSoundBuf, nSegmentLength);
-			MSM6295Render(1, pSoundBuf, nSegmentLength);
+			MSM6295Render(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -509,8 +504,7 @@ static INT32 DrvFrame()
 
 		if (nSegmentLength) {
 			BurnYM2151Render(pSoundBuf, nSegmentLength);
-			MSM6295Render(0, pSoundBuf, nSegmentLength);
-			MSM6295Render(1, pSoundBuf, nSegmentLength);
+			MSM6295Render(pSoundBuf, nSegmentLength);
 		}
 	}
 	
@@ -625,9 +619,8 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
-		MSM6295Scan(0, nAction);
-		MSM6295Scan(1, nAction);
+		BurnYM2151Scan(nAction, pnMin);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(nVideoIRQ);
 		SCAN_VAR(nSoundIRQ);
@@ -827,7 +820,7 @@ struct BurnDriver BurnDrvmetmqstr = {
 	"Metamoqester (International)\0", NULL, "Banpresto / Pandorabox", "Cave",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_Z80, GBF_VSFIGHT, 0,
-	NULL, metmqstrRomInfo, metmqstrRomName, NULL, NULL, metmqstrInputInfo, NULL,
+	NULL, metmqstrRomInfo, metmqstrRomName, NULL, NULL, NULL, NULL, metmqstrInputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 384, 240, 4, 3
 };
@@ -837,7 +830,7 @@ struct BurnDriver BurnDrvnmaster = {
 	"Oni - The Ninja Master (Japan)\0", NULL, "Banpresto / Pandorabox", "Cave",
 	L"\u7A4F\u5FCD - The Ninja Master (Japan)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY | BDF_CLONE, 2, HARDWARE_CAVE_68K_Z80, GBF_VSFIGHT, 0,
-	NULL, nmasterRomInfo, nmasterRomName, NULL, NULL, metmqstrInputInfo, NULL,
+	NULL, nmasterRomInfo, nmasterRomName, NULL, NULL, NULL, NULL, metmqstrInputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 384, 240, 4, 3
 };

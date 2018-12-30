@@ -58,7 +58,8 @@ int InputInit();
 int InputExit();
 int InputMake(bool bCopy);
 
-#define szAppBurnVer "1.0"
+//TODO:
+#define szAppBurnVer 1
 
 //stringset.cpp
 class StringSet {

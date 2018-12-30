@@ -457,6 +457,8 @@ static int DrvDoReset()
 
 	KonamiICReset();
 
+	K007232Reset(0);
+	K007232Reset(1);
 	BurnYM3812Reset();
 
 	spy_video_enable = 0;
@@ -534,7 +536,7 @@ static INT32 DrvInit()
 		K051960GfxDecode(DrvGfxROM1, DrvGfxROMExp1, 0x100000);
 	}
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvM6809RAM,		0x0800, 0x1aff, MAP_RAM);
 	M6809MapMemory(DrvM6809ROM + 0x10000,	0x6000, 0x7fff, MAP_ROM);
@@ -563,7 +565,7 @@ static INT32 DrvInit()
 	K051960SetSpriteOffset(0, 0);
 
 	BurnYM3812Init(1, 3579545, &DrvFMIRQHandler, DrvSynchroniseStream, 0);
-	BurnTimerAttachZetYM3812(3579545);
+	BurnTimerAttachYM3812(&ZetConfig, 3579545);
 	BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 1.00, BURN_SND_ROUTE_BOTH);
 
 	K007232Init(0, 3579545, DrvSndROM0, 0x40000);
@@ -747,8 +749,8 @@ struct BurnDriver BurnDrvSpy = {
 	"spy", NULL, NULL, NULL, "1989",
 	"S.P.Y. - Special Project Y (World ver. N)\0", NULL, "Konami", "GX857",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, spyRomInfo, spyRomName, NULL, NULL, SpyInputInfo, SpyDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
+	NULL, spyRomInfo, spyRomName, NULL, NULL, NULL, NULL, SpyInputInfo, SpyDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	304, 216, 4, 3
 };
@@ -782,8 +784,8 @@ struct BurnDriver BurnDrvSpyu = {
 	"spyu", "spy", NULL, NULL, "1989",
 	"S.P.Y. - Special Project Y (US ver. M)\0", NULL, "Konami", "GX857",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, spyuRomInfo, spyuRomName, NULL, NULL, SpyInputInfo, SpyDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SHOOT, 0,
+	NULL, spyuRomInfo, spyuRomName, NULL, NULL, NULL, NULL, SpyInputInfo, SpyDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	304, 216, 4, 3
 };

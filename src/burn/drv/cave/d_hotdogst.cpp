@@ -85,10 +85,10 @@ UINT8 __fastcall hotdogstReadByte(UINT32 sekAddress)
 void __fastcall hotdogstWriteByte(UINT32 sekAddress, UINT8 byteValue)
 {
 	switch (sekAddress) {
-			if (~byteValue & 0x0100) {
 		case 0xd00000:
-			EEPROMWrite(byteValue & 0x04, byteValue & 0x02, byteValue & 0x08);
-			break;
+			{
+				EEPROMWrite(byteValue & 0x04, byteValue & 0x02, byteValue & 0x08);
+				break;
 			}
 		default: {
 			bprintf(PRINT_NORMAL, _T("Attempt to write byte value %x to location %x\n"), byteValue, sekAddress);
@@ -148,7 +148,10 @@ void __fastcall hotdogstWriteWord(UINT32 sekAddress, UINT16 wordValue)
 			CaveSpriteBuffer();
 			nCaveSpriteBank = wordValue;
 			return;
-		
+
+		case 0xa8006c: // nop
+			return;
+
 		case 0xa8006e: {
 			DrvSoundLatch = wordValue;
 			ZetNmi();
@@ -221,7 +224,7 @@ UINT8 __fastcall hotdogstZIn(UINT16 nAddress)
 		}
 		
 		case 0x60: {
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 		}
 		
 		default: {
@@ -256,7 +259,7 @@ void __fastcall hotdogstZOut(UINT16 nAddress, UINT8 nValue)
 		}
 		
 		case 0x60: {
-			MSM6295Command(0, nValue);
+			MSM6295Write(0, nValue);
 			return;
 		}
 		
@@ -345,6 +348,8 @@ static INT32 DrvDoReset()
 	DrvZ80Bank = 0;
 	DrvOkiBank1 = 0;
 	DrvOkiBank2 = 0;
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -557,7 +562,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM2203Scan(nAction, pnMin);
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(nVideoIRQ);
 		SCAN_VAR(nSoundIRQ);
@@ -595,16 +600,6 @@ static void DrvFMIRQHandler(INT32, INT32 nStatus)
 	} else {
 		ZetSetIRQLine(0,    CPU_IRQSTATUS_NONE);
 	}
-}
-
-static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 4000000;
-}
-
-static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 4000000;
 }
 
 static INT32 drvZInit()
@@ -688,7 +683,7 @@ static INT32 DrvInit()
 	nCaveExtraXOffset = -32;
 	nCaveExtraYOffset = 32;
 	
-	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, 0);
 	BurnTimerAttachZet(4000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.80, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.20, BURN_SND_ROUTE_BOTH);
@@ -731,10 +726,10 @@ STD_ROM_FN(hotdogst)
 
 struct BurnDriver BurnDrvhotdogst = {
 	"hotdogst", NULL, NULL, NULL, "1996",
-	"Hotdog Storm - The First Supersonics (International)\0", NULL, "Marble / ACE International", "Cave",
+	"Hotdog Storm - The First Supersonics (korea)\0", NULL, "Ace International Licence", "Cave",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_Z80, GBF_VERSHOOT, 0,
-	NULL, hotdogstRomInfo, hotdogstRomName, NULL, NULL, hotdogstInputInfo, NULL,
+	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_16BIT_ONLY | BDF_HISCORE_SUPPORTED, 2, HARDWARE_CAVE_68K_Z80, GBF_VERSHOOT, 0,
+	NULL, hotdogstRomInfo, hotdogstRomName, NULL, NULL, NULL, NULL, hotdogstInputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 240, 384, 3, 4
 };

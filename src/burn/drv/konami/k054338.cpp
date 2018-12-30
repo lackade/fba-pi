@@ -1,18 +1,32 @@
-
 // 054338
+
+// license:BSD-3-Clause
+// copyright-holders:David Haywood
 
 #include "tiles_generic.h"
 #include "konamiic.h"
 
 static UINT16 k54338_regs[32];
-static INT32 m_shd_rgb[9];
+INT32 m_shd_rgb[12];
 
 static INT32 k054338_alphainverted;
+static INT32 alpha_cache; // for moomesa
+
+static void reset_shadows()
+{
+	m_shd_rgb[0] = m_shd_rgb[1] = m_shd_rgb[2] = -80;   // shadow bank 0
+	m_shd_rgb[3] = m_shd_rgb[4] = m_shd_rgb[5] = -80;   // shadow bank 1
+	m_shd_rgb[6] = m_shd_rgb[7] = m_shd_rgb[8] = -80;   // shadow bank 2
+	m_shd_rgb[9] = m_shd_rgb[10] = m_shd_rgb[11] = -80; // shadow bank 3 (static)
+}
 
 void K054338Reset()
 {
-	memset(k54338_regs, 0, sizeof(UINT16)*32);
-	memset (m_shd_rgb, 0, sizeof(INT32)*9);
+	memset(k54338_regs, 0, sizeof(k54338_regs));
+	memset(m_shd_rgb, 0, sizeof(m_shd_rgb));
+
+	reset_shadows();
+	alpha_cache = 0;
 }
 
 void K054338Exit()
@@ -24,15 +38,15 @@ void K054338Scan(INT32 nAction)
 {
 	struct BurnArea ba;
 	
-	if (nAction & ACB_DRIVER_DATA) {
+	if (nAction & ACB_MEMORY_RAM) {
 		memset(&ba, 0, sizeof(ba));
 		ba.Data	  = (UINT8*)k54338_regs;
-		ba.nLen	  = 32 * sizeof(INT16);
+		ba.nLen	  = sizeof(k54338_regs);
 		ba.szName = "K054338 Regs";
 		BurnAcb(&ba);
-	}
 
-//	SCAN_VARS(m_shd_rgb);
+		SCAN_VAR(alpha_cache);
+	}
 }
 
 void K054338Init()
@@ -51,7 +65,7 @@ void K054338WriteWord(INT32 offset, UINT16 data)
 
 void K054338WriteByte(INT32 offset, UINT8 data)
 {
-	UINT8 *regs = (UINT8*)k54338_regs;
+	UINT8 *regs = (UINT8*)&k54338_regs;
 
 	regs[(offset & 0x1f)^1] = data;
 }
@@ -62,7 +76,7 @@ INT32 K054338_read_register(INT32 reg)
 	return k54338_regs[reg];
 }
 
-void K054338_update_all_shadows()
+void K054338_update_all_shadows(INT32 rushingheroes_hack)
 {
 	INT32 i, d;
 
@@ -72,6 +86,10 @@ void K054338_update_all_shadows()
 		if (d >= 0x100)
 			d -= 0x200;
 		m_shd_rgb[i] = d;
+	}
+
+	if (rushingheroes_hack) {
+		reset_shadows();
 	}
 }
 
@@ -198,6 +216,66 @@ INT32 K054338_set_alpha_level(INT32 pblend)
 	mixpri = ctrl & K338_CTL_MIXPRI;
 	mixset = regs[K338_REG_PBLEND + (pblend>>1 & 1)] >> (~pblend<<3 & 8);
 	mixlv  = mixset & 0x1f;
+
+	if (k054338_alphainverted) mixlv = 0x1f - mixlv;
+
+	if (!(mixset & 0x20))
+	{
+		mixlv = mixlv<<3 | mixlv>>2;
+	//	alpha_set_level(mixlv); // source x alpha/255  +  target x (255-alpha)/255
+	}
+	else
+	{
+		if (!mixpri)
+		{
+			// source x alpha  +  target (clipped at 255)
+		}
+		else
+		{
+			// source  +  target x alpha (clipped at 255)
+		}
+
+		// DUMMY
+		if (mixlv && mixlv<0x1f) mixlv = 0x10;
+		mixlv = mixlv<<3 | mixlv>>2;
+	//	alpha_set_level(mixlv);
+	}
+
+	return(mixlv);
+}
+
+//#define DEBUGMOO
+
+INT32 K054338_alpha_level_moo(INT32 pblend)
+{
+	UINT16 *regs;
+	INT32 ctrl, mixpri, mixset, mixlv;
+
+	if (pblend <= 0 || pblend > 3)
+	{
+	//	alpha_set_level(255);
+		return(255);
+	}
+
+	regs   = k54338_regs;
+	ctrl   = k54338_regs[K338_REG_CONTROL];
+	mixpri = ctrl & K338_CTL_MIXPRI;
+	mixset = regs[K338_REG_PBLEND + (pblend>>1 & 1)] >> (~pblend<<3 & 8);
+	mixlv  = mixset & 0x1f;
+
+#ifdef DEBUGMOO
+	bprintf(0, _T("%X   - %X"), mixlv, mixpri);
+#endif
+	if (mixlv == 0 && alpha_cache == 0x1f) {
+		mixlv = 0x1f;
+#ifdef DEBUGMOO
+		bprintf(0, _T(" (cached) -> 0x1f"));
+#endif
+	} // 0x1f -> 0x00 transition cache [dink]
+#ifdef DEBUGMOO
+	bprintf(0, _T("\n"));
+#endif
+	alpha_cache = mixlv;
 
 	if (k054338_alphainverted) mixlv = 0x1f - mixlv;
 

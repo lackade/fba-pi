@@ -45,7 +45,9 @@ static UINT16              m_xmask;
 static UINT8               m_yshift;
 static UINT32              m_vrammask;
 static UINT8 *             m_vram;
+static UINT8 *             m_vram_orig;
 static UINT8 *             m_latchram;
+static UINT8 *             m_latchram_orig;
 static UINT8               m_latchdata;
 static UINT8 *             m_shiftreg;
 static INT32 		   m_timer;
@@ -105,10 +107,10 @@ void tms34061_init(UINT8 rowshift, UINT32 ram_size, void (*partial_update)(), vo
 	m_vrammask = m_vramsize - 1;
 
 	/* allocate memory for VRAM */
-	m_vram = (UINT8*)BurnMalloc(m_vramsize + 256 * 2);
+	m_vram = m_vram_orig = (UINT8*)BurnMalloc(m_vramsize + 256 * 2);
 
 	/* allocate memory for latch RAM */
-	m_latchram = (UINT8*)BurnMalloc(m_vramsize + 256 * 2);
+	m_latchram = m_latchram_orig = (UINT8*)BurnMalloc(m_vramsize + 256 * 2);
 
 	/* add some buffer space for VRAM and latch RAM */
 	m_vram += 256;
@@ -124,9 +126,9 @@ void tms34061_exit()
 	if (!DebugDev_Tms34061Initted) bprintf(PRINT_ERROR, _T("tms34061_exit called without init\n"));
 #endif
 
-	BurnFree(m_vram);
+	BurnFree(m_vram_orig);
 	m_vram = NULL;
-	BurnFree(m_latchram);
+	BurnFree(m_latchram_orig);
 	m_latchram = NULL;
 	
 	DebugDev_Tms34061Initted = 0;
@@ -593,7 +595,7 @@ INT32 tms34061_scan(INT32 nAction, INT32 *)
 
 	struct BurnArea ba;
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = m_vram;
@@ -607,7 +609,7 @@ INT32 tms34061_scan(INT32 nAction, INT32 *)
 		BurnAcb(&ba);
 
 		ba.Data	  = m_regs;
-		ba.nLen	  = TMS34061_REGCOUNT * sizeof(UINT16);
+		ba.nLen	  = sizeof(m_regs);
 		ba.szName = "tms34061 registers";
 		BurnAcb(&ba);
 

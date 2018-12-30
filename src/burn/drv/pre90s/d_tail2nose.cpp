@@ -302,16 +302,6 @@ static void tail2noseFMIRQHandler(INT32, INT32 status)
 	ZetSetIRQLine(0, (status & 1) ? CPU_IRQSTATUS_ACK : CPU_IRQSTATUS_NONE );
 }
 
-static INT32 tail2noseSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 5000000;
-}
-
-static double tail2noseGetTime()
-{
-	return (double)ZetTotalCycles() / 5000000;
-}
-
 static void tail2nos_zoom_callback(INT32 *code, INT32 *color, INT32 */*flags*/)
 {
 	*code |= ((*color & 0x03) << 8);
@@ -463,7 +453,7 @@ static INT32 DrvInit()
 	ZetSetInHandler(tail2nose_sound_in);
 
 	INT32 nSndROMLen = 0x20000;
-	BurnYM2608Init(8000000, DrvSndROM, &nSndROMLen, DrvISndROM, &tail2noseFMIRQHandler, tail2noseSynchroniseStream, tail2noseGetTime, 0);
+	BurnYM2608Init(8000000, DrvSndROM, &nSndROMLen, DrvISndROM, &tail2noseFMIRQHandler, 0);
 	AY8910SetPorts(0, NULL, NULL, NULL, bankswitch); // Really YM2608
 	BurnTimerAttachZet(5000000);
 	BurnYM2608SetRoute(BURN_SND_YM2608_YM2608_ROUTE_1, 0.25, BURN_SND_ROUTE_BOTH);
@@ -472,7 +462,7 @@ static INT32 DrvInit()
 
 	ZetClose();
 
-	K051316Init(0, DrvZoomRAM, DrvZoomRAMExp, 0x3ff, tail2nos_zoom_callback, 4, -1);
+	K051316Init(0, DrvZoomRAM, DrvZoomRAMExp, 0x3ff, tail2nos_zoom_callback, 4, 0);
 	K051316SetOffset(0, -89, -24);
 
 	GenericTilesInit();
@@ -688,7 +678,11 @@ static struct BurnRomInfo emptyRomDesc[] = {
 };
 
 static struct BurnRomInfo Ym2608RomDesc[] = {
+#if !defined (ROM_VERIFY)
 	{ "ym2608_adpcm_rom.bin",  0x002000, 0x23c9e0d8, BRF_ESS | BRF_PRG | BRF_BIOS },
+#else
+	{ "",  0x000000, 0x00000000, BRF_ESS | BRF_PRG | BRF_BIOS },
+#endif
 };
 
 
@@ -723,7 +717,7 @@ struct BurnDriver BurnDrvTail2nos = {
 	"Tail to Nose - Great Championship\0", NULL, "V-System Co.", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_RACING, 0,
-	NULL, tail2nosRomInfo, tail2nosRomName, NULL, NULL, Tail2nosInputInfo, Tail2nosDIPInfo,
+	NULL, tail2nosRomInfo, tail2nosRomName, NULL, NULL, NULL, NULL, Tail2nosInputInfo, Tail2nosDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	240, 320, 3, 4
 };
@@ -760,7 +754,7 @@ struct BurnDriver BurnDrvSformula = {
 	"Super Formula (Japan)\0", NULL, "V-System Co.", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_PRE90S, GBF_RACING, 0,
-	NULL, sformulaRomInfo, sformulaRomName, NULL, NULL, Tail2nosInputInfo, Tail2nosDIPInfo,
+	NULL, sformulaRomInfo, sformulaRomName, NULL, NULL, NULL, NULL, Tail2nosInputInfo, Tail2nosDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	240, 320, 3, 4
 };

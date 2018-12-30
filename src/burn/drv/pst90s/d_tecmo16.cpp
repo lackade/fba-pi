@@ -1,3 +1,6 @@
+// FB Alpha Tecmo 16-bit driver module
+// Based on MAME driver by Hau, Nicola Salmoria
+
 #include "tiles_generic.h"
 #include "m68000_intf.h"
 #include "z80_intf.h"
@@ -592,11 +595,11 @@ static UINT8 __fastcall FstarfrcZ80Read(UINT16 a)
 {
 	switch (a) {
 		case 0xfc00: {
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 		}
 
 		case 0xfc05: {
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 		}
 
 		case 0xfc08: {
@@ -611,7 +614,7 @@ static void __fastcall FstarfrcZ80Write(UINT16 a, UINT8 d)
 {
 	switch (a) {
 		case 0xfc00: {
-			MSM6295Command(0, d);
+			MSM6295Write(0, d);
 			return;
 		}
 
@@ -650,7 +653,7 @@ static INT32 FstarfrcMemIndex()
 	FstarfrcColour2Ram   = Next; Next += 0x01000;
 	FstarfrcSpriteRam    = Next; Next += 0x01000;
 	FstarfrcPaletteRam   = Next; Next += 0x02000;
-	FstarfrcZ80Ram       = Next; Next += 0x0c002;
+	FstarfrcZ80Ram       = Next; Next += 0x0c010; // c002
 
 	RamEnd = Next;
 
@@ -1290,8 +1293,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SekScan(nAction);					// Scan 68000
 		ZetScan(nAction);					// Scan Z80
 
-		MSM6295Scan(0, nAction);			// Scan OKIM6295
-		BurnYM2151Scan(nAction);
+		MSM6295Scan(nAction, pnMin);			// Scan OKIM6295
+		BurnYM2151Scan(nAction, pnMin);
 
 		// Scan critical driver variables
 		SCAN_VAR(FstarfrcSoundLatch);
@@ -1315,7 +1318,7 @@ struct BurnDriver BurnDrvFstarfrc = {
 	"Final Star Force (US)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_POST90S, GBF_VERSHOOT, 0,
-	NULL, FstarfrcRomInfo, FstarfrcRomName, NULL, NULL, FstarfrcInputInfo, FstarfrcDIPInfo,
+	NULL, FstarfrcRomInfo, FstarfrcRomName, NULL, NULL, NULL, NULL, FstarfrcInputInfo, FstarfrcDIPInfo,
 	FstarfrcInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x2000, 224, 256, 3, 4
 };
@@ -1325,17 +1328,17 @@ struct BurnDriver BurnDrvFstarfrcj = {
 	"Final Star Force (Japan)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_MISC_POST90S, GBF_VERSHOOT, 0,
-	NULL, FstarfrcjRomInfo, FstarfrcjRomName, NULL, NULL, FstarfrcInputInfo, FstarfrcDIPInfo,
+	NULL, FstarfrcjRomInfo, FstarfrcjRomName, NULL, NULL, NULL, NULL, FstarfrcInputInfo, FstarfrcDIPInfo,
 	FstarfrcInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x2000, 224, 256, 3, 4
 };
 
 struct BurnDriver BurnDrvGinkun = {
 	"ginkun", NULL, NULL, NULL, "1995",
-	"Ganbare Ginkun\0", "Imperfect GFX", "Tecmo", "Miscellaneous",
+	"Ganbare Ginkun\0", NULL, "Tecmo", "Miscellaneous",
 	L"\u304C\u3093\u3070\u308C \u30AE\u30F3\u304F\u3093\0Ganbare Ginkun\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_MINIGAMES, 0,
-	NULL, GinkunRomInfo, GinkunRomName, NULL, NULL, FstarfrcInputInfo, GinkunDIPInfo,
+	NULL, GinkunRomInfo, GinkunRomName, NULL, NULL, NULL, NULL, FstarfrcInputInfo, GinkunDIPInfo,
 	GinkunInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x2000, 256, 224, 4, 3
 };
@@ -1345,7 +1348,7 @@ struct BurnDriver BurnDrvRiot = {
 	"Riot\0", NULL, "NMK", "Miscellaneous",
 	L"\u96F7\u8ECB\u6597 Riot\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_SHOOT, 0,
-	NULL, RiotRomInfo, RiotRomName, NULL, NULL, RiotInputInfo, RiotDIPInfo,
+	NULL, RiotRomInfo, RiotRomName, NULL, NULL, NULL, NULL, RiotInputInfo, RiotDIPInfo,
 	RiotInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x2000, 256, 224, 4, 3
 };

@@ -342,7 +342,7 @@ static void f1dream_protection_w()
 			{
 				indx <<= 4;
 				indx += ram16[0x3ff6/2] & 0x00ff;
-				value = f1dream_613eb_lookup[indx];
+				value = f1dream_613eb_lookup[indx & 0xff];
 			}
 		}
 
@@ -542,16 +542,6 @@ static void TigeroadIRQHandler(INT32, INT32 nStatus)
 	}
 }
 
-static INT32 TigeroadSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 3579545;
-}
-
-static double TigeroadGetTime()
-{
-	return (double)ZetTotalCycles() / 3579545;
-}
-
 inline static INT32 DrvMSM5205SynchroniseStream(INT32 nSoundRate)
 {
 	return (INT64)((double)SekTotalCycles() * nSoundRate / 10000000);
@@ -582,8 +572,10 @@ static INT32 DrvDoReset()
 	}
 
 	if (pBurnSoundOut) { // fix ym2203 junk..
-		memset (pBurnSoundOut, 0, nBurnSoundLen);
+		BurnSoundClear();
 	}
+
+	HiscoreReset();
 
 	return 0;
 }
@@ -726,12 +718,11 @@ static INT32 DrvInit(INT32 (*pInitCallback)())
 		ZetClose();
 	}
 
-	BurnYM2203Init(2, 3579545, &TigeroadIRQHandler, TigeroadSynchroniseStream, TigeroadGetTime, 0);
+	BurnYM2203Init(2, 3579545, &TigeroadIRQHandler, 0);
 	BurnTimerAttachZet(3579545);
 	BurnYM2203SetAllRoutes(0, 0.25, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetAllRoutes(1, 0.25, BURN_SND_ROUTE_BOTH);
-
-	if (strstr(BurnDrvGetTextA(DRV_NAME), "f1dream")) { // all versions
+	if (!toramich) { // toramich has a low psg volume by default
 		BurnYM2203SetPSGVolume(0, 0.11);
 		BurnYM2203SetPSGVolume(1, 0.11);
 	}
@@ -866,8 +857,8 @@ static void draw_background(INT32 priority)
 	{
 		for (INT32 x = 0; x < 8+1; x++)
 		{
-			INT32 sx = x + (scrollx >> 5);
-			INT32 sy = y + (scrolly >> 5);
+			INT32 sx = (x + (scrollx >> 5)) & 0x7f;
+			INT32 sy = (y + (scrolly >> 5)) & 0x7f;
 
 			INT32 ofst = ((sx & 7) << 1) + (((127 - sy) & 7) << 4) + ((sx >> 3) << 7) + (((127 - sy) >> 3) << 11);
 
@@ -959,8 +950,8 @@ static INT32 DrvDraw()
 	if (DrvRecalc) {
 		for (INT32 i = 0; i < 0x240 * 2; i+=2) {
 			palette_write(i);
-                }
-                DrvRecalc = 0;
+		}
+		DrvRecalc = 0;
 	}
 
 	memset (pTransDraw, 0, nScreenWidth * nScreenHeight * 2);
@@ -1085,9 +1076,9 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM2203Scan(nAction, pnMin);
-                if (toramich) {
-                    MSM5205Scan(nAction, pnMin);
-                }
+		if (toramich) {
+			MSM5205Scan(nAction, pnMin);
+		}
 	}
 
 	return 0;
@@ -1159,8 +1150,8 @@ struct BurnDriver BurnDrvTigeroad = {
 	"tigeroad", NULL, NULL, NULL, "1987",
 	"Tiger Road (US)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, tigeroadRomInfo, tigeroadRomName, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
+	NULL, tigeroadRomInfo, tigeroadRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
 	TigeroadInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1202,8 +1193,8 @@ struct BurnDriver BurnDrvTigeroadu = {
 	"tigeroadu", "tigeroad", NULL, NULL, "1987",
 	"Tiger Road (US, Romstar license)\0", NULL, "Capcom (Romstar license)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, tigeroaduRomInfo, tigeroaduRomName, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
+	NULL, tigeroaduRomInfo, tigeroaduRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
 	TigeroadInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1254,8 +1245,8 @@ struct BurnDriver BurnDrvToramich = {
 	"toramich", "tigeroad", NULL, NULL, "1987",
 	"Tora e no Michi (Japan)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, toramichRomInfo, toramichRomName, NULL, NULL, TigeroadInputInfo, ToramichDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
+	NULL, toramichRomInfo, toramichRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, ToramichDIPInfo,
 	ToramichInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1331,8 +1322,8 @@ struct BurnDriver BurnDrvTigeroadb = {
 	"tigeroadb", "tigeroad", NULL, NULL, "1987",
 	"Tiger Road (US bootleg, set 1)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, tigeroadbRomInfo, tigeroadbRomName, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
+	NULL, tigeroadbRomInfo, tigeroadbRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
 	TigeroadbInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1417,8 +1408,8 @@ struct BurnDriver BurnDrvTigeroadb2 = {
 	"tigeroadb2", "tigeroad", NULL, NULL, "1987",
 	"Tiger Road (US bootleg, set 2)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
-	NULL, tigeroadb2RomInfo, tigeroadb2RomName, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_SCRFIGHT | GBF_PLATFORM, 0,
+	NULL, tigeroadb2RomInfo, tigeroadb2RomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, TigeroadDIPInfo,
 	Tigeroadb2Init, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1450,7 +1441,7 @@ static struct BurnRomInfo f1dreamRomDesc[] = {
 
 	{ "09e_tr.bin",	0x00100, 0xec80ae36, 7 | BRF_GRA | BRF_OPT }, // 15 Priority Proms (unused)
 	
-	{ "c8751h-88",  0x01000, 0x00000000, 0 | BRF_OPT | BRF_NODUMP },
+	{ "8751.mcu",   0x01000, 0xc8e6075c, 0 | BRF_OPT },
 };
 
 STD_ROM_PICK(f1dream)
@@ -1491,7 +1482,7 @@ struct BurnDriver BurnDrvF1dream = {
 	"F-1 Dream\0", "Game is bugged, use the bootleg instead.", "Capcom (Romstar license)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	0, 2, HARWARE_CAPCOM_MISC, GBF_RACING, 0,
-	NULL, f1dreamRomInfo, f1dreamRomName, NULL, NULL, TigeroadInputInfo, F1dreamDIPInfo,
+	NULL, f1dreamRomInfo, f1dreamRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, F1dreamDIPInfo,
 	F1dreamInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1563,8 +1554,8 @@ struct BurnDriver BurnDrvF1dreamb = {
 	"f1dreamb", "f1dream", NULL, NULL, "1988",
 	"F-1 Dream (bootleg, set 1)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_RACING, 0,
-	NULL, f1dreambRomInfo, f1dreambRomName, NULL, NULL, TigeroadInputInfo, F1dreamDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RACING, 0,
+	NULL, f1dreambRomInfo, f1dreambRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, F1dreamDIPInfo,
 	F1dreambInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };
@@ -1606,8 +1597,8 @@ struct BurnDriver BurnDrvF1dreamba = {
 	"f1dreamba", "f1dream", NULL, NULL, "1988",
 	"F-1 Dream (bootleg, set 2)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_RACING, 0,
-	NULL, f1dreambaRomInfo, f1dreambaRomName, NULL, NULL, TigeroadInputInfo, F1dreamDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RACING, 0,
+	NULL, f1dreambaRomInfo, f1dreambaRomName, NULL, NULL, NULL, NULL, TigeroadInputInfo, F1dreamDIPInfo,
 	F1dreambInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x240,
 	256, 224, 4, 3
 };

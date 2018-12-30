@@ -351,21 +351,7 @@ UINT8 __fastcall crshrace_sound_in(UINT16 port)
 
 static void DrvFMIRQHandler(INT32, INT32 nStatus)
 {
-	if (nStatus) {
-		ZetSetIRQLine(0xff, CPU_IRQSTATUS_ACK);
-	} else {
-		ZetSetIRQLine(0,    CPU_IRQSTATUS_NONE);
-	}
-}
-
-static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 4000000;
-}
-
-static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 4000000.0;
+	ZetSetIRQLine(0, (nStatus) ? CPU_IRQSTATUS_ACK : CPU_IRQSTATUS_NONE);
 }
 
 static INT32 MemIndex()
@@ -529,7 +515,7 @@ static INT32 DrvInit()
 	ZetClose();
 
 	INT32 DrvSndROMLen = 0x100000;
-	BurnYM2610Init(8000000, DrvSndROM + 0x100000, &DrvSndROMLen, DrvSndROM, &DrvSndROMLen, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2610Init(8000000, DrvSndROM + 0x100000, &DrvSndROMLen, DrvSndROM, &DrvSndROMLen, &DrvFMIRQHandler, 0);
 	BurnTimerAttachZet(4000000);
 	BurnYM2610SetRoute(BURN_SND_YM2610_YM2610_ROUTE_1, 1.00, BURN_SND_ROUTE_LEFT);
 	BurnYM2610SetRoute(BURN_SND_YM2610_YM2610_ROUTE_2, 1.00, BURN_SND_ROUTE_RIGHT);
@@ -848,7 +834,7 @@ struct BurnDriver BurnDrvCrshrace = {
 	"Lethal Crash Race (set 1)\0", NULL, "Video System Co.", "Miscellaneous",
 	L"Lethal Crash Race\0\u7206\u70C8 \u30AF\u30E9\u30C3\u30B7\u30E5 \u30EC\u30FC\u30B9 (set 1)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, crshraceRomInfo, crshraceRomName, NULL, NULL, CrshraceInputInfo, CrshraceDIPInfo,
+	NULL, crshraceRomInfo, crshraceRomName, NULL, NULL, NULL, NULL, CrshraceInputInfo, CrshraceDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x401,
 	224, 320, 3, 4
 };
@@ -884,7 +870,7 @@ struct BurnDriver BurnDrvCrshrace2 = {
 	"Lethal Crash Race (set 2)\0", NULL, "Video System Co.", "Miscellaneous",
 	L"Lethal Crash Race\0\u7206\u70C8 \u30AF\u30E9\u30C3\u30B7\u30E5 \u30EC\u30FC\u30B9 (set 2)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_MISC_POST90S, GBF_RACING, 0,
-	NULL, crshrace2RomInfo, crshrace2RomName, NULL, NULL,  CrshraceInputInfo,  CrshraceDIPInfo,
+	NULL, crshrace2RomInfo, crshrace2RomName, NULL, NULL, NULL, NULL,  CrshraceInputInfo,  CrshraceDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x401,
 	224, 320, 3, 4
 };

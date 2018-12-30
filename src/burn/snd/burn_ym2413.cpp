@@ -1,5 +1,4 @@
 #include "burnint.h"
-#include "burn_sound.h"
 #include "burn_ym2413.h"
 
 void (*BurnYM2413Render)(INT16* pSoundBuf, INT32 nSegmentLength);
@@ -80,12 +79,12 @@ void BurnYM2413Exit()
 #if defined FBA_DEBUG
 	if (!DebugSnd_YM2413Initted) bprintf(PRINT_ERROR, _T("BurnYM2413Exit called without init\n"));
 #endif
+
+	if (!DebugSnd_YM2413Initted) return;
+
 	YM2413Shutdown();
 
-	if (pBuffer) {
-		free(pBuffer);
-		pBuffer = NULL;
-	}
+	BurnFree(pBuffer);
 	
 	DebugSnd_YM2413Initted = 0;
 }
@@ -120,7 +119,7 @@ INT32 BurnYM2413Init(INT32 nClockFrequency)
 
 	YM2413Init(1, nClockFrequency, nBurnYM2413SoundRate);
 
-	pBuffer = (INT16*)malloc(65536 * 2 * sizeof(INT16));
+	pBuffer = (INT16*)BurnMalloc(65536 * 2 * sizeof(INT16));
 	memset(pBuffer, 0, 65536 * 2 * sizeof(INT16));
 
 	nSampleSize = (UINT32)nBurnYM2413SoundRate * (1 << 16) / nBurnSoundRate;
@@ -148,7 +147,7 @@ void BurnYM2413SetRoute(INT32 nIndex, double nVolume, INT32 nRouteDir)
 	YM2413RouteDirs[nIndex] = nRouteDir;
 }
 
-void BurnYM2413Scan(INT32 nAction)
+void BurnYM2413Scan(INT32 nAction, INT32 *)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_YM2413Initted) bprintf(PRINT_ERROR, _T("BurnYM2413Scan called without init\n"));

@@ -1,4 +1,5 @@
 // FB Alpha - World Cup '90 driver
+// Based on MAME driver by Ernesto Corvi
 
 #include "tiles_generic.h"
 #include "z80_intf.h"
@@ -183,7 +184,11 @@ static struct BurnRomInfo emptyRomDesc[] = {
 };
 
 static struct BurnRomInfo Ym2608RomDesc[] = {
+#if !defined (ROM_VERIFY)
 	{ "ym2608_adpcm_rom.bin",  0x002000, 0x23c9e0d8, BRF_ESS | BRF_PRG | BRF_BIOS },
+#else
+	{ "",  0x000000, 0x00000000, BRF_ESS | BRF_PRG | BRF_BIOS },
+#endif
 };
 
 STD_ROM_PICK(Ym2608)
@@ -330,16 +335,6 @@ static inline void wc90SendSoundCommand(INT32 nCommand)
 	ZetClose();
 
 	ZetOpen(0);
-}
-
-static INT32 wc90SynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 4000000;
-}
-
-static double wc90GetTime()
-{
-	return (double)ZetTotalCycles() / 4000000;
 }
 
 UINT8 __fastcall Wc90Read1(UINT16 a)
@@ -958,7 +953,7 @@ static INT32 Wc90CalcPalette()
 	return 0;
 }
 
-static void Wc90Draw()
+static INT32 Wc90Draw()
 {
 	Wc90CalcPalette();
 	Wc90RenderBgLayer();
@@ -968,9 +963,11 @@ static void Wc90Draw()
 	Wc90RenderCharLayer();
 	Wc90RenderSprites(0);
 	BurnTransferCopy(Wc90Palette);
+
+	return 0;
 }
 
-static void Wc90tDraw()
+static INT32 Wc90tDraw()
 {
 	Wc90CalcPalette();
 	Wc90tRenderBgLayer();
@@ -980,14 +977,9 @@ static void Wc90tDraw()
 	Wc90RenderCharLayer();
 	Wc90RenderSprites(0);
 	BurnTransferCopy(Wc90Palette);
+
+	return 0;
 }
-
-typedef void (*drawscreen_procdef)(void);
-
-static drawscreen_procdef drawscreen_proc[2] = {
-	Wc90Draw,
-	Wc90tDraw,
-};
 
 static INT32 Wc90Frame()
 {
@@ -1037,7 +1029,7 @@ static INT32 Wc90Frame()
 	}
 	ZetClose();
 
-	if (pBurnDraw) (*(drawscreen_proc[nTileType]))();
+	if (pBurnDraw) BurnDrvRedraw();
 
 	return 0;
 }
@@ -1172,7 +1164,7 @@ static INT32 Wc90Init()
 	BurnSetRefreshRate(59.17);
 
 	INT32 Wc90YM2608RomSize = 0x20000;
-	BurnYM2608Init(8000000, Wc90YM2608Rom, &Wc90YM2608RomSize, Wc90YM2608IRom, &wc90FMIRQHandler, wc90SynchroniseStream, wc90GetTime, 0);
+	BurnYM2608Init(8000000, Wc90YM2608Rom, &Wc90YM2608RomSize, Wc90YM2608IRom, &wc90FMIRQHandler, 0);
 	BurnTimerAttachZet(4000000);
 	BurnYM2608SetRoute(BURN_SND_YM2608_YM2608_ROUTE_1, 1.00, BURN_SND_ROUTE_BOTH);
 	BurnYM2608SetRoute(BURN_SND_YM2608_YM2608_ROUTE_2, 1.00, BURN_SND_ROUTE_BOTH);
@@ -1277,47 +1269,47 @@ struct BurnDriver BurnDrvYm2608 = {
 	"YM2608 Internal ROM\0", "Internal ROM only", "Yamaha", "YM2608 Internal ROM",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_BOARDROM, 0, HARDWARE_MISC_PRE90S, GBF_BIOS, 0,
-	NULL, Ym2608RomInfo, Ym2608RomName, NULL, NULL, Wc90InputInfo, NULL,
+	NULL, Ym2608RomInfo, Ym2608RomName, NULL, NULL, NULL, NULL, Wc90InputInfo, NULL,
 	NULL, NULL, NULL, NULL, NULL,
 	NULL, 0x1800, 320, 224, 4, 3
 };
 
 struct BurnDriver BurnDrvWc90 = {
-	"wc90", NULL, "ym2608", NULL, "1989",
+	"twcup90", NULL, "ym2608", NULL, "1989",
 	"World Cup '90 (World)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSFOOTBALL, 0,
-	NULL, Wc90RomInfo, Wc90RomName, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
-	Wc90Init, Wc90Exit, Wc90Frame, NULL, Wc90Scan,
+	NULL, Wc90RomInfo, Wc90RomName, NULL, NULL, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
+	Wc90Init, Wc90Exit, Wc90Frame, Wc90Draw, Wc90Scan,
 	NULL, 0x400, 256, 224, 4, 3
 };
 
 struct BurnDriver BurnDrvWc90a = {
-	"wc90a", "wc90", "ym2608", NULL, "1989",
+	"twcup90a", "twcup90", "ym2608", NULL, "1989",
 	"World Cup '90 (Euro set 1)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSFOOTBALL, 0,
-	NULL, Wc90aRomInfo, Wc90aRomName, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
-	Wc90Init, Wc90Exit, Wc90Frame, NULL, Wc90Scan,
+	NULL, Wc90aRomInfo, Wc90aRomName, NULL, NULL, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
+	Wc90Init, Wc90Exit, Wc90Frame, Wc90Draw, Wc90Scan,
 	NULL, 0x400, 256, 224, 4, 3
 };
 
 struct BurnDriver BurnDrvWc90b = {
-	"wc90b", "wc90", "ym2608", NULL, "1989",
+	"twcup90b", "twcup90", "ym2608", NULL, "1989",
 	"World Cup '90 (Euro set 2)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSFOOTBALL, 0,
-	NULL, Wc90bRomInfo, Wc90bRomName, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
-	Wc90Init, Wc90Exit, Wc90Frame, NULL, Wc90Scan,
+	NULL, Wc90bRomInfo, Wc90bRomName, NULL, NULL, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
+	Wc90Init, Wc90Exit, Wc90Frame, Wc90Draw, Wc90Scan,
 	NULL, 0x400, 256, 224, 4, 3
 };
 
 struct BurnDriver BurnDrvWc90t = {
-	"wc90t", "wc90", "ym2608", NULL, "1989",
+	"twcup90t", "twcup90", "ym2608", NULL, "1989",
 	"World Cup '90 (trackball)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSFOOTBALL, 0,
-	NULL, Wc90tRomInfo, Wc90tRomName, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
-	Wc90tInit, Wc90Exit, Wc90Frame, NULL, Wc90Scan,
+	NULL, Wc90tRomInfo, Wc90tRomName, NULL, NULL, NULL, NULL, Wc90InputInfo, Wc90DIPInfo,
+	Wc90tInit, Wc90Exit, Wc90Frame, Wc90tDraw, Wc90Scan,
 	NULL, 0x400, 256, 224, 4, 3
 };

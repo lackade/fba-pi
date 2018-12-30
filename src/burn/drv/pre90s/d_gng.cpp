@@ -1,3 +1,6 @@
+// FB Alpha Ghosts'n Goblins driver module
+// Based on MAME driver by Pierpaolo Prazzoli
+
 #include "tiles_generic.h"
 #include "z80_intf.h"
 #include "m6809_intf.h"
@@ -37,8 +40,7 @@ static UINT8 DrvSoundLatch;
 
 static INT32 RomLoadOffset = 0;
 
-static INT32 nCyclesDone[2], nCyclesTotal[2];
-static INT32 nCyclesSegment;
+static INT32 nExtraCycles = 0;
 
 static INT32 Diamond;
 
@@ -506,7 +508,7 @@ static struct BurnRomInfo DrvprotRomDesc[] = {
 	
 	{ "gg14h.bin",     0x08000, 0x55cfb196, BRF_ESS | BRF_PRG }, //  5	Z80 Program 
 	
-	{ "1.84490.11e",   0x04000, 0xecfccf07, BRF_GRA },	     //  6	Characters
+	{ "gg11e.bin",	   0x04000, 0xccea9365, BRF_GRA },	     //  6	Characters
 	
 	{ "gg3e.bin",      0x04000, 0x68db22c8, BRF_GRA },	     //  7	Tiles
 	{ "gg1e.bin",      0x04000, 0xdad8dd2f, BRF_GRA },	     //  8
@@ -710,20 +712,33 @@ static INT32 DrvDoReset()
 	M6809Close();
 	
 	ZetOpen(0);
+	BurnYM2203Reset();
 	ZetReset();
 	ZetClose();
 	
-	BurnYM2203Reset();
-	
+	HiscoreReset();
+
 	DrvRomBank = 0;
 	DrvBgScrollX[0] = DrvBgScrollX[1] = 0;
 	DrvBgScrollY[0] = DrvBgScrollY[1] = 0;
 	DrvSoundLatch = 0;
+	nExtraCycles = 0;
 
 	return 0;
 }
 
-UINT8 DrvGngM6809ReadByte(UINT16 Address)
+static void bank_switch(UINT8 bank)
+{
+	DrvRomBank = bank & 3;
+	if (bank == 4) {
+		DrvRomBank = 4;
+		M6809MapMemory(DrvM6809Rom, 0x4000, 0x5fff, MAP_ROM);
+	} else {
+		M6809MapMemory(DrvM6809Rom + 0xc000 + (DrvRomBank * 0x2000), 0x4000, 0x5fff, MAP_ROM);
+	}
+}
+
+static UINT8 DrvGngM6809ReadByte(UINT16 Address)
 {
 	switch (Address) {
 		case 0x3000: {
@@ -758,7 +773,7 @@ UINT8 DrvGngM6809ReadByte(UINT16 Address)
 }
 
 
-void DrvGngM6809WriteByte(UINT16 Address, UINT8 Data)
+static void DrvGngM6809WriteByte(UINT16 Address, UINT8 Data)
 {
 	switch (Address) {
 		case 0x3a00: {
@@ -796,27 +811,23 @@ void DrvGngM6809WriteByte(UINT16 Address, UINT8 Data)
 			return;
 		}
 		
-		case 0x3d01: {
-			// ???
+		case 0x3d01:
+		case 0x3d02:
+		case 0x3d03: {
+			// reset sound cpu, coin counter...
 			return;
 		}
 		
 		case 0x3e00: {
-			DrvRomBank = Data & 3;
-			if (Data == 4) {
-				DrvRomBank = 4;
-				M6809MapMemory(DrvM6809Rom, 0x4000, 0x5fff, MAP_ROM);
-			} else {
-				M6809MapMemory(DrvM6809Rom + 0xc000 + (DrvRomBank * 0x2000), 0x4000, 0x5fff, MAP_ROM);
-			}
+			bank_switch(Data);
 			return;
 		}
 	}
 	
-	bprintf(PRINT_NORMAL, _T("M6809 Write Byte -> %04X, %02X\n"), Address, Data);
+	//bprintf(PRINT_NORMAL, _T("M6809 Write Byte -> %04X, %02X\n"), Address, Data);
 }
 
-UINT8 __fastcall DrvGngZ80Read(UINT16 a)
+static UINT8 __fastcall DrvGngZ80Read(UINT16 a)
 {
 	switch (a) {
 		case 0xc800: {
@@ -831,7 +842,7 @@ UINT8 __fastcall DrvGngZ80Read(UINT16 a)
 	return 0;
 }
 
-void __fastcall DrvGngZ80Write(UINT16 a, UINT8 d)
+static void __fastcall DrvGngZ80Write(UINT16 a, UINT8 d)
 {
 	switch (a) {
 		case 0xe000: {
@@ -860,6 +871,16 @@ void __fastcall DrvGngZ80Write(UINT16 a, UINT8 d)
 	}
 }
 
+static void DrvRandPalette()
+{ // On first boot we fill the palette with some arbitrary values to see the boot-up messages
+	DrvPaletteRam1[0] = 0x00;
+	DrvPaletteRam2[0] = 0x00;
+	for (INT32 i = 1; i < 0x100; i++) {
+		DrvPaletteRam1[i] = 0xaf;
+		DrvPaletteRam2[i] = 0x5a;
+	}
+}
+
 static INT32 CharPlaneOffsets[2]   = { 4, 0 };
 static INT32 CharXOffsets[8]       = { 0, 1, 2, 3, 8, 9, 10, 11 };
 static INT32 CharYOffsets[8]       = { 0, 16, 32, 48, 64, 80, 96, 112 };
@@ -869,16 +890,6 @@ static INT32 TileYOffsets[16]      = { 0, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80,
 static INT32 SpritePlaneOffsets[4] = { 0x80004, 0x80000, 4, 0 };
 static INT32 SpriteXOffsets[16]    = { 0, 1, 2, 3, 8, 9, 10, 11, 256, 257, 258, 259, 264, 265, 266, 267 };
 static INT32 SpriteYOffsets[16]    = { 0, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 176, 192, 208, 224, 240 };
-
-inline static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)(ZetTotalCycles() * nSoundRate / 3000000);
-}
-
-inline static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 3000000;
-}
 
 static INT32 DrvInit()
 {
@@ -891,6 +902,8 @@ static INT32 DrvInit()
 	if ((Mem = (UINT8 *)BurnMalloc(nLen)) == NULL) return 1;
 	memset(Mem, 0, nLen);
 	MemIndex();
+
+	BurnSetRefreshRate(59.59);
 
 	DrvTempRom = (UINT8 *)BurnMalloc(0x20000);
 
@@ -937,7 +950,7 @@ static INT32 DrvInit()
 	BurnFree(DrvTempRom);
 	
 	// Setup the M6809 emulation
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvM6809Ram          , 0x0000, 0x1dff, MAP_RAM);
 	M6809MapMemory(DrvSpriteRam         , 0x1e00, 0x1fff, MAP_RAM);
@@ -963,7 +976,7 @@ static INT32 DrvInit()
 	ZetMapArea(0xc000, 0xc7ff, 2, DrvZ80Ram             );
 	ZetClose();	
 	
-	BurnYM2203Init(2, 1500000, NULL, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(2, 1500000, NULL, 0);
 	BurnTimerAttachZet(3000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.20, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.40, BURN_SND_ROUTE_BOTH);
@@ -975,6 +988,7 @@ static INT32 DrvInit()
 	BurnYM2203SetRoute(1, BURN_SND_YM2203_AY8910_ROUTE_3, 0.40, BURN_SND_ROUTE_BOTH);
 
 	GenericTilesInit();
+	DrvRandPalette();
 
 	// Reset the driver
 	DrvDoReset();
@@ -1056,7 +1070,7 @@ static INT32 DiamondInit()
 	ZetMapArea(0xc000, 0xc7ff, 2, DrvZ80Ram             );
 	ZetClose();	
 	
-	BurnYM2203Init(2, 1500000, NULL, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(2, 1500000, NULL, 0);
 	BurnTimerAttachZet(3000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.20, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.40, BURN_SND_ROUTE_BOTH);
@@ -1245,7 +1259,7 @@ static void DrvRenderSprites()
 		INT32 yFlip = Attr & 0x08;
 		INT32 Code = DrvSpriteRamBuffer[Offs + 0] + ((Attr << 2) & 0x300);
 		INT32 Colour = (Attr >> 4) & 3;
-		
+
 		if (sx > 16 && sx < 240 && sy > 16 && sy < 208) {
 			if (xFlip) {
 				if (yFlip) {
@@ -1334,56 +1348,53 @@ static void DrvRenderCharLayer()
 	}
 }
 
-static void DrvDraw()
+static INT32 DrvDraw()
 {
 	BurnTransferClear();
 	DrvCalcPalette();
-	DrvRenderBgLayer(0, 1);
-	DrvRenderSprites();
-	DrvRenderBgLayer(1, 0);
-	DrvRenderCharLayer();
+	if (nBurnLayer & 2)     DrvRenderBgLayer(0, 1);
+	if (nSpriteEnable & 1)  DrvRenderSprites();
+	if (nBurnLayer & 4)     DrvRenderBgLayer(1, 0);
+	if (nBurnLayer & 8)     DrvRenderCharLayer();
 	BurnTransferCopy(DrvPalette);
+
+	return 0;
 }
 
 static INT32 DrvFrame()
 {
-	INT32 nInterleave = 25;
+	INT32 nInterleave = 256;
 
 	if (DrvReset) DrvDoReset();
 
 	DrvMakeInputs();
 
-	nCyclesTotal[0] = 1500000 / 60;
-	nCyclesTotal[1] = 3000000 / 60;
-	nCyclesDone[0] = nCyclesDone[1] = 0;
+	INT32 nCyclesTotal[2] = { (UINT32)((double)1500000 / 59.59), (UINT32)((double)3000000 / 59.59) };
+	INT32 nCyclesDone[2] = { nExtraCycles, 0 };
 	
 	ZetNewFrame();
 
 	for (INT32 i = 0; i < nInterleave; i++) {
-		INT32 nCurrentCPU, nNext;
-		
 		// Run M6809
-		nCurrentCPU = 0;
 		M6809Open(0);
-		nNext = (i + 1) * nCyclesTotal[nCurrentCPU] / nInterleave;
-		nCyclesSegment = nNext - nCyclesDone[nCurrentCPU];
-		nCyclesDone[nCurrentCPU] += M6809Run(nCyclesSegment);
-		if (i == 24) {
+		nCyclesDone[0] += M6809Run(((i + 1) * nCyclesTotal[0] / nInterleave) - nCyclesDone[0]);
+		if (i == 239) {
+			memcpy(DrvSpriteRamBuffer, DrvSpriteRam, 0x200);
 			M6809SetIRQLine(0, CPU_IRQSTATUS_AUTO);
 		}
 		M6809Close();
-		
+
 		// Run Z80
-		nCurrentCPU = 1;
 		ZetOpen(0);
-		BurnTimerUpdate(i * (nCyclesTotal[1] / nInterleave));
-		if (i == 5 || i == 10 || i == 15 || i == 20) ZetSetIRQLine(0, CPU_IRQSTATUS_ACK);
-		if (i == 6 || i == 11 || i == 16 || i == 21) ZetSetIRQLine(0, CPU_IRQSTATUS_NONE);
+		BurnTimerUpdate((i + 1) * (nCyclesTotal[1] / nInterleave));
+		if (i % 64 == 63) ZetSetIRQLine(0, CPU_IRQSTATUS_HOLD);
 		ZetClose();
 	}
 
 	ZetOpen(0);
 	BurnTimerEndFrame(nCyclesTotal[1]);
+
+	nExtraCycles = nCyclesDone[0] - nCyclesTotal[0];
 
 	if (pBurnSoundOut) {
 		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
@@ -1391,8 +1402,6 @@ static INT32 DrvFrame()
 	ZetClose();
 
 	if (pBurnDraw) DrvDraw();
-	
-	memcpy(DrvSpriteRamBuffer, DrvSpriteRam, 0x200);
 
 	return 0;
 }
@@ -1416,18 +1425,23 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	if (nAction & ACB_DRIVER_DATA) {
 		M6809Scan(nAction);
 		ZetScan(nAction);
-		
+
+		ZetOpen(0);
 		BurnYM2203Scan(nAction, pnMin);
+		ZetClose();
 
 		// Scan critical driver variables
-		SCAN_VAR(nCyclesDone);
-		SCAN_VAR(nCyclesSegment);
+		SCAN_VAR(nExtraCycles);
 		SCAN_VAR(DrvRomBank);
 		SCAN_VAR(DrvSoundLatch);
 		SCAN_VAR(DrvBgScrollX);
 		SCAN_VAR(DrvBgScrollY);
-		SCAN_VAR(DrvDip);
-		SCAN_VAR(DrvInput);
+	}
+
+	if (nAction & ACB_WRITE) {
+		M6809Open(0);
+		bank_switch(DrvRomBank);
+		M6809Close();
 	}
 	
 	return 0;
@@ -1437,9 +1451,9 @@ struct BurnDriver BurnDrvGng = {
 	"gng", NULL, NULL, NULL, "1985",
 	"Ghosts'n Goblins (World? set 1)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvRomInfo, DrvRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvRomInfo, DrvRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1447,9 +1461,9 @@ struct BurnDriver BurnDrvGnga = {
 	"gnga", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (World? set 2)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvaRomInfo, DrvaRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	GngaInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvaRomInfo, DrvaRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	GngaInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1457,9 +1471,9 @@ struct BurnDriver BurnDrvGngbl = {
 	"gngbl", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (bootleg with Cross)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvblRomInfo, DrvblRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	GngaInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvblRomInfo, DrvblRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	GngaInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1467,9 +1481,9 @@ struct BurnDriver BurnDrvGngbla = {
 	"gngbla", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (bootleg, harder)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvblaRomInfo, DrvblaRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	GngaInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvblaRomInfo, DrvblaRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	GngaInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1477,9 +1491,9 @@ struct BurnDriver BurnDrvGngblita = {
 	"gngblita", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (Italian bootleg, harder)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvblitaRomInfo, DrvblitaRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvblitaRomInfo, DrvblitaRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1487,9 +1501,9 @@ struct BurnDriver BurnDrvGngprot = {
 	"gngprot", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (prototype)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvprotRomInfo, DrvprotRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	GngaInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvprotRomInfo, DrvprotRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	GngaInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1497,9 +1511,9 @@ struct BurnDriver BurnDrvGngt = {
 	"gngt", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (US)\0", NULL, "Capcom (Taito America License)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvtRomInfo, DrvtRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvtRomInfo, DrvtRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1507,9 +1521,9 @@ struct BurnDriver BurnDrvGngc = {
 	"gngc", "gng", NULL, NULL, "1985",
 	"Ghosts'n Goblins (World Revision C)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DrvcRomInfo, DrvcRomName, NULL, NULL, DrvInputInfo, DrvDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, DrvcRomInfo, DrvcRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1517,9 +1531,9 @@ struct BurnDriver BurnDrvMakaimur = {
 	"makaimur", "gng", NULL, NULL, "1985",
 	"Makai-Mura (Japan)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, MakaimurRomInfo, MakaimurRomName, NULL, NULL, DrvInputInfo, DrvjDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, MakaimurRomInfo, MakaimurRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvjDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1527,9 +1541,9 @@ struct BurnDriver BurnDrvMakaimuc = {
 	"makaimurc", "gng", NULL, NULL, "1985",
 	"Makai-Mura (Japan revision C)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, MakaimucRomInfo, MakaimucRomName, NULL, NULL, DrvInputInfo, DrvjDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, MakaimucRomInfo, MakaimucRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvjDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1537,9 +1551,9 @@ struct BurnDriver BurnDrvMakaimug = {
 	"makaimurg", "gng", NULL, NULL, "1985",
 	"Makai-Mura (Japan revision G)\0", NULL, "Capcom", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, MakaimugRomInfo, MakaimugRomName, NULL, NULL, DrvInputInfo, DrvjDIPInfo,
-	DrvInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_RUNGUN, 0,
+	NULL, MakaimugRomInfo, MakaimugRomName, NULL, NULL, NULL, NULL, DrvInputInfo, DrvjDIPInfo,
+	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };
 
@@ -1547,8 +1561,8 @@ struct BurnDriver BurnDrvDiamond = {
 	"diamond", NULL, NULL, NULL, "1985",
 	"Diamond Run\0", NULL, "KH Video", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
-	NULL, DiamondRomInfo, DiamondRomName, NULL, NULL, DiamondInputInfo, DiamondDIPInfo,
-	DiamondInit, DrvExit, DrvFrame, NULL, DrvScan,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARWARE_CAPCOM_MISC, GBF_PLATFORM, 0,
+	NULL, DiamondRomInfo, DiamondRomName, NULL, NULL, NULL, NULL, DiamondInputInfo, DiamondDIPInfo,
+	DiamondInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	NULL, 0x100, 256, 224, 4, 3
 };

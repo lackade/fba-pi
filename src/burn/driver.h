@@ -14,6 +14,11 @@
  #define __cdecl
 #endif
 
+#if !defined (_MSC_VER) && defined(FASTCALL)
+ #undef __fastcall
+ #define __fastcall __attribute__((fastcall))
+#endif
+
 #ifndef INLINE
  #define INLINE __inline static
 #endif
@@ -33,6 +38,10 @@ typedef unsigned __int64					UINT64;
 __extension__ typedef unsigned long long	UINT64;
 __extension__ typedef long long				INT64;
 #endif
+
+// Macro to determine the size of a struct up to and including "member"
+#define STRUCT_SIZE_HELPER(type, member) offsetof(type, member) + sizeof(((type*)0)->member)
+
 #define OSD_CPU_H
 
 /* U64 and S64 are used to wrap long integer constants. */

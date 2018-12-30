@@ -369,7 +369,7 @@ static INT32 DrvInit(INT32 game, INT32 swap)
 	s2650SetInHandler(s2650games_read_port);
 	s2650Close();
 
-	SN76496Init(0, 307200, 0);
+	SN76496Init(0, 3072000, 0);
 	SN76496SetRoute(0, 0.75, BURN_SND_ROUTE_BOTH);
 
 	GenericTilesInit();
@@ -558,7 +558,7 @@ struct BurnDriver BurnDrvDrivfrcp = {
 	"Driving Force (Pac-Man conversion)\0", NULL, "Shinkai Inc. (Magic Eletronics Inc. license)", "Pac-man",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_PACMAN, GBF_RACING, 0,
-	NULL, drivfrcpRomInfo, drivfrcpRomName, NULL, NULL, DrivfrcpInputInfo, DrivfrcpDIPInfo,
+	NULL, drivfrcpRomInfo, drivfrcpRomName, NULL, NULL, NULL, NULL, DrivfrcpInputInfo, DrivfrcpDIPInfo,
 	drivfrcpInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x80,
 	224, 256, 3, 4
 };
@@ -580,10 +580,10 @@ STD_ROM_FN(_8bpm)
 
 struct BurnDriver BurnDrv_8bpm = {
 	"8bpm", "8ballact", NULL, NULL, "1985",
-	"Eight Ball Action (Pac-Man conversion)\0", NULL, "Seatongrove Ltd (Magic Eletronics USA license)", "Pac-man",
+	"Eight Ball Action (Pac-Man conversion)\0", "imperfect graphics", "Seatongrove Ltd (Magic Eletronics USA license)", "Pac-man",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PACMAN, GBF_SPORTSMISC, 0,
-	NULL, _8bpmRomInfo, _8bpmRomName, NULL, NULL, _8bpmInputInfo, _8bpmDIPInfo,
+	NULL, _8bpmRomInfo, _8bpmRomName, NULL, NULL, NULL, NULL, _8bpmInputInfo, _8bpmDIPInfo,
 	_8bpmInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x80,
 	224, 256, 3, 4
 };
@@ -609,7 +609,7 @@ struct BurnDriver BurnDrvPorky = {
 	"Porky\0", NULL, "Shinkai Inc. (Magic Eletronics Inc. license)", "Pac-man",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_PACMAN, GBF_HORSHOOT, 0,
-	NULL, porkyRomInfo, porkyRomName, NULL, NULL, PorkyInputInfo, PorkyDIPInfo,
+	NULL, porkyRomInfo, porkyRomName, NULL, NULL, NULL, NULL, PorkyInputInfo, PorkyDIPInfo,
 	porkyInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x80,
 	224, 256, 3, 4
 };

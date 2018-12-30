@@ -117,11 +117,11 @@ static struct BurnDIPInfo PunchoutDIPList[]=
 	{0x09, 0x01, 0x0f, 0x07, "1 Coin  6 Credits"			},
 	{0x09, 0x01, 0x0f, 0x0f, "Free Play"				},
 
-	{0   , 0xfe, 0   ,    0, "Copyright"				},
+	{0   , 0xfe, 0   ,    2, "Copyright"				},
 	{0x09, 0x01, 0x80, 0x00, "Nintendo"				},
 	{0x09, 0x01, 0x80, 0x80, "Nintendo of America Inc."		},
 
-	{0   , 0xfe, 0   ,    2, "Difficulty"				},
+	{0   , 0xfe, 0   ,    4, "Difficulty"				},
 	{0x0a, 0x01, 0x03, 0x00, "Easy"					},
 	{0x0a, 0x01, 0x03, 0x01, "Medium"				},
 	{0x0a, 0x01, 0x03, 0x02, "Hard"					},
@@ -133,7 +133,7 @@ static struct BurnDIPInfo PunchoutDIPList[]=
 	{0x0a, 0x01, 0x0c, 0x08, "Short"				},
 	{0x0a, 0x01, 0x0c, 0x0c, "Shortest"				},
 
-	{0   , 0xfe, 0   ,    4, "Demo Sounds"				},
+	{0   , 0xfe, 0   ,    2, "Demo Sounds"				},
 	{0x0a, 0x01, 0x10, 0x00, "Off"					},
 	{0x0a, 0x01, 0x10, 0x10, "On"					},
 
@@ -169,27 +169,27 @@ static struct BurnDIPInfo SpnchoutDIPList[]=
 	{0x0a, 0x01, 0x0f, 0x07, "1 Coin  6 Credits"			},
 	{0x0a, 0x01, 0x0f, 0x0f, "Free Play"				},
 
-	{0   , 0xfe, 0   ,    0, "Copyright"				},
+	{0   , 0xfe, 0   ,    2, "Copyright"				},
 	{0x0a, 0x01, 0x80, 0x00, "Nintendo"				},
 	{0x0a, 0x01, 0x80, 0x80, "Nintendo of America Inc."		},
 
-	{0   , 0xfe, 0   ,    0, "Difficulty"				},
+	{0   , 0xfe, 0   ,    4, "Difficulty"				},
 	{0x0b, 0x01, 0x03, 0x00, "Easy"					},
 	{0x0b, 0x01, 0x03, 0x01, "Medium"				},
 	{0x0b, 0x01, 0x03, 0x02, "Hard"					},
 	{0x0b, 0x01, 0x03, 0x03, "Hardest"				},
 
-	{0   , 0xfe, 0   ,    2, "Time"					},
+	{0   , 0xfe, 0   ,    4, "Time"					},
 	{0x0b, 0x01, 0x0c, 0x00, "Longest"				},
 	{0x0b, 0x01, 0x0c, 0x04, "Long"					},
 	{0x0b, 0x01, 0x0c, 0x08, "Short"				},
 	{0x0b, 0x01, 0x0c, 0x0c, "Shortest"				},
 
-	{0   , 0xfe, 0   ,    4, "Demo Sounds"				},
+	{0   , 0xfe, 0   ,    2, "Demo Sounds"				},
 	{0x0b, 0x01, 0x10, 0x00, "Off"					},
 	{0x0b, 0x01, 0x10, 0x10, "On"					},
 
-	{0   , 0xfe, 0   ,    4, "Rematch At A Discount"		},
+	{0   , 0xfe, 0   ,    2, "Rematch At A Discount"		},
 	{0x0b, 0x01, 0x20, 0x00, "Off"					},
 	{0x0b, 0x01, 0x20, 0x20, "On"					},
 
@@ -227,13 +227,13 @@ static struct BurnDIPInfo ArmwrestDIPList[]=
 	{0x07, 0x01, 0x40, 0x40, "1"		},
 	{0x07, 0x01, 0x40, 0x00, "2"		},
 
-	{0   , 0xfe, 0   ,    0, "Difficulty"	},
+	{0   , 0xfe, 0   ,    4, "Difficulty"	},
 	{0x08, 0x01, 0x03, 0x00, "Easy"		},
 	{0x08, 0x01, 0x03, 0x01, "Medium"	},
 	{0x08, 0x01, 0x03, 0x02, "Hard"		},
 	{0x08, 0x01, 0x03, 0x03, "Hardest"	},
 
-	{0   , 0xfe, 0   ,    4, "Coinage 2"	},
+	{0   , 0xfe, 0   ,    16, "Coinage 2"	},
 	{0x08, 0x01, 0x3c, 0x00, "0000"		},
 	{0x08, 0x01, 0x3c, 0x04, "0001"		},
 	{0x08, 0x01, 0x3c, 0x08, "0010"		},
@@ -251,7 +251,7 @@ static struct BurnDIPInfo ArmwrestDIPList[]=
 	{0x08, 0x01, 0x3c, 0x38, "1110"		},
 	{0x08, 0x01, 0x3c, 0x3c, "1111"		},
 
-	{0   , 0xfe, 0   ,    16, "Rematches"	},
+	{0   , 0xfe, 0   ,    2, "Rematches"	},
 	{0x08, 0x01, 0x40, 0x40, "3"		},
 	{0x08, 0x01, 0x40, 0x00, "7"		},
 
@@ -509,6 +509,8 @@ static INT32 DrvDoReset()
 
 	spunchout_prot_mode = 0;
 
+	HiscoreReset();
+
 	return 0;
 }
 
@@ -558,7 +560,7 @@ static INT32 MemIndex()
 
 static void DrvGfxDecode(UINT8 *rom, INT32 len, UINT8 xor1, INT32 depth) // 0x100, 0, 0x100, 0 (mod 0x40 always)
 {
-	UINT8 *tmp = (UINT8*)malloc(len);
+	UINT8 *tmp = (UINT8*)BurnMalloc(len);
 	if (tmp == NULL || len == 0) return;
 
 	for (INT32 i = 0; i < len; i++) tmp[i] = rom[i] ^ xor1; // copy & invert
@@ -573,7 +575,7 @@ static void DrvGfxDecode(UINT8 *rom, INT32 len, UINT8 xor1, INT32 depth) // 0x10
 		rom[i] &= depth;
 	}
 
-	free (tmp);
+	BurnFree (tmp);
 }
 
 static void DrvPaletteInit(INT32 off, INT32 bank, INT32 reverse)
@@ -599,7 +601,7 @@ static INT32 CommonInit(INT32 (*pInitCallback)(), INT32 punchout, INT32 reverse_
 	AllMem = NULL;
 	MemIndex();
 	INT32 nLen = MemEnd - (UINT8 *)0;
-	if ((AllMem = (UINT8 *)malloc(nLen)) == NULL) return 1;
+	if ((AllMem = (UINT8 *)BurnMalloc(nLen)) == NULL) return 1;
 	memset(AllMem, 0, nLen);
 	MemIndex();
 
@@ -698,8 +700,7 @@ static INT32 DrvExit()
 	vlm5030Exit();
 	nesapuExit();
 
-	free (AllMem);
-	AllMem = NULL;
+	BurnFree (AllMem);
 
 	return 0;
 }
@@ -1116,8 +1117,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 
 		ZetScan(nAction);
 		M6502Scan(nAction);
-		vlm5030Scan(nAction);
-		nesapuScan(nAction);
+		vlm5030Scan(nAction, pnMin);
+		nesapuScan(nAction, pnMin);
 
 		SCAN_VAR(spunchout_prot_mode);
 	}
@@ -1324,8 +1325,8 @@ struct BurnDriver BurnDrvPunchout = {
 	"punchout", NULL, NULL, NULL, "1984",
 	"Punch-Out!! (Rev B)\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 1, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, punchoutRomInfo, punchoutRomName, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 1, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, punchoutRomInfo, punchoutRomName, NULL, NULL, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
 	PunchoutInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1396,8 +1397,8 @@ struct BurnDriver BurnDrvPunchouta = {
 	"punchouta", "punchout", NULL, NULL, "1984",
 	"Punch-Out!! (Rev A)\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, punchoutaRomInfo, punchoutaRomName, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 1, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, punchoutaRomInfo, punchoutaRomName, NULL, NULL, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
 	PunchoutaInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1463,8 +1464,8 @@ struct BurnDriver BurnDrvPunchoutj = {
 	"punchoutj", "punchout", NULL, NULL, "1984",
 	"Punch-Out!! (Japan)\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, punchoutjRomInfo, punchoutjRomName, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, punchoutjRomInfo, punchoutjRomName, NULL, NULL, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
 	PunchoutaInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1535,8 +1536,8 @@ struct BurnDriver BurnDrvPunchita = {
 	"punchita", "punchout", NULL, NULL, "1984",
 	"Punch-Out!! (Italian bootleg)\0", NULL, "bootleg", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 1, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, punchitaRomInfo, punchitaRomName, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 1, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, punchitaRomInfo, punchitaRomName, NULL, NULL, NULL, NULL, PunchoutInputInfo, PunchoutDIPInfo,
 	SpnchoutInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1602,8 +1603,8 @@ struct BurnDriver BurnDrvSpnchout = {
 	"spnchout", NULL, NULL, NULL, "1984",
 	"Super Punch-Out!! (Rev B)\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, spnchoutRomInfo, spnchoutRomName, NULL, NULL, SpnchoutInputInfo, SpnchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, spnchoutRomInfo, spnchoutRomName, NULL, NULL, NULL, NULL, SpnchoutInputInfo, SpnchoutDIPInfo,
 	SpnchoutInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1669,8 +1670,8 @@ struct BurnDriver BurnDrvSpnchouta = {
 	"spnchouta", "spnchout", NULL, NULL, "1984",
 	"Super Punch-Out!! (Rev A)\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, spnchoutaRomInfo, spnchoutaRomName, NULL, NULL, SpnchoutInputInfo, SpnchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, spnchoutaRomInfo, spnchoutaRomName, NULL, NULL, NULL, NULL, SpnchoutInputInfo, SpnchoutDIPInfo,
 	PunchoutaInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1741,8 +1742,8 @@ struct BurnDriver BurnDrvSpnchoutj = {
 	"spnchoutj", "spnchout", NULL, NULL, "1984",
 	"Super Punch-Out!! (Japan)\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, spnchoutjRomInfo, spnchoutjRomName, NULL, NULL, SpnchoutInputInfo, SpnchoutDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, spnchoutjRomInfo, spnchoutjRomName, NULL, NULL, NULL, NULL, SpnchoutInputInfo, SpnchoutDIPInfo,
 	SpnchoutjInit, DrvExit, DrvFrame, PunchoutDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };
@@ -1803,8 +1804,8 @@ struct BurnDriver BurnDrvArmwrest = {
 	"armwrest", NULL, NULL, NULL, "1985",
 	"Arm Wrestling\0", NULL, "Nintendo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
-	NULL, armwrestRomInfo, armwrestRomName, NULL, NULL, ArmwrestInputInfo, ArmwrestDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_SPORTSMISC, 0,
+	NULL, armwrestRomInfo, armwrestRomName, NULL, NULL, NULL, NULL, ArmwrestInputInfo, ArmwrestDIPInfo,
 	ArmwrestInit, DrvExit, DrvFrame, ArmwrestDraw, DrvScan, &DrvRecalc, 0x400,
 	256, 448, 4, 6
 };

@@ -38,6 +38,8 @@ void konami_draw_16x16_prio_tile(UINT8 *gfx, INT32 code, INT32 bpp, INT32 color,
 void konami_draw_16x16_zoom_tile(UINT8 *gfx, INT32 code, INT32 bpp, INT32 color, INT32 t, INT32 sx, INT32 sy, INT32 fx, INT32 fy, INT32 width, INT32 height, INT32 zoomx, INT32 zoomy);
 void konami_draw_16x16_priozoom_tile(UINT8 *gfx, INT32 code, INT32 bpp, INT32 color, INT32 t, INT32 sx, INT32 sy, INT32 fx, INT32 fy, INT32 width, INT32 height, INT32 zoomx, INT32 zoomy, UINT32 priority);
 void konami_render_zoom_shadow_tile(UINT8 *gfx, INT32 code, INT32 bpp, INT32 color, INT32 sx, INT32 sy, INT32 fx, INT32 fy, INT32 width, INT32 height, INT32 zoomx, INT32 zoomy, UINT32 priority, INT32 shadow);
+void konami_set_highlight_mode(INT32 mode);
+void konami_set_highlight_over_sprites_mode(INT32 mode);
 
 // k051960 / k052109 shared
 //---------------------------------------------------------------------------------------------------------------
@@ -196,7 +198,7 @@ void K056832WritebRegsByte(INT32 offset, UINT8 data);
 UINT16 K056832mwRomWordRead(INT32 address);
 void K056832Draw(INT32 layer, UINT32 flags, UINT32 priority);
 INT32 K056832GetLayerAssociation();
-
+void K056832Metamorphic_Fixup();
 
 // K051316.cpp
 //---------------------------------------------------------------------------------------------------------------
@@ -323,6 +325,7 @@ void K053936Scan(INT32 nAction);
 
 void K053936EnableWrap(INT32 chip, INT32 status);
 void K053936SetOffset(INT32 chip, INT32 xoffs, INT32 yoffs);
+void K053936PredrawTiles3(INT32 chip, UINT8 *gfx, INT32 tile_size_x, INT32 tile_size_y, INT32 transparent);
 void K053936PredrawTiles2(INT32 chip, UINT8 *gfx);
 void K053936PredrawTiles(INT32 chip, UINT8 *gfx, INT32 transparent, INT32 tcol /*transparent color*/);
 void K053936Draw(INT32 chip, UINT16 *ctrl, UINT16 *linectrl, INT32 transp);
@@ -387,10 +390,12 @@ INT32 K054338_read_register(int reg);
 void K054338_fill_solid_bg();
 void K054338_fill_backcolor(int palette_offset, int mode);
 INT32 K054338_set_alpha_level(int pblend);
+INT32 K054338_alpha_level_moo(INT32 pblend);
 void K054338_invert_alpha(int invert);
-void K054338_update_all_shadows();
+void K054338_update_all_shadows(INT32 rushingheroes_hack);
 void K054338_export_config(int **shdRGB);
 
+extern INT32 m_shd_rgb[12];
 
 // k055555.cpp
 //------------------------------------------------------------------------------------------
@@ -496,3 +501,4 @@ void konamigx_mixer_init(int objdma);
 void konamigx_mixer_exit();
 void konamigx_mixer_primode(int mode);
 void konamigx_mixer(int sub1 /*extra tilemap 1*/, int sub1flags, int sub2 /*extra tilemap 2*/, int sub2flags, int mixerflags, int extra_bitmap /*extra tilemap 3*/, int rushingheroes_hack);
+extern INT32 konamigx_mystwarr_kludge;

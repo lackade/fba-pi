@@ -1,10 +1,9 @@
+// FB Alpha Solomon's Key driver module
+// Based on MAME driver by Mirko Buffoni
+
 #include "tiles_generic.h"
 #include "z80_intf.h"
-
-#include "driver.h"
-extern "C" {
- #include "ay8910.h"
-}
+#include "ay8910.h"
 
 static UINT8 SolomonInputPort0[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 static UINT8 SolomonInputPort1[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -38,9 +37,6 @@ static INT32 SolomonIrqFire = 0;
 static INT32 SolomonFlipScreen = 0;
 
 static INT32 SolomonSoundLatch = 0;
-static INT16* pFMBuffer;
-static INT16* pAY8910Buffer[9];
-
 
 static INT32 nCyclesDone[2], nCyclesTotal[2];
 static INT32 nCyclesSegment;
@@ -205,7 +201,7 @@ static struct BurnRomInfo SolomonjRomDesc[] = {
 STD_ROM_PICK(Solomonj)
 STD_ROM_FN(Solomonj)
 
-INT32 SolomonDoReset()
+static INT32 SolomonDoReset()
 {
 	SolomonIrqFire = 0;
 	SolomonFlipScreen = 0;
@@ -221,10 +217,12 @@ INT32 SolomonDoReset()
 		AY8910Reset(i);
 	}
 
+	HiscoreReset();
+
 	return 0;
 }
 
-UINT8 __fastcall SolomonRead1(UINT16 a)
+static UINT8 __fastcall SolomonRead1(UINT16 a)
 {
 	switch (a) {
 		case 0xe600: {
@@ -251,7 +249,7 @@ UINT8 __fastcall SolomonRead1(UINT16 a)
 	return 0;
 }
 
-void __fastcall SolomonWrite1(UINT16 a, UINT8 d)
+static void __fastcall SolomonWrite1(UINT16 a, UINT8 d)
 {
 	switch (a) {
 		case 0xe600: {
@@ -276,7 +274,7 @@ void __fastcall SolomonWrite1(UINT16 a, UINT8 d)
 	}
 }
 
-UINT8 __fastcall SolomonRead2(UINT16 a)
+static UINT8 __fastcall SolomonRead2(UINT16 a)
 {
 	switch (a) {
 		case 0x8000: {
@@ -287,7 +285,7 @@ UINT8 __fastcall SolomonRead2(UINT16 a)
 	return 0;
 }
 
-void __fastcall SolomonPortWrite2(UINT16 a, UINT8 d)
+static void __fastcall SolomonPortWrite2(UINT16 a, UINT8 d)
 {
 	a &= 0xff;
 
@@ -347,7 +345,7 @@ static INT32 SolomonMemIndex()
 	SolomonBgTiles         = Next; Next += 2048 * 8 * 8;
 	SolomonFgTiles         = Next; Next += 2048 * 8 * 8;
 	SolomonSprites         = Next; Next += 2048 * 8 * 8;
-	pFMBuffer              = (INT16*)Next; Next += nBurnSoundLen * 9 * sizeof(INT16);
+
 	SolomonPalette         = (UINT32*)Next; Next += 0x00200 * sizeof(UINT32);
 
 	MemEnd                 = Next;
@@ -362,7 +360,7 @@ static INT32 SpritePlaneOffsets[4] = { 0, 131072, 262144, 393216 };
 static INT32 SpriteXOffsets[16]    = { 0, 1, 2, 3, 4, 5, 6, 7, 64, 65, 66, 67, 68, 69, 70, 71 };
 static INT32 SpriteYOffsets[16]    = { 0, 8, 16, 24, 32, 40, 48, 56, 128, 136, 144, 152, 160, 168, 176, 184 };
 
-INT32 SolomonInit()
+static INT32 SolomonInit()
 {
 	INT32 nRet = 0, nLen;
 
@@ -454,19 +452,9 @@ INT32 SolomonInit()
 
 	BurnFree(SolomonTempRom);
 
-	pAY8910Buffer[0] = pFMBuffer + nBurnSoundLen * 0;
-	pAY8910Buffer[1] = pFMBuffer + nBurnSoundLen * 1;
-	pAY8910Buffer[2] = pFMBuffer + nBurnSoundLen * 2;
-	pAY8910Buffer[3] = pFMBuffer + nBurnSoundLen * 3;
-	pAY8910Buffer[4] = pFMBuffer + nBurnSoundLen * 4;
-	pAY8910Buffer[5] = pFMBuffer + nBurnSoundLen * 5;
-	pAY8910Buffer[6] = pFMBuffer + nBurnSoundLen * 6;
-	pAY8910Buffer[7] = pFMBuffer + nBurnSoundLen * 7;
-	pAY8910Buffer[8] = pFMBuffer + nBurnSoundLen * 8;
-
-	AY8910Init(0, 1500000, nBurnSoundRate, NULL, NULL, NULL, NULL);
-	AY8910Init(1, 1500000, nBurnSoundRate, NULL, NULL, NULL, NULL);
-	AY8910Init(2, 1500000, nBurnSoundRate, NULL, NULL, NULL, NULL);
+	AY8910Init(0, 1500000, 0);
+	AY8910Init(1, 1500000, 1);
+	AY8910Init(2, 1500000, 1);
 	AY8910SetAllRoutes(0, 0.12, BURN_SND_ROUTE_BOTH);
 	AY8910SetAllRoutes(1, 0.12, BURN_SND_ROUTE_BOTH);
 	AY8910SetAllRoutes(2, 0.12, BURN_SND_ROUTE_BOTH);
@@ -479,7 +467,7 @@ INT32 SolomonInit()
 	return 0;
 }
 
-INT32 SolomonExit()
+static INT32 SolomonExit()
 {
 	ZetExit();
 
@@ -494,7 +482,7 @@ INT32 SolomonExit()
 	return 0;
 }
 
-void SolomonRenderBgLayer()
+static void SolomonRenderBgLayer()
 {
 	for (INT32 Offs = 0; Offs < 0x400; Offs++) {
 		INT32 sx, sy, Attr, Code, Colour, FlipX, FlipY;
@@ -550,7 +538,7 @@ void SolomonRenderBgLayer()
 	}
 }
 
-void SolomonRenderFgLayer()
+static void SolomonRenderFgLayer()
 {
 	for (INT32 Offs = 0x400 - 1; Offs >= 0; Offs--) {
 		INT32 sx, sy, Code, Colour;
@@ -585,7 +573,7 @@ void SolomonRenderFgLayer()
 	}
 }
 
-void SolomonRenderSpriteLayer()
+static void SolomonRenderSpriteLayer()
 {
 	for (INT32 Offs = 0x80 - 4; Offs >= 0; Offs -= 4) {
 		INT32 sx, sy, Attr, Code, Colour, FlipX, FlipY;
@@ -654,7 +642,7 @@ inline static UINT32 CalcCol(UINT16 nColour)
 	return BurnHighCol(r, g, b, 0);
 }
 
-INT32 SolomonCalcPalette()
+static INT32 SolomonCalcPalette()
 {
 	for (INT32 i = 0; i < 0x200; i++) {
 		SolomonPalette[i / 2] = CalcCol(SolomonPaletteRam[i & ~1] | (SolomonPaletteRam[i | 1] << 8));
@@ -663,7 +651,7 @@ INT32 SolomonCalcPalette()
 	return 0;
 }
 
-void SolomonDraw()
+static INT32 SolomonDraw()
 {
 	BurnTransferClear();
 	SolomonCalcPalette();
@@ -671,9 +659,11 @@ void SolomonDraw()
 	SolomonRenderFgLayer();
 	SolomonRenderSpriteLayer();
 	BurnTransferCopy(SolomonPalette);
+
+	return 0;
 }
 
-INT32 SolomonFrame()
+static INT32 SolomonFrame()
 {
 	INT32 nInterleave = 2;
 	INT32 nSoundBufferPos = 0;
@@ -712,7 +702,7 @@ INT32 SolomonFrame()
 		if (pBurnSoundOut) {
 			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
 			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
-			AY8910Render(&pAY8910Buffer[0], pSoundBuf, nSegmentLength, 0);
+			AY8910Render(pSoundBuf, nSegmentLength);
 			nSoundBufferPos += nSegmentLength;
 		}
 	}
@@ -722,7 +712,7 @@ INT32 SolomonFrame()
 		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
 		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
 		if (nSegmentLength) {
-			AY8910Render(&pAY8910Buffer[0], pSoundBuf, nSegmentLength, 0);
+			AY8910Render(pSoundBuf, nSegmentLength);
 		}
 	}
 
@@ -765,9 +755,9 @@ struct BurnDriver BurnDrvSolomon = {
 	"solomon", NULL, NULL, NULL, "1986",
 	"Solomon's Key (US)\0", NULL, "Tecmo", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_PRE90S, GBF_PUZZLE, 0,
-	NULL, SolomonRomInfo, SolomonRomName, NULL, NULL, SolomonInputInfo, SolomonDIPInfo,
-	SolomonInit, SolomonExit, SolomonFrame, NULL, SolomonScan,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_PUZZLE, 0,
+	NULL, SolomonRomInfo, SolomonRomName, NULL, NULL, NULL, NULL, SolomonInputInfo, SolomonDIPInfo,
+	SolomonInit, SolomonExit, SolomonFrame, SolomonDraw, SolomonScan,
 	NULL, 0x200, 256, 224, 4, 3
 };
 
@@ -775,8 +765,8 @@ struct BurnDriver BurnDrvSolomonj = {
 	"solomonj", "solomon", NULL, NULL, "1986",
 	"Solomon's Key (Japan)\0", NULL, "Tecmo", "Miscellaneous",
 	L"Solomon's Key (Japan)\0Solomon's Key \u30BD\u30ED\u30E2\u30F3\u306E\u9375\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_PRE90S, GBF_PUZZLE, 0,
-	NULL, SolomonjRomInfo, SolomonjRomName, NULL, NULL, SolomonInputInfo, SolomonDIPInfo,
-	SolomonInit, SolomonExit, SolomonFrame, NULL, SolomonScan,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_MISC_PRE90S, GBF_PUZZLE, 0,
+	NULL, SolomonjRomInfo, SolomonjRomName, NULL, NULL, NULL, NULL, SolomonInputInfo, SolomonDIPInfo,
+	SolomonInit, SolomonExit, SolomonFrame, SolomonDraw, SolomonScan,
 	NULL, 0x200, 256, 224, 4, 3
 };

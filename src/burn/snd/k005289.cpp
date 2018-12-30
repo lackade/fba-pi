@@ -128,9 +128,13 @@ void K005289Exit()
 	if (!DebugSnd_K005289Initted) bprintf(PRINT_ERROR, _T("K005289Exit called without init\n"));
 #endif
 
+	if (!DebugSnd_K005289Initted) return;
+
 	BurnFree (mixer_buffer);
 	BurnFree (mixer_table);
-	
+	mixer_buffer = NULL;
+	mixer_table = NULL;
+
 	DebugSnd_K005289Initted = 0;
 }
 
@@ -273,7 +277,7 @@ void K005289Tg2Write()
 	frequency[1] = freq_latch[1];
 }
 
-INT32 K005289Scan(INT32 nAction, INT32 *)
+void K005289Scan(INT32 nAction, INT32 *)
 {
 #if defined FBA_DEBUG
 	if (!DebugSnd_K005289Initted) bprintf(PRINT_ERROR, _T("K005289Scan called without init\n"));
@@ -288,9 +292,5 @@ INT32 K005289Scan(INT32 nAction, INT32 *)
 			SCAN_VAR(waveform[i]);
 			SCAN_VAR(volume[i]);
 		}
-
-		return 0;
 	}
-
-	return 0;
 }

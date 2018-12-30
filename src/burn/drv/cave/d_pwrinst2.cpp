@@ -2,6 +2,7 @@
 #include "cave.h"
 #include "msm6295.h"
 #include "burn_ym2203.h"
+#include "nmk112.h"
 #include "bitswap.h"
 
 #define CAVE_VBLANK_LINES 12
@@ -36,8 +37,6 @@ static INT32 SoundLatchReplyIndex;
 static INT32 SoundLatchReplyMax;
 
 static UINT8 DrvZ80Bank;
-static UINT8 DrvOkiBank1[4];
-static UINT8 DrvOkiBank2[4];
 
 static struct BurnInputInfo pwrinst2InputList[] = {
 	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 8,	"p1 coin"},
@@ -265,11 +264,11 @@ UINT8 __fastcall pwrinst2ZIn(UINT16 nAddress)
 
 	switch (nAddress) {
 		case 0x00: {
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 		}
 		
 		case 0x08: {
-			return MSM6295ReadStatus(1);
+			return MSM6295Read(1);
 		}
 		
 		case 0x40: {
@@ -304,12 +303,12 @@ void __fastcall pwrinst2ZOut(UINT16 nAddress, UINT8 nValue)
 
 	switch (nAddress) {
 		case 0x00: {
-			MSM6295Command(0, nValue);
+			MSM6295Write(0, nValue);
 			return;
 		}
 		
 		case 0x08: {
-			MSM6295Command(1, nValue);
+			MSM6295Write(1, nValue);
 			return;
 		}
 		
@@ -321,25 +320,7 @@ void __fastcall pwrinst2ZOut(UINT16 nAddress, UINT8 nValue)
 		case 0x15:
 		case 0x16:
 		case 0x17: {
-			INT32 Offset = nAddress - 0x10;
-			INT32 Chip = (Offset & 4) >> 2;
-			INT32 BankNum = Offset & 3;
-			UINT32 Address;
-			
-			if (Chip == 0) {
-				DrvOkiBank1[BankNum] = nValue;
-				Address = DrvOkiBank1[BankNum] * 0x10000;
-				MSM6295SampleData[0][BankNum] = MSM6295ROM + Address;
-				MSM6295SampleInfo[0][BankNum] = MSM6295ROM + Address + (BankNum << 8);
-			}
-			
-			if (Chip == 1) {
-				DrvOkiBank2[BankNum] = nValue;
-				Address = DrvOkiBank2[BankNum] * 0x10000;
-				MSM6295SampleData[1][BankNum] = MSM6295ROM + 0x400000 + Address;
-				MSM6295SampleInfo[1][BankNum] = MSM6295ROM + 0x400000 + Address + (BankNum << 8);
-			}
-
+			NMK112_okibank_write(nAddress & 0x07, nValue);
 			return;
 		}
 		
@@ -406,8 +387,7 @@ static INT32 DrvExit()
 {
 	EEPROMExit();
 
-	MSM6295Exit(0);
-	MSM6295Exit(1);
+	MSM6295Exit();
 
 	CaveTileExit();
 	CaveSpriteExit();
@@ -420,8 +400,6 @@ static INT32 DrvExit()
 	
 	SoundLatch = 0;
 	DrvZ80Bank = 0;
-	DrvOkiBank1[0] = DrvOkiBank1[1] = DrvOkiBank1[2] = DrvOkiBank1[3] = 0;
-	DrvOkiBank2[0] = DrvOkiBank2[1] = DrvOkiBank2[2] = DrvOkiBank2[3] = 0;
 
 	BurnFree(Mem);
 
@@ -439,8 +417,7 @@ static INT32 DrvDoReset()
 	ZetClose();
 	
 	BurnYM2203Reset();
-	MSM6295Reset(0);
-	MSM6295Reset(1);
+	MSM6295Reset();
 
 	EEPROMReset();
 
@@ -458,26 +435,7 @@ static INT32 DrvDoReset()
 	SoundLatchReplyMax = -1;	
 	
 	DrvZ80Bank = 0;
-	DrvOkiBank1[0] = DrvOkiBank1[1] = DrvOkiBank1[2] = DrvOkiBank1[3] = 0;
-	DrvOkiBank2[0] = DrvOkiBank2[1] = DrvOkiBank2[2] = DrvOkiBank2[3] = 0;
-	
-	MSM6295SampleInfo[0][0] = MSM6295ROM + 0x00000;
-	MSM6295SampleData[0][0] = MSM6295ROM + 0x00000;
-	MSM6295SampleInfo[0][1] = MSM6295ROM + 0x00100;
-	MSM6295SampleData[0][1] = MSM6295ROM + 0x10000;
-	MSM6295SampleInfo[0][2] = MSM6295ROM + 0x00200;
-	MSM6295SampleData[0][2] = MSM6295ROM + 0x20000;
-	MSM6295SampleInfo[0][3] = MSM6295ROM + 0x00300;
-	MSM6295SampleData[0][3] = MSM6295ROM + 0x30000;
-
-	MSM6295SampleInfo[1][0] = MSM6295ROM + 0x400000;
-	MSM6295SampleData[1][0] = MSM6295ROM + 0x400000;
-	MSM6295SampleInfo[1][1] = MSM6295ROM + 0x400100;
-	MSM6295SampleData[1][1] = MSM6295ROM + 0x410000;
-	MSM6295SampleInfo[1][2] = MSM6295ROM + 0x400200;
-	MSM6295SampleData[1][2] = MSM6295ROM + 0x420000;
-	MSM6295SampleInfo[1][3] = MSM6295ROM + 0x400300;
-	MSM6295SampleData[1][3] = MSM6295ROM + 0x430000;
+	NMK112Reset();
 
 	return 0;
 }
@@ -606,8 +564,7 @@ static INT32 DrvFrame()
 	
 	if (pBurnSoundOut) {
 		BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
-		MSM6295Render(0, pBurnSoundOut, nBurnSoundLen);
-		MSM6295Render(1, pBurnSoundOut, nBurnSoundLen);
+		MSM6295Render(pBurnSoundOut, nBurnSoundLen);
 	}
 	
 	ZetClose();
@@ -770,9 +727,8 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	EEPROMScan(nAction, pnMin);			// Scan EEPROM
 
 	if (nAction & ACB_VOLATILE) {		// Scan volatile ram
-
 		memset(&ba, 0, sizeof(ba));
-    		ba.Data		= RamStart;
+		ba.Data		= RamStart;
 		ba.nLen		= RamEnd - RamStart;
 		ba.szName	= "RAM";
 		BurnAcb(&ba);
@@ -781,8 +737,8 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM2203Scan(nAction, pnMin);
-		MSM6295Scan(0, nAction);
-		MSM6295Scan(1, nAction);
+		MSM6295Scan(nAction, pnMin);
+		NMK112_Scan(nAction);
 
 		SCAN_VAR(nVideoIRQ);
 		SCAN_VAR(nSoundIRQ);
@@ -794,24 +750,12 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		SCAN_VAR(DrvInput);
 		SCAN_VAR(SoundLatch);
 		SCAN_VAR(DrvZ80Bank);
-		SCAN_VAR(DrvOkiBank1);
-		SCAN_VAR(DrvOkiBank2);
 		
 		if (nAction & ACB_WRITE) {
 			ZetOpen(0);
 			ZetMapArea(0x8000, 0xbFFF, 0, RomZ80 + (DrvZ80Bank * 0x4000));
 			ZetMapArea(0x8000, 0xbFFF, 2, RomZ80 + (DrvZ80Bank * 0x4000));
 			ZetClose();
-			
-			for (INT32 i = 0; i < 4; i++) {
-				INT32 Address = DrvOkiBank1[i] * 0x10000;
-				MSM6295SampleData[0][i] = MSM6295ROM + Address;
-				MSM6295SampleInfo[0][i] = MSM6295ROM + Address + (i << 8);
-				
-				Address = DrvOkiBank2[i] * 0x10000;
-				MSM6295SampleData[1][i] = MSM6295ROM + 0x400000 + Address;
-				MSM6295SampleInfo[1][i] = MSM6295ROM + 0x400000 + Address + (i << 8);
-			}
 
 			CaveRecalcPalette = 1;
 		}
@@ -827,16 +771,6 @@ static void DrvFMIRQHandler(INT32, INT32 nStatus)
 	} else {
 		ZetSetIRQLine(0,    CPU_IRQSTATUS_NONE);
 	}
-}
-
-static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 8000000;
-}
-
-static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 8000000;
 }
 
 static INT32 drvZInit()
@@ -888,7 +822,7 @@ static INT32 DrvInit()
 
 	{
 		SekInit(0, 0x68000);													// Allocate 68000
-	    SekOpen(0);
+		SekOpen(0);
 
 		// Map 68000 memory:
 		SekMapMemory(Rom01,				0x000000, 0x1FFFFF, MAP_ROM);	// CPU 0 ROM
@@ -921,7 +855,7 @@ static INT32 DrvInit()
 	nCaveExtraXOffset = -112;
 	nCaveExtraYOffset = 1;
 	
-	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, 0);
 	BurnTimerAttachZet(8000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.80, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.40, BURN_SND_ROUTE_BOTH);
@@ -932,7 +866,9 @@ static INT32 DrvInit()
 	MSM6295Init(1, 3000000 / 165, 1);
 	MSM6295SetRoute(0, 0.80, BURN_SND_ROUTE_BOTH);
 	MSM6295SetRoute(1, 1.00, BURN_SND_ROUTE_BOTH);
-	
+
+	NMK112_init(0, MSM6295ROM, MSM6295ROM + 0x400000, 0x400000, 0x400000);
+
 	if (!strcmp(BurnDrvGetTextA(DRV_NAME), "pwrinst2")) {
 		UINT16 *rom = (UINT16 *)Rom01;
 		rom[0xD46C/2] = 0xD482;	// kurara dash fix  0xd400 -> 0xd482
@@ -1004,7 +940,7 @@ static INT32 PlegendsInit()
 	nCaveExtraXOffset = -112;
 	nCaveExtraYOffset = 1;
 	
-	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(1, 4000000, &DrvFMIRQHandler, 0);
 	BurnTimerAttachZet(8000000);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_YM2203_ROUTE, 0.80, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetRoute(0, BURN_SND_YM2203_AY8910_ROUTE_1, 0.40, BURN_SND_ROUTE_BOTH);
@@ -1015,6 +951,8 @@ static INT32 PlegendsInit()
 	MSM6295Init(1, 3000000 / 165, 1);
 	MSM6295SetRoute(0, 0.80, BURN_SND_ROUTE_BOTH);
 	MSM6295SetRoute(1, 1.00, BURN_SND_ROUTE_BOTH);
+
+	NMK112_init(0, MSM6295ROM, MSM6295ROM + 0x400000, 0x400000, 0x400000);
 	
 	bDrawScreen = true;
 
@@ -1159,7 +1097,7 @@ struct BurnDriver BurnDrvPwrinst2 = {
 	"Power Instinct 2 (USA, ver. 94/04/08)\0", NULL, "Atlus", "Cave",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_Z80, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, pwrinst2RomInfo, pwrinst2RomName, NULL, NULL, pwrinst2InputInfo, NULL,
+	NULL, pwrinst2RomInfo, pwrinst2RomName, NULL, NULL, NULL, NULL, pwrinst2InputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 320, 240, 4, 3
 };
@@ -1169,7 +1107,7 @@ struct BurnDriver BurnDrvPwrinst2j = {
 	"Gouketsuji Ichizoku 2 (Japan, ver. 94/04/08)\0", NULL, "Atlus", "Cave",
 	L"\u8C6A\u8840\u5BFA\u4E00\u65CF \uFF12 (Japan, ver. 94/04/08)\0Gouketsuji Ichizoku 2\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_Z80, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, pwrinst2jRomInfo, pwrinst2jRomName, NULL, NULL, pwrinst2InputInfo, NULL,
+	NULL, pwrinst2jRomInfo, pwrinst2jRomName, NULL, NULL, NULL, NULL, pwrinst2InputInfo, NULL,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 320, 240, 4, 3
 };
@@ -1179,7 +1117,7 @@ struct BurnDriver BurnDrvPlegends = {
 	"Gouketsuji Gaiden Legends (USA, ver. 95/06/20)\0", NULL, "Atlus / KM International", "Cave",
 	L"\u8C6A\u8840\u5BFA\u5916\u4F1D Gogetsuji Legends (USA, ver. 95/06/20)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_Z80, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, plegendsRomInfo, plegendsRomName, NULL, NULL, pwrinst2InputInfo, NULL,
+	NULL, plegendsRomInfo, plegendsRomName, NULL, NULL, NULL, NULL, pwrinst2InputInfo, NULL,
 	PlegendsInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 320, 240, 4, 3
 };
@@ -1189,7 +1127,7 @@ struct BurnDriver BurnDrvPlegendsj = {
 	"Gouketsuji Gaiden Saikyou Densetsu (Japan, ver. 95/06/20)\0", NULL, "Atlus", "Cave",
 	L"\u8C6A\u8840\u5BFA\u5916\u4F1D Gogetsuji \u6700\u5F37\u4F1D\u8AAC (Japan, ver. 95/06/20)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_16BIT_ONLY, 2, HARDWARE_CAVE_68K_Z80, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, plegendsjRomInfo, plegendsjRomName, NULL, NULL, pwrinst2InputInfo, NULL,
+	NULL, plegendsjRomInfo, plegendsjRomName, NULL, NULL, NULL, NULL, pwrinst2InputInfo, NULL,
 	PlegendsInit, DrvExit, DrvFrame, DrvDraw, DrvScan,
 	&CaveRecalcPalette, 0x8000, 320, 240, 4, 3
 };

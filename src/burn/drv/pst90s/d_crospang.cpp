@@ -240,7 +240,7 @@ void __fastcall crospang_sound_out(UINT16 port, UINT8 data)
 		return;
 
 		case 0x02:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 	}
 }
@@ -253,7 +253,7 @@ UINT8 __fastcall crospang_sound_in(UINT16 port)
 			return BurnYM3812Read(0, 0);
 
 		case 0x02:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0x06:
 			return *soundlatch;
@@ -458,7 +458,7 @@ static INT32 DrvInit(INT32 (*pRomLoadCallback)())
 	ZetClose();
 
 	BurnYM3812Init(1, 3579545, &crospangYM3812IrqHandler, crospangSynchroniseStream, 0);
-	BurnTimerAttachZetYM3812(3579545);
+	BurnTimerAttachYM3812(&ZetConfig, 3579545);
 	BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 1.00, BURN_SND_ROUTE_BOTH);
 
 	MSM6295Init(0, 1056000 / 132, 1);
@@ -666,7 +666,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		ZetScan(nAction);
 
 		BurnYM3812Scan(nAction, pnMin);
-		MSM6295Scan(0, nAction);
+		MSM6295Scan(nAction, pnMin);
 	}
 
 	return 0;
@@ -705,7 +705,7 @@ struct BurnDriver BurnDrvCrospang = {
 	"Cross Pang\0", NULL, "F2 System", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, crospangRomInfo, crospangRomName, NULL, NULL, CrospangInputInfo, CrospangDIPInfo,
+	NULL, crospangRomInfo, crospangRomName, NULL, NULL, NULL, NULL, CrospangInputInfo, CrospangDIPInfo,
 	crospangInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x300,
 	320, 240, 4, 3
 };
@@ -742,8 +742,8 @@ struct BurnDriver BurnDrvHeuksun = {
 	"heuksun", NULL, NULL, NULL, "199?",
 	"Heuk Sun Baek Sa (Korea)\0", NULL, "Oksan / F2 System", "Miscellaneous",
 	L"\uD751\uC120\uBC31\uC0AC (Korea)\0Heuk Sun Baek Sa\0", NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_MISC, 0,
-	NULL, heuksunRomInfo, heuksunRomName, NULL, NULL, CrospangInputInfo, HeuksunDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
+	NULL, heuksunRomInfo, heuksunRomName, NULL, NULL, NULL, NULL, CrospangInputInfo, HeuksunDIPInfo,
 	heuksunInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x300,
 	320, 240, 4, 3
 };
@@ -785,7 +785,7 @@ struct BurnDriver BurnDrvBestri = {
 	"Bestri (Korea)\0", NULL, "F2 System", "Miscellaneous",
 	L"Bestri\0\uBCA0\uC2A4\uD2B8\uB77C\uC774 (Korea)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_MINIGAMES, 0,
-	NULL, bestriRomInfo, bestriRomName, NULL, NULL, CrospangInputInfo, BestriDIPInfo,
+	NULL, bestriRomInfo, bestriRomName, NULL, NULL, NULL, NULL, CrospangInputInfo, BestriDIPInfo,
 	bestriInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x300,
 	320, 240, 4, 3
 };

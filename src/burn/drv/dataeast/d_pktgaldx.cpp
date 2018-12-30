@@ -119,67 +119,55 @@ static struct BurnDIPInfo PktgaldxDIPList[]=
 
 STDDIPINFO(Pktgaldx)
 
-static void MSM6295SetInitialBanks(INT32 chips)
-{
-	INT32 len = DrvSndROM1 - DrvSndROM0;
-
-	for (INT32 i = 0; i < chips; i++) {
-		for (INT32 nChannel = 0; nChannel < 4; nChannel++) {
-			MSM6295SampleInfo[i][nChannel] = MSM6295ROM + (i * len) + (nChannel << 8);
-			MSM6295SampleData[i][nChannel] = MSM6295ROM + (i * len) + (nChannel << 16);
-		}
-	}
-}
-
-void __fastcall pktgaldx_write_word(UINT32 address, UINT16 data)
+static void __fastcall pktgaldx_write_word(UINT32 address, UINT16 data)
 {
 	if ((address & 0xfffff0) == 0x140000) {
-		MSM6295Command(0, data);
+		MSM6295Write(0, data);
 		return;
 	}
 
 	if ((address & 0xfffff0) == 0x150000) {
-		MSM6295Command(1, data);
+		MSM6295Write(1, data);
 		return;
 	}
 
 	deco16_write_control_word(0, address, 0x161800, data);
 
 	if ((address & 0xfffff0) == 0x164800) {
-		memcpy (DrvSndROM1 + 0x000000, DrvSndROM1 + 0x40000 + ((data & 3) * 0x40000), 0x40000);
+		MSM6295SetBank(1, DrvSndROM1 + ((data & 3) * 0x40000), 0x00000, 0x3ffff);
 		return;
 	}
 }
 
-void __fastcall pktgaldx_write_byte(UINT32 address, UINT8 data)
+static void __fastcall pktgaldx_write_byte(UINT32 address, UINT8 data)
 {
 	if ((address & 0xfffff0) == 0x140000) {
-		MSM6295Command(0, data);
+		MSM6295Write(0, data);
 		return;
 	}
 
 	if ((address & 0xfffff0) == 0x150000) {
-		MSM6295Command(1, data);
+		MSM6295Write(1, data);
 		return;
 	}
 
 	deco16_write_control_word(0, address, 0x161800, data);
 
 	if ((address & 0xfffff0) == 0x164800) {
-		memcpy (DrvSndROM1 + 0x000000, DrvSndROM1 + 0x40000 + ((data & 3) * 0x40000), 0x40000);
+		MSM6295SetBank(1, DrvSndROM1 + ((data & 3) * 0x40000), 0x00000, 0x3ffff);
 		return;
 	}
 }
 
-UINT16 __fastcall pktgaldx_read_word(UINT32 address)
+static UINT16 __fastcall pktgaldx_read_word(UINT32 address)
 {
 	switch (address)
 	{
 		case 0x140006:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0x150006:
-			return MSM6295ReadStatus(1);
+			return MSM6295Read(1);
 
 		case 0x167db2:
 			return (DrvInputs[0] & 0xfff7) | (deco16_vblank & 0x08);
@@ -200,17 +188,17 @@ UINT16 __fastcall pktgaldx_read_word(UINT32 address)
 	return 0;
 }
 
-UINT8 __fastcall pktgaldx_read_byte(UINT32 address)
+static UINT8 __fastcall pktgaldx_read_byte(UINT32 address)
 {
 	switch (address)
 	{
 		case 0x140006:
 		case 0x140007:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0x150006:
 		case 0x150007:
-			return MSM6295ReadStatus(1);
+			return MSM6295Read(1);
 
 		case 0x167db2:
 		case 0x167db3:
@@ -254,9 +242,7 @@ static INT32 DrvDoReset()
 	SekReset();
 	SekClose();
 
-	MSM6295Reset(0);
-	MSM6295Reset(1);
-	MSM6295SetInitialBanks(2);
+	MSM6295Reset();
 
 	deco16Reset();
 
@@ -275,8 +261,8 @@ static INT32 MemIndex()
 	DrvGfxROM2	= Next; Next += 0x200000;
 
 	MSM6295ROM	= Next;
-	DrvSndROM0	= Next; Next += 0x140000;
-	DrvSndROM1	= Next; Next += 0x140000;
+	DrvSndROM0	= Next; Next += 0x040000;
+	DrvSndROM1	= Next; Next += 0x100000;
 
 	DrvPalette	= (UINT32*)Next; Next += 0x0400 * sizeof(UINT32);
 
@@ -317,7 +303,7 @@ static INT32 DrvInit()
 
 		if (BurnLoadRom(DrvSndROM0 + 0x000000,  4, 1)) return 1;
 
-		if (BurnLoadRom(DrvSndROM1 + 0x040000,  5, 1)) return 1;
+		if (BurnLoadRom(DrvSndROM1 + 0x000000,  5, 1)) return 1;
 
 		deco102_decrypt_cpu(Drv68KROM, Drv68KCode, 0x80000, 0x42ba, 0x00, 0x00);
 
@@ -353,6 +339,8 @@ static INT32 DrvInit()
 
 	MSM6295Init(0, 1006875 / 132, 0);
 	MSM6295Init(1, 2013750 / 132, 1);
+	MSM6295SetBank(0, DrvSndROM0, 0, 0x3ffff);
+	MSM6295SetBank(1, DrvSndROM1, 0, 0x3ffff);
 	MSM6295SetRoute(0, 0.75, BURN_SND_ROUTE_BOTH);
 	MSM6295SetRoute(1, 0.60, BURN_SND_ROUTE_BOTH);
 
@@ -368,8 +356,7 @@ static INT32 DrvExit()
 	GenericTilesExit();
 	deco16Exit();
 
-	MSM6295Exit(0);
-	MSM6295Exit(1);
+	MSM6295Exit();
 
 	SekExit();
 
@@ -509,9 +496,7 @@ static INT32 DrvFrame()
 	SekClose();
 
 	if (pBurnSoundOut) {
-		memset (pBurnSoundOut, 0, nBurnSoundLen * 2 * sizeof(INT16));
-		MSM6295Render(0, pBurnSoundOut, nBurnSoundLen);
-		MSM6295Render(1, pBurnSoundOut, nBurnSoundLen);
+		MSM6295Render(pBurnSoundOut, nBurnSoundLen);
 	}
 
 	if (pBurnDraw) {
@@ -542,8 +527,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 
 		deco16Scan();
 
-		MSM6295Scan(0, nAction);
-		MSM6295Scan(1, nAction);
+		MSM6295Scan(nAction, pnMin);
 	}
 
 	return 0;
@@ -572,8 +556,8 @@ struct BurnDriver BurnDrvPktgaldx = {
 	"pktgaldx", NULL, NULL, NULL, "1992",
 	"Pocket Gal Deluxe (Euro v3.00)\0", NULL, "Data East Corporation", "DECO IC16",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_DATAEAST, GBF_MISC, 0,
-	NULL, pktgaldxRomInfo, pktgaldxRomName, NULL, NULL, PktgaldxInputInfo, PktgaldxDIPInfo,
+	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_DATAEAST, GBF_SPORTSMISC, 0,
+	NULL, pktgaldxRomInfo, pktgaldxRomName, NULL, NULL, NULL, NULL, PktgaldxInputInfo, PktgaldxDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	320, 240, 4, 3
 };
@@ -601,8 +585,8 @@ struct BurnDriver BurnDrvPktgaldxj = {
 	"pktgaldxj", "pktgaldx", NULL, NULL, "1993",
 	"Pocket Gal Deluxe (Japan v3.00)\0", NULL, "Nihon System", "DECO IC16",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_MISC, 0,
-	NULL, pktgaldxjRomInfo, pktgaldxjRomName, NULL, NULL, PktgaldxInputInfo, PktgaldxDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_DATAEAST, GBF_SPORTSMISC, 0,
+	NULL, pktgaldxjRomInfo, pktgaldxjRomName, NULL, NULL, NULL, NULL, PktgaldxInputInfo, PktgaldxDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	320, 240, 4, 3
 };
@@ -621,7 +605,7 @@ static struct BurnRomInfo pktgaldxbRomDesc[] = {
 	{ "9.bin",		0x80000, 0x078f371c, 2 | BRF_GRA },           //  6
 	{ "8.bin",		0x80000, 0x40f5a032, 2 | BRF_GRA },           //  7
 
-	{ "kg01.14f",		0x20000, 0x8a106263, 3 | BRF_SND },           //  8 OKI M6295 Sample 0
+	{ "1.bin",		0x20000, 0x8a106263, 3 | BRF_SND },           //  8 OKI M6295 Sample 0
 
 	{ "3.bin",		0x80000, 0x4638747b, 4 | BRF_SND },           //  9 OKI M6295 Sample 1
 	{ "2.bin",		0x80000, 0xf841d995, 4 | BRF_SND },           // 10
@@ -639,8 +623,8 @@ struct BurnDriverD BurnDrvPktgaldxb = {
 	"pktgaldxb", "pktgaldx", NULL, NULL, "1992",
 	"Pocket Gal Deluxe (Euro v3.00, bootleg)\0", NULL, "bootleg", "DECO IC16",
 	NULL, NULL, NULL, NULL,
-	BDF_CLONE | BDF_BOOTLEG, 2, HARDWARE_PREFIX_DATAEAST, GBF_MISC, 0,
-	NULL, pktgaldxbRomInfo, pktgaldxbRomName, NULL, NULL, PktgaldxInputInfo, PktgaldxDIPInfo,
+	BDF_CLONE | BDF_BOOTLEG, 2, HARDWARE_PREFIX_DATAEAST, GBF_SPORTSMISC, 0,
+	NULL, pktgaldxbRomInfo, pktgaldxbRomName, NULL, NULL, NULL, NULL, PktgaldxInputInfo, PktgaldxDIPInfo,
 	pkgaldxbInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	320, 240, 4, 3
 };

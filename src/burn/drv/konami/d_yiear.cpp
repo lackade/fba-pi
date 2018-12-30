@@ -221,6 +221,8 @@ static INT32 DrvDoReset()
 
 	sn76496_latch = 0;
 
+	HiscoreReset();
+
 	return 0;
 }
 
@@ -331,7 +333,7 @@ static INT32 DrvInit()
 		DrvPaletteInit();
 	}
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvM6809RAM,	0x5000, 0x57ff, MAP_RAM);
 	M6809MapMemory(DrvVidRAM,	0x5800, 0x5fff, MAP_RAM);
@@ -523,7 +525,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 
 		M6809Scan(nAction);
 
-		vlm5030Scan(nAction);
+		vlm5030Scan(nAction, pnMin);
 		SN76496Scan(nAction, pnMin);
 
 		SCAN_VAR(sn76496_latch);
@@ -559,8 +561,8 @@ struct BurnDriver BurnDrvYiear = {
 	"yiear", NULL, NULL, NULL, "1985",
 	"Yie Ar Kung-Fu (program code I)\0", NULL, "Konami", "GX407",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
-	NULL, yiearRomInfo, yiearRomName, NULL, NULL, YiearInputInfo, YiearDIPInfo,
+	BDF_GAME_WORKING | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
+	NULL, yiearRomInfo, yiearRomName, NULL, NULL, NULL, NULL, YiearInputInfo, YiearDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x20,
 	256, 224, 4, 3
 };
@@ -592,8 +594,8 @@ struct BurnDriver BurnDrvYiear2 = {
 	"yiear2", "yiear", NULL, NULL, "1985",
 	"Yie Ar Kung-Fu (program code G)\0", NULL, "Konami", "GX407",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
-	NULL, yiear2RomInfo, yiear2RomName, NULL, NULL, YiearInputInfo, YiearDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | BDF_HISCORE_SUPPORTED, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
+	NULL, yiear2RomInfo, yiear2RomName, NULL, NULL, NULL, NULL, YiearInputInfo, YiearDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x20,
 	256, 224, 4, 3
 };

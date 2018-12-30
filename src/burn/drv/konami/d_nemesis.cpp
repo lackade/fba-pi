@@ -10,10 +10,9 @@
 #include "k005289.h"
 #include "vlm5030.h"
 #include "burn_ym2151.h"
-#include "driver.h"
-extern "C" {
+#include "flt_rc.h"
 #include "ay8910.h"
-}
+#include "burn_shift.h"
 
 static UINT8 *AllMem;
 static UINT8 *MemEnd;
@@ -38,8 +37,6 @@ static UINT8 *DrvCharRAMExp;
 static UINT8 *DrvScrollRAM;
 static UINT8 *DrvShareRAM;
 static UINT8 *DrvZ80RAM;
-
-static INT16 *pAY8910Buffer[6];
 
 static UINT32 *DrvPalette;
 static UINT8  DrvRecalc;
@@ -69,7 +66,8 @@ static UINT8 DrvJoy4[16];
 static UINT8 DrvDips[4];
 static UINT8 DrvReset;
 static UINT16 DrvInputs[4];
-static INT32 DrvAnalogPort0 = 0;
+static INT16 DrvAnalogPort0 = 0;
+static INT16 DrvDial1;
 
 static INT32 ay8910_enable = 0;
 static INT32 ym2151_enable = 0;
@@ -78,7 +76,10 @@ static INT32 k005289_enable = 0;
 static INT32 k007232_enable = 0;
 static INT32 k051649_enable = 0;
 static INT32 vlm5030_enable = 0;
+static INT32 rcflt_enable = 0;
 static INT32 hcrash_mode = 0;
+static INT32 gearboxmode = 0;
+static INT32 bUseShifter = 0;
 
 #define A(a, b, c, d) {a, b, (UINT8*)(c), d}
 
@@ -140,6 +141,36 @@ static struct BurnInputInfo SalamandInputList[] = {
 };
 
 STDINPUTINFO(Salamand)
+
+static struct BurnInputInfo LifefrcejInputList[] = {
+	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 0,	"p1 coin"	},
+	{"P1 Start",		BIT_DIGITAL,	DrvJoy1 + 3,	"p1 start"	},
+	{"P1 Up",		BIT_DIGITAL,	DrvJoy2 + 2,	"p1 up"		},
+	{"P1 Down",		BIT_DIGITAL,	DrvJoy2 + 3,	"p1 down"	},
+	{"P1 Left",		BIT_DIGITAL,	DrvJoy2 + 0,	"p1 left"	},
+	{"P1 Right",		BIT_DIGITAL,	DrvJoy2 + 1,	"p1 right"	},
+	{"P1 Button 1",		BIT_DIGITAL,	DrvJoy2 + 4,	"p1 fire 1"	},
+	{"P1 Button 2",		BIT_DIGITAL,	DrvJoy2 + 5,	"p1 fire 2"	},
+	{"P1 Button 3",		BIT_DIGITAL,	DrvJoy2 + 6,	"p1 fire 3"	},
+
+	{"P2 Coin",		BIT_DIGITAL,	DrvJoy1 + 1,	"p2 coin"	},
+	{"P2 Start",		BIT_DIGITAL,	DrvJoy1 + 4,	"p2 start"	},
+	{"P2 Up",		BIT_DIGITAL,	DrvJoy3 + 2,	"p2 up"		},
+	{"P2 Down",		BIT_DIGITAL,	DrvJoy3 + 3,	"p2 down"	},
+	{"P2 Left",		BIT_DIGITAL,	DrvJoy3 + 0,	"p2 left"	},
+	{"P2 Right",		BIT_DIGITAL,	DrvJoy3 + 1,	"p2 right"	},
+	{"P2 Button 1",		BIT_DIGITAL,	DrvJoy3 + 4,	"p2 fire 1"	},
+	{"P2 Button 2",		BIT_DIGITAL,	DrvJoy3 + 5,	"p2 fire 2"	},
+	{"P2 Button 3",		BIT_DIGITAL,	DrvJoy3 + 6,	"p2 fire 3"	},
+
+	{"Reset",		BIT_DIGITAL,	&DrvReset,	"reset"		},
+	{"Service",		BIT_DIGITAL,	DrvJoy1 + 2,	"service"	},
+	{"Dip A",		BIT_DIPSWITCH,	DrvDips + 0,	"dip"		},
+	{"Dip B",		BIT_DIPSWITCH,	DrvDips + 1,	"dip"		},
+	{"Dip C",		BIT_DIPSWITCH,	DrvDips + 2,	"dip"		},
+};
+
+STDINPUTINFO(Lifefrcej)
 
 static struct BurnInputInfo TwinbeeInputList[] = {
 	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 0,	"p1 coin"	},
@@ -321,12 +352,12 @@ static struct BurnInputInfo CitybombInputList[] = {
 STDINPUTINFO(Citybomb)
 
 static struct BurnInputInfo KonamigtInputList[] = {
-	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 0,	"p1 coin"	},
-	{"Accelerator",		BIT_DIGITAL,	DrvJoy4 + 6,	"p1 fire 1"	},
-	{"Brake",		BIT_DIGITAL,	DrvJoy4 + 5,	"p1 fire 2"	},
-	{"Gear Shift",		BIT_DIGITAL,	DrvJoy2 + 4,	"p1 fire 3"	},
+	{"P1 Coin",     BIT_DIGITAL,	DrvJoy1 + 0,	"p1 coin"	},
+	{"P1 Accelerator",BIT_DIGITAL,	DrvJoy4 + 6,	"p1 fire 1"	},
+	{"P1 Brake",    BIT_DIGITAL,	DrvJoy4 + 5,	"p1 fire 2"	},
+	{"P1 Gear Shift",BIT_DIGITAL,	DrvJoy2 + 4,	"p1 fire 3"	},
 
-	A("Wheel"             , BIT_ANALOG_REL, &DrvAnalogPort0 , "mouse x-axis"),
+	A("P1 Wheel",   BIT_ANALOG_REL, &DrvAnalogPort0 , "mouse x-axis"),
 
 	{"Reset",		BIT_DIGITAL,	&DrvReset,	"reset"		},
 	{"Service",		BIT_DIGITAL,	DrvJoy1 + 2,	"service"	},
@@ -339,13 +370,13 @@ static struct BurnInputInfo KonamigtInputList[] = {
 STDINPUTINFO(Konamigt)
 
 static struct BurnInputInfo HcrashInputList[] = {
-	{"P1 Coin",		BIT_DIGITAL,	DrvJoy1 + 4,	"p1 coin"	},
-	{"P1 Start",		BIT_DIGITAL,	DrvJoy1 + 3,	"p1 start"	},
-	{"Accelerator",		BIT_DIGITAL,	DrvJoy4 + 6,	"p1 fire 1"	},
-	{"Brake",		BIT_DIGITAL,	DrvJoy4 + 5,	"p1 fire 2"	},
-	{"Jump",		BIT_DIGITAL,	DrvJoy4 + 4,	"p1 fire 3"	},
+	{"P1 Coin",     BIT_DIGITAL,	DrvJoy1 + 4,	"p1 coin"	},
+	{"P1 Start",    BIT_DIGITAL,	DrvJoy1 + 3,	"p1 start"	},
+	{"P1 Accelerator",BIT_DIGITAL,	DrvJoy4 + 6,	"p1 fire 1"	},
+	{"P1 Brake",    BIT_DIGITAL,	DrvJoy4 + 5,	"p1 fire 2"	},
+	{"P1 Jump",		BIT_DIGITAL,	DrvJoy4 + 4,	"p1 fire 3"	},
 
-	A("Wheel"             , BIT_ANALOG_REL, &DrvAnalogPort0 , "mouse x-axis"),
+	A("P1 Wheel",   BIT_ANALOG_REL, &DrvAnalogPort0 , "mouse x-axis"),
 
 	{"Reset",		BIT_DIGITAL,	&DrvReset,	"reset"		},
 	{"Service",		BIT_DIGITAL,	DrvJoy1 + 2,	"service"	},
@@ -510,70 +541,70 @@ static struct BurnDIPInfo SalamandDIPList[]=
 
 STDDIPINFO(Salamand)
 
-static struct BurnDIPInfo LifefrcjDIPList[]=
+static struct BurnDIPInfo LifefrcejDIPList[]=
 {
-	{0x12, 0xff, 0xff, 0xff, NULL			},
-	{0x13, 0xff, 0xff, 0x42, NULL			},
-	{0x14, 0xff, 0xff, 0x0e, NULL			},
+	{0x14, 0xff, 0xff, 0xff, NULL			},
+	{0x15, 0xff, 0xff, 0x42, NULL			},
+	{0x16, 0xff, 0xff, 0x0e, NULL			},
 
 	{0   , 0xfe, 0   ,   16, "Coinage"		},
-	{0x12, 0x01, 0x0f, 0x02, "4 Coins 1 Credits"	},
-	{0x12, 0x01, 0x0f, 0x05, "3 Coins 1 Credits"	},
-	{0x12, 0x01, 0x0f, 0x08, "2 Coins 1 Credits"	},
-	{0x12, 0x01, 0x0f, 0x04, "3 Coins 2 Credits"	},
-	{0x12, 0x01, 0x0f, 0x01, "4 Coins 3 Credits"	},
-	{0x12, 0x01, 0x0f, 0x0f, "1 Coin  1 Credits"	},
-	{0x12, 0x01, 0x0f, 0x03, "3 Coins 4 Credits"	},
-	{0x12, 0x01, 0x0f, 0x07, "2 Coins 3 Credits"	},
-	{0x12, 0x01, 0x0f, 0x0e, "1 Coin  2 Credits"	},
-	{0x12, 0x01, 0x0f, 0x06, "2 Coins 5 Credits"	},
-	{0x12, 0x01, 0x0f, 0x0d, "1 Coin  3 Credits"	},
-	{0x12, 0x01, 0x0f, 0x0c, "1 Coin  4 Credits"	},
-	{0x12, 0x01, 0x0f, 0x0b, "1 Coin  5 Credits"	},
-	{0x12, 0x01, 0x0f, 0x0a, "1 Coin  6 Credits"	},
-	{0x12, 0x01, 0x0f, 0x09, "1 Coin  7 Credits"	},
-	{0x12, 0x01, 0x0f, 0x00, "Disabled"		},
+	{0x14, 0x01, 0x0f, 0x02, "4 Coins 1 Credits"	},
+	{0x14, 0x01, 0x0f, 0x05, "3 Coins 1 Credits"	},
+	{0x14, 0x01, 0x0f, 0x08, "2 Coins 1 Credits"	},
+	{0x14, 0x01, 0x0f, 0x04, "3 Coins 2 Credits"	},
+	{0x14, 0x01, 0x0f, 0x01, "4 Coins 3 Credits"	},
+	{0x14, 0x01, 0x0f, 0x0f, "1 Coin  1 Credits"	},
+	{0x14, 0x01, 0x0f, 0x03, "3 Coins 4 Credits"	},
+	{0x14, 0x01, 0x0f, 0x07, "2 Coins 3 Credits"	},
+	{0x14, 0x01, 0x0f, 0x0e, "1 Coin  2 Credits"	},
+	{0x14, 0x01, 0x0f, 0x06, "2 Coins 5 Credits"	},
+	{0x14, 0x01, 0x0f, 0x0d, "1 Coin  3 Credits"	},
+	{0x14, 0x01, 0x0f, 0x0c, "1 Coin  4 Credits"	},
+	{0x14, 0x01, 0x0f, 0x0b, "1 Coin  5 Credits"	},
+	{0x14, 0x01, 0x0f, 0x0a, "1 Coin  6 Credits"	},
+	{0x14, 0x01, 0x0f, 0x09, "1 Coin  7 Credits"	},
+	{0x14, 0x01, 0x0f, 0x00, "Disabled"		},
 
 	{0   , 0xfe, 0   ,    4, "Lives"		},
-	{0x13, 0x01, 0x03, 0x03, "2"			},
-	{0x13, 0x01, 0x03, 0x02, "3"			},
-	{0x13, 0x01, 0x03, 0x01, "5"			},
-	{0x13, 0x01, 0x03, 0x00, "7"			},
+	{0x15, 0x01, 0x03, 0x03, "2"			},
+	{0x15, 0x01, 0x03, 0x02, "3"			},
+	{0x15, 0x01, 0x03, 0x01, "5"			},
+	{0x15, 0x01, 0x03, 0x00, "7"			},
 
 	{0   , 0xfe, 0   ,    2, "Coin Slot(s)"		},
-	{0x13, 0x01, 0x04, 0x04, "1"			},
-	{0x13, 0x01, 0x04, 0x00, "2"			},
+	{0x15, 0x01, 0x04, 0x04, "1"			},
+	{0x15, 0x01, 0x04, 0x00, "2"			},
 
 	{0   , 0xfe, 0   ,    4, "Max Credit(s)"	},
-	{0x13, 0x01, 0x18, 0x18, "1"			},
-	{0x13, 0x01, 0x18, 0x10, "3"			},
-	{0x13, 0x01, 0x18, 0x08, "5"			},
-	{0x13, 0x01, 0x18, 0x00, "9"			},
+	{0x15, 0x01, 0x18, 0x18, "1"			},
+	{0x15, 0x01, 0x18, 0x10, "3"			},
+	{0x15, 0x01, 0x18, 0x08, "5"			},
+	{0x15, 0x01, 0x18, 0x00, "9"			},
 
 	{0   , 0xfe, 0   ,    4, "Difficulty"		},
-	{0x13, 0x01, 0x60, 0x60, "Easy"			},
-	{0x13, 0x01, 0x60, 0x40, "Normal"		},
-	{0x13, 0x01, 0x60, 0x20, "Hard"			},
-	{0x13, 0x01, 0x60, 0x00, "Hardest"		},
+	{0x15, 0x01, 0x60, 0x60, "Easy"			},
+	{0x15, 0x01, 0x60, 0x40, "Normal"		},
+	{0x15, 0x01, 0x60, 0x20, "Hard"			},
+	{0x15, 0x01, 0x60, 0x00, "Hardest"		},
 
 	{0   , 0xfe, 0   ,    2, "Demo Sounds"		},
-	{0x13, 0x01, 0x80, 0x80, "Off"			},
-	{0x13, 0x01, 0x80, 0x00, "On"			},
+	{0x15, 0x01, 0x80, 0x80, "Off"			},
+	{0x15, 0x01, 0x80, 0x00, "On"			},
 
 //	{0   , 0xfe, 0   ,    2, "Flip Screen"		},
-//	{0x14, 0x01, 0x02, 0x02, "Off"			},
-//	{0x14, 0x01, 0x02, 0x00, "On"			},
+//	{0x16, 0x01, 0x02, 0x02, "Off"			},
+//	{0x16, 0x01, 0x02, 0x00, "On"			},
 
 	{0   , 0xfe, 0   ,    2, "Service Mode"		},
-	{0x14, 0x01, 0x08, 0x08, "Off"			},
-	{0x14, 0x01, 0x08, 0x00, "On"			},
+	{0x16, 0x01, 0x08, 0x08, "Off"			},
+	{0x16, 0x01, 0x08, 0x00, "On"			},
 
 	{0   , 0xfe, 0   ,    2, "Cabinet"		},
-	{0x14, 0x01, 0x80, 0x00, "Upright"		},
-	{0x14, 0x01, 0x80, 0x80, "Cocktail"		},
+	{0x16, 0x01, 0x80, 0x00, "Upright"		},
+	{0x16, 0x01, 0x80, 0x80, "Cocktail"		},
 };
 
-STDDIPINFO(Lifefrcj)
+STDDIPINFO(Lifefrcej)
 
 static struct BurnDIPInfo TwinbeeDIPList[]=
 {
@@ -655,7 +686,7 @@ static struct BurnDIPInfo TwinbeeDIPList[]=
 	{0,    0xfe, 0,       3, "Color Settings"	},
 	{0x15, 0x01, 0x03, 0x00, "Proper Colors (Dark)"	},
 	{0x15, 0x01, 0x03, 0x01, "Light Colors"		},
-	{0x17, 0x01, 0x03, 0x02, "MAMEUIFx Colors (Mid)"},
+	{0x15, 0x01, 0x03, 0x02, "MAMEUIFx Colors (Mid)"},
 };
 
 STDDIPINFO(Twinbee)
@@ -1034,23 +1065,23 @@ static struct BurnDIPInfo CitybombDIPList[]=
 //	{0x15, 0x01, 0x04, 0x00, "Upright"		},
 //	{0x15, 0x01, 0x04, 0x04, "Cocktail"		},
 
-	{0   , 0xfe, 0   ,    0, "Qualify"		},
+	{0   , 0xfe, 0   ,    4, "Qualify"		},
 	{0x15, 0x01, 0x18, 0x18, "Long"			},
 	{0x15, 0x01, 0x18, 0x10, "Normal"		},
 	{0x15, 0x01, 0x18, 0x08, "Short"		},
 	{0x15, 0x01, 0x18, 0x00, "Very Short"		},
 
-	{0   , 0xfe, 0   ,    2, "Difficulty"		},
+	{0   , 0xfe, 0   ,    4, "Difficulty"		},
 	{0x15, 0x01, 0x60, 0x60, "Easy"			},
 	{0x15, 0x01, 0x60, 0x40, "Normal"		},
 	{0x15, 0x01, 0x60, 0x20, "Hard"			},
 	{0x15, 0x01, 0x60, 0x00, "Hardest"		},
 
-	{0   , 0xfe, 0   ,    4, "Demo Sounds"		},
+	{0   , 0xfe, 0   ,    2, "Demo Sounds"		},
 	{0x15, 0x01, 0x80, 0x80, "Off"			},
 	{0x15, 0x01, 0x80, 0x00, "On"			},
 
-//	{0   , 0xfe, 0   ,    4, "Flip Screen"		},
+//	{0   , 0xfe, 0   ,    2, "Flip Screen"		},
 //	{0x16, 0x01, 0x02, 0x00, "Off"			},
 //	{0x16, 0x01, 0x02, 0x02, "On"			},
 
@@ -1133,7 +1164,7 @@ static struct BurnDIPInfo KonamigtDIPList[]=
 	{0,    0xfe, 0,       3, "Color Settings"	},
 	{0x0a, 0x01, 0x03, 0x00, "Proper Colors (Dark)"	},
 	{0x0a, 0x01, 0x03, 0x01, "Light Colors"		},
-	{0x17, 0x01, 0x03, 0x02, "MAMEUIFx Colors (Mid)"},
+	{0x0a, 0x01, 0x03, 0x02, "MAMEUIFx Colors (Mid)"},
 };
 
 STDDIPINFO(Konamigt)
@@ -1212,19 +1243,9 @@ static struct BurnDIPInfo HcrashDIPList[]=
 
 STDDIPINFO(Hcrash)
 
-static UINT32 scalerange(UINT32 x, UINT32 in_min, UINT32 in_max, UINT32 out_min, UINT32 out_max) {
-	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
-}
-
 static UINT8 konamigt_read_wheel()
 {
-	UINT8 Temp = 0x7f + (DrvAnalogPort0 >> 4);
-	UINT8 Temp2 = 0;
-	if (Temp < 0x01) Temp = 0x01;
-	if (Temp > 0xfe) Temp = 0xfe;
-	Temp2 = scalerange(Temp, 0x3f, 0xbe, 0x25, 0x50); // konami gt scalings
-	//bprintf(0, _T("Port0-temp[%X] scaled[%X]\n"), Temp, Temp2); // debug, do not remove.
-	return Temp2;
+	return ProcessAnalog(DrvAnalogPort0, 0, 0, 0x00, 0x7f);
 }
 
 static UINT16 konamigt_read_analog(int /*Offset*/)
@@ -1234,7 +1255,7 @@ static UINT16 konamigt_read_analog(int /*Offset*/)
 	if (DrvInputs[3] & 0x20) nRet |= 0x0300; // break
 	if (DrvInputs[3] & 0x40) nRet |= 0xf000; // accel
 
-	nRet |= konamigt_read_wheel();
+	nRet |= DrvDial1 & 0x7f;
 
 	return nRet;
 }
@@ -1712,6 +1733,23 @@ static UINT8 __fastcall citybomb_main_read_byte(UINT32 address)
 	return 0;
 }
 
+static void nemesis_filter_w(UINT16 /*offset*/)
+{
+#if 0
+	// not used right now..
+	INT32 C1 = /* offset & 0x1000 ? 4700 : */ 0; // is this right? 4.7uF seems too large
+	INT32 C2 = offset & 0x0800 ? 33 : 0;         // 0.033uF = 33 nF
+	INT32 AY8910_INTERNAL_RESISTANCE = 356;
+
+	filter_rc_set_RC(0, FLT_RC_LOWPASS, (AY8910_INTERNAL_RESISTANCE + 12000) / 3, 0, 0, CAP_N(C1)); // unused?
+	filter_rc_set_RC(1, FLT_RC_LOWPASS, (AY8910_INTERNAL_RESISTANCE + 12000) / 3, 0, 0, CAP_N(C1)); // unused?
+	filter_rc_set_RC(2, FLT_RC_LOWPASS, (AY8910_INTERNAL_RESISTANCE + 12000) / 3, 0, 0, CAP_N(C1)); // unused?
+
+	filter_rc_set_RC(3, FLT_RC_LOWPASS, AY8910_INTERNAL_RESISTANCE + 1000, 10000, 0, CAP_N(C2));
+	filter_rc_set_RC(4, FLT_RC_LOWPASS, AY8910_INTERNAL_RESISTANCE + 1000, 10000, 0, CAP_N(C2));
+	filter_rc_set_RC(5, FLT_RC_LOWPASS, AY8910_INTERNAL_RESISTANCE + 1000, 10000, 0, CAP_N(C2));
+#endif
+}
 
 static void __fastcall nemesis_sound_write(UINT16 address, UINT8 data)
 {
@@ -1749,6 +1787,11 @@ static void __fastcall nemesis_sound_write(UINT16 address, UINT8 data)
 			AY8910Write(0, 0, data);
 		return;
 
+		case 0xe007:
+		case 0xe007+0x1ff8:
+			nemesis_filter_w(address);
+		return;
+
 		case 0xe030:
 			if (vlm5030_enable) {
 				vlm5030_st(0,1);
@@ -1764,11 +1807,7 @@ static void __fastcall nemesis_sound_write(UINT16 address, UINT8 data)
 			AY8910Write(1, 1, data);
 		return;
 	}
-	
-	if ((address & ~0x1ff8) == 0xe007) {
-		// nemesis_filter_w
-		return;
-	}
+	//bprintf(0, _T("sw(%X, %X);.."), address, data);
 }
 
 static UINT8 __fastcall nemesis_sound_read(UINT16 address)
@@ -1835,7 +1874,7 @@ static UINT8 __fastcall salamand_sound_read(UINT16 address)
 
 		case 0xc000:
 		case 0xc001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 
 		case 0xe000:
 			static int flipper;
@@ -2097,13 +2136,6 @@ static INT32 MemIndex()
 
 	RamEnd			= Next;
 
-	pAY8910Buffer[0] 	= (INT16 *)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[1] 	= (INT16 *)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[2] 	= (INT16 *)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[3] 	= (INT16 *)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[4] 	= (INT16 *)Next; Next += nBurnSoundLen * sizeof(INT16);
-	pAY8910Buffer[5] 	= (INT16 *)Next; Next += nBurnSoundLen * sizeof(INT16);
-
 	MemEnd			= Next;
 
 	return 0;
@@ -2127,13 +2159,18 @@ static INT32 DrvDoReset()
 	if (ym2151_enable) BurnYM2151Reset();
 	if (ym3812_enable) BurnYM3812Reset();
 	if (vlm5030_enable) vlm5030Reset(0);
-//	if (k007232_enable) K007232Reset();
+	if (k007232_enable) K007232Reset(0);
 	if (k005289_enable) K005289Reset();
 	if (k051649_enable) K051649Reset();
 	ZetClose();
 
 	watchdog = 0;
 	selected_ip = 0;
+
+	if (bUseShifter)
+		BurnShiftReset();
+
+	DrvDial1 = 0x3f;
 
 	return 0;
 }
@@ -2151,10 +2188,30 @@ static void NemesisSoundInit(INT32 konamigtmode)
 	K005289Init(3579545, K005289ROM);
 	K005289SetRoute(BURN_SND_K005289_ROUTE_1, 0.35, BURN_SND_ROUTE_BOTH);
 
-	AY8910Init(0, 14318180/8, nBurnSoundRate, &nemesis_AY8910_0_portA, NULL, NULL, NULL);
-	AY8910Init(1, 14318180/8, nBurnSoundRate, NULL, NULL, &k005289_control_A_write, &k005289_control_B_write);
+	AY8910Init(0, 14318180/8, 0);
+	AY8910Init(1, 14318180/8, 1);
+	AY8910SetPorts(0, &nemesis_AY8910_0_portA, NULL, NULL, NULL);
+	AY8910SetPorts(1, NULL, NULL, &k005289_control_A_write, &k005289_control_B_write);
 	AY8910SetAllRoutes(0, 0.35, BURN_SND_ROUTE_BOTH);
 	AY8910SetAllRoutes(1, (konamigtmode) ? 0.20 : 1.00, BURN_SND_ROUTE_BOTH);
+
+#if 0
+	filter_rc_init(0, FLT_RC_LOWPASS, 1000, 5100, 0, CAP_P(0), 0); // ay 0
+	filter_rc_init(1, FLT_RC_LOWPASS, 1000, 5100, 0, CAP_P(0), 1);
+	filter_rc_init(2, FLT_RC_LOWPASS, 1000, 5100, 0, CAP_P(0), 1);
+
+	filter_rc_init(3, FLT_RC_LOWPASS, 1000, 5100, 0, CAP_P(0), 1); // ay 1
+	filter_rc_init(4, FLT_RC_LOWPASS, 1000, 5100, 0, CAP_P(0), 1);
+	filter_rc_init(5, FLT_RC_LOWPASS, 1000, 5100, 0, CAP_P(0), 1);
+
+	filter_rc_set_src_gain(0, 0.35);
+	filter_rc_set_src_gain(1, 0.35);
+	filter_rc_set_src_gain(2, 0.35);
+	filter_rc_set_src_gain(3, 1.00);
+	filter_rc_set_src_gain(4, 1.00);
+	filter_rc_set_src_gain(5, 1.00);
+	rcflt_enable = 1;
+#endif
 
 	ay8910_enable = 1;
 	k005289_enable = 1;
@@ -2174,8 +2231,10 @@ static void Gx400SoundInit(INT32 rf2mode)
 	K005289Init(3579545, K005289ROM);
 	K005289SetRoute(BURN_SND_K005289_ROUTE_1, (rf2mode) ? 0.60 : 0.35, BURN_SND_ROUTE_BOTH);
 
-	AY8910Init(0, 14318180/8, nBurnSoundRate, &nemesis_AY8910_0_portA, NULL, NULL, NULL);
-	AY8910Init(1, 14318180/8, nBurnSoundRate, NULL, NULL, &k005289_control_A_write, &k005289_control_B_write);
+	AY8910Init(0, 14318180/8, 0);
+	AY8910Init(1, 14318180/8, 1);
+	AY8910SetPorts(0, &nemesis_AY8910_0_portA, NULL, NULL, NULL);
+	AY8910SetPorts(1, NULL, NULL, &k005289_control_A_write, &k005289_control_B_write);
 	AY8910SetAllRoutes(0, (rf2mode) ? 0.80 : 0.20, BURN_SND_ROUTE_BOTH);
 	AY8910SetAllRoutes(1, (rf2mode) ? 0.40 : 1.00, BURN_SND_ROUTE_BOTH);
 
@@ -2201,8 +2260,10 @@ static void TwinbeeGx400SoundInit()
 	K005289Init(3579545, K005289ROM);
 	K005289SetRoute(BURN_SND_K005289_ROUTE_1, 0.20, BURN_SND_ROUTE_BOTH);
 
-	AY8910Init(0, 14318180/8, nBurnSoundRate, &nemesis_AY8910_0_portA, NULL, NULL, NULL);
-	AY8910Init(1, 14318180/8, nBurnSoundRate, NULL, NULL, &k005289_control_A_write, &k005289_control_B_write);
+	AY8910Init(0, 14318180/8, 0);
+	AY8910Init(1, 14318180/8, 1);
+	AY8910SetPorts(0, &nemesis_AY8910_0_portA, NULL, NULL, NULL);
+	AY8910SetPorts(1, NULL, NULL, &k005289_control_A_write, &k005289_control_B_write);
 	AY8910SetAllRoutes(0, 0.50, BURN_SND_ROUTE_BOTH); // melody & hat
 	AY8910SetAllRoutes(1, 1.00, BURN_SND_ROUTE_BOTH); // drums, explosions
 
@@ -2232,12 +2293,14 @@ static void SalamandSoundInit()
 	K007232SetPortWriteHandler(0, DrvK007232VolCallback);
 	K007232PCMSetAllRoutes(0, (hcrash_mode) ? 0.10 : 0.08, BURN_SND_ROUTE_BOTH);
 
-	vlm5030Init(0,  3579545, salamand_vlm_sync, DrvVLMROM, 0x4000, 1);
-	vlm5030SetAllRoutes(0, (hcrash_mode) ? 0.60 : 2.50, BURN_SND_ROUTE_BOTH);
+	if (DrvVLMROM[1] || DrvVLMROM[2]) {
+		vlm5030Init(0,  3579545, salamand_vlm_sync, DrvVLMROM, 0x4000, 1);
+		vlm5030SetAllRoutes(0, (hcrash_mode) ? 0.80 : 2.50, BURN_SND_ROUTE_BOTH);
+		vlm5030_enable = 1;
+	}
 
 	ym2151_enable = 1;
 	k007232_enable = 1;
-	vlm5030_enable = 1;
 }
 
 static void CitybombSoundInit()
@@ -2251,7 +2314,7 @@ static void CitybombSoundInit()
 	ZetClose();
 
 	BurnYM3812Init(1, 3579545, NULL, DrvSynchroniseStream, 0);
-	BurnTimerAttachZetYM3812(3579545);
+	BurnTimerAttachYM3812(&ZetConfig, 3579545);
 	BurnYM3812SetRoute(0, BURN_SND_YM3812_ROUTE, 1.00, BURN_SND_ROUTE_BOTH);
 
 	K007232Init(0,  3579545, K007232ROM, 0x80000);
@@ -2330,6 +2393,12 @@ static INT32 NemesisInit()
 	return 0;
 }
 
+static void ShifterSetup()
+{
+	BurnShiftInit(SHIFT_POSITION_BOTTOM_RIGHT, SHIFT_COLOR_GREEN, 80);
+	bUseShifter = 1;
+}
+
 static INT32 KonamigtInit()
 {
 	AllMem = NULL;
@@ -2389,7 +2458,11 @@ static INT32 KonamigtInit()
 
 	GenericTilesInit();
 
+	ShifterSetup();
+
 	DrvDoReset();
+
+	gearboxmode = 1;
 
 	return 0;
 }
@@ -2504,7 +2577,6 @@ static INT32 BlkpnthrInit()
 	SekClose();
 
 	SalamandSoundInit();
-	vlm5030_enable = 0; // no vlm
 
 	palette_write = salamand_palette_update;
 
@@ -2532,7 +2604,9 @@ static INT32 HcrashInit()
 
 		if (BurnLoadRom(DrvZ80ROM + 0x000000,  4, 1)) return 1;
 
-		if (BurnLoadRom(DrvVLMROM + 0x000000,  5, 1)) return 1;
+		if (BurnLoadRom(DrvVLMROM + 0x004000,  5, 1)) return 1;
+		memmove(DrvVLMROM, DrvVLMROM + 0x08000, 0x4000);
+		memset(DrvVLMROM + 0x08000, 0, 0x4000);
 
 		if (BurnLoadRom(K007232ROM + 0x00000,  6, 1)) return 1;
 	}
@@ -2704,7 +2778,11 @@ static INT32 Rf2_gx400Init()
 
 	GenericTilesInit();
 
+	ShifterSetup();
+
 	DrvDoReset();
+
+	gearboxmode = 1;
 
 	return 0;
 }
@@ -2848,6 +2926,9 @@ static INT32 DrvExit()
 	if (k007232_enable) K007232Exit();
 	if (k005289_enable) K005289Exit();
 	if (k051649_enable) K051649Exit();
+	if (rcflt_enable) filter_rc_exit();
+	if (bUseShifter) BurnShiftExit();
+	bUseShifter = 0;
 
 	BurnFree (AllMem);
 
@@ -2861,6 +2942,7 @@ static INT32 DrvExit()
 	k051649_enable = 0;
 	vlm5030_enable = 0;
 	hcrash_mode = 0;
+	gearboxmode = 0;
 
 	return 0;
 }
@@ -3020,6 +3102,8 @@ static INT32 DrvDraw()
 	if (nBurnLayer & 8) draw_layer(DrvVidRAM0, DrvColRAM0, xscroll1, yscroll1, 1, 8);
 
 	BurnTransferCopy(DrvPalette);
+	if (bUseShifter)
+		BurnShiftRender();
 
 	return 0;
 }
@@ -3048,6 +3132,7 @@ static INT32 NemesisFrame()
 	INT32 nInterleave = 256;
 	INT32 nCyclesTotal[2] = { 9216000 / 60, 3579545 / 60 };
 	INT32 nCyclesDone[2] = { 0, 0 };
+	INT32 nSoundBufferPos = 0;
 
 	SekOpen(0);
 	ZetOpen(0);
@@ -3058,18 +3143,31 @@ static INT32 NemesisFrame()
 
 		segment = nCyclesTotal[0] / nInterleave;
 		nCyclesDone[0] += SekRun(segment);
-		if (i == (nInterleave - 4) && *m68k_irq_enable) // should be 2500...
+		if (i == 240 && *m68k_irq_enable)
 			SekSetIRQLine(1, CPU_IRQSTATUS_AUTO);
 
 		segment = nCyclesTotal[1] / nInterleave;
 		nCyclesDone[1] += ZetRun(segment);
+
+		// Render Sound Segment
+		if (pBurnSoundOut) {
+			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+			AY8910Render(pSoundBuf, nSegmentLength);
+			nSoundBufferPos += nSegmentLength;
+		}
 	}
 
 	ZetClose();
 	SekClose();
 
+	// Make sure the buffer is entirely filled.
 	if (pBurnSoundOut) {
-		AY8910Render(&pAY8910Buffer[0], pBurnSoundOut, nBurnSoundLen, 0);
+		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
+		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+		if (nSegmentLength) {
+			AY8910Render(pSoundBuf, nSegmentLength);
+		}
 		K005289Update(pBurnSoundOut, nBurnSoundLen);
 	}
 
@@ -3078,6 +3176,27 @@ static INT32 NemesisFrame()
 	}
 
 	return 0;
+}
+
+static void spinner_update()
+{ // spinner calculation stuff. (wheel) for rf2 / konamigt & hcrash
+	UINT8 INCREMENT = 0x02;
+	UINT8 target = konamigt_read_wheel();
+	if (DrvDial1+INCREMENT < target) { // go "right" in blocks of "INCREMENT"
+		DrvDial1 += INCREMENT;
+	}
+	else
+	if (DrvDial1 < target) { // take care of remainder
+		DrvDial1++;
+	}
+
+	if (DrvDial1-INCREMENT > target) { // go "left" in blocks of "INCREMENT"
+		DrvDial1 -= INCREMENT;
+	}
+	else
+	if (DrvDial1 > target) { // take care of remainder
+		DrvDial1--;
+	}
 }
 
 static INT32 KonamigtFrame()
@@ -3099,7 +3218,12 @@ static INT32 KonamigtFrame()
 			DrvInputs[2] ^= (DrvJoy3[i] & 1) << i;
 			DrvInputs[3] ^= (DrvJoy4[i] & 1) << i;
 		}
+
+		DrvInputs[1] = DrvInputs[1] & ~0x10;
+		DrvInputs[1] |= ((BurnShiftInputCheckToggle(DrvJoy2[4])) ? 0x10 : 0x00);
 	}
+
+	spinner_update();
 
 	INT32 nInterleave = 256;
 	INT32 nCyclesTotal[2] = { 9216000 / 60, 3579545 / 60 };
@@ -3129,7 +3253,7 @@ static INT32 KonamigtFrame()
 	SekClose();
 
 	if (pBurnSoundOut) {
-		AY8910Render(&pAY8910Buffer[0], pBurnSoundOut, nBurnSoundLen, 0);
+		AY8910Render(pBurnSoundOut, nBurnSoundLen);
 		K005289Update(pBurnSoundOut, nBurnSoundLen);
 	}
 
@@ -3237,6 +3361,9 @@ static INT32 HcrashFrame()
 			DrvInputs[2] |= 1 << i;
 			DrvInputs[3] ^= (DrvJoy4[i] & 1) << i;
 		}
+
+		spinner_update();
+
 	}
 
 	INT32 nSoundBufferPos = 0;
@@ -3389,11 +3516,19 @@ static INT32 Gx400Frame()
 			DrvInputs[2] ^= (DrvJoy3[i] & 1) << i;
 			DrvInputs[3] ^= (DrvJoy4[i] & 1) << i;
 		}
+
+		if (gearboxmode) { // rf2
+			DrvInputs[1] = DrvInputs[1] & ~0x10;
+			DrvInputs[1] |= ((BurnShiftInputCheckToggle(DrvJoy2[4])) ? 0x00 : 0x10); // different from the rest.
+
+			spinner_update();
+		}
 	}
 
 	INT32 nInterleave = 256;
 	INT32 nCyclesTotal[2] = { 9216000 / 60, 3579545 / 60 };
 	INT32 nCyclesDone[2] = { 0, 0 };
+	INT32 nSoundBufferPos = 0;
 
 	SekOpen(0);
 	ZetOpen(0);
@@ -3417,13 +3552,26 @@ static INT32 Gx400Frame()
 		segment = nCyclesTotal[1] / nInterleave;
 		nCyclesDone[1] += ZetRun(segment);
 		if (i == (nInterleave - 1)) ZetNmi();
+
+		// Render Sound Segment
+		if (pBurnSoundOut) {
+			INT32 nSegmentLength = nBurnSoundLen / nInterleave;
+			INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+			AY8910Render(pSoundBuf, nSegmentLength);
+			nSoundBufferPos += nSegmentLength;
+		}
 	}
 
 	ZetClose();
 	SekClose();
 
+	// Make sure the buffer is entirely filled.
 	if (pBurnSoundOut) {
-		AY8910Render(&pAY8910Buffer[0], pBurnSoundOut, nBurnSoundLen, 0);
+		INT32 nSegmentLength = nBurnSoundLen - nSoundBufferPos;
+		INT16* pSoundBuf = pBurnSoundOut + (nSoundBufferPos << 1);
+		if (nSegmentLength) {
+			AY8910Render(pSoundBuf, nSegmentLength);
+		}
 		vlm5030Update(0, pBurnSoundOut, nBurnSoundLen);
 		K005289Update(pBurnSoundOut, nBurnSoundLen);
 	}
@@ -3512,15 +3660,17 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		if (ym2151_enable) BurnYM2151Scan(nAction);
+		if (ym2151_enable) BurnYM2151Scan(nAction, pnMin);
 		if (ym3812_enable) BurnYM3812Scan(nAction, pnMin);
 		if (ay8910_enable) AY8910Scan(nAction, pnMin);
 		if (k005289_enable) K005289Scan(nAction, pnMin);
 		if (k007232_enable) K007232Scan(nAction, pnMin);
 		if (k051649_enable) K051649Scan(nAction, pnMin);
-		if (vlm5030_enable) vlm5030Scan(nAction);
+		if (vlm5030_enable) vlm5030Scan(nAction, pnMin);
+		if (bUseShifter) BurnShiftScan(nAction);
 
 		SCAN_VAR(selected_ip);
+		SCAN_VAR(DrvDial1);
 	}
 
 	if (nAction & ACB_WRITE) {
@@ -3561,7 +3711,7 @@ struct BurnDriver BurnDrvNemesis = {
 	"Nemesis (ROM version)\0", NULL, "Konami", "GX400",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, nemesisRomInfo, nemesisRomName, NULL, NULL, NemesisInputInfo, NemesisDIPInfo,
+	NULL, nemesisRomInfo, nemesisRomName, NULL, NULL, NULL, NULL, NemesisInputInfo, NemesisDIPInfo,
 	NemesisInit, DrvExit, NemesisFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3593,7 +3743,7 @@ struct BurnDriver BurnDrvNemesisuk = {
 	"Nemesis (World?, ROM version)\0", NULL, "Konami", "GX400",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, nemesisukRomInfo, nemesisukRomName, NULL, NULL, NemesisInputInfo, NemesisDIPInfo,
+	NULL, nemesisukRomInfo, nemesisukRomName, NULL, NULL, NULL, NULL, NemesisInputInfo, NemesisDIPInfo,
 	NemesisInit, DrvExit, NemesisFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3625,7 +3775,7 @@ struct BurnDriver BurnDrvKonamigt = {
 	"Konami GT\0", NULL, "Konami", "GX561",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_RACING, 0,
-	NULL, konamigtRomInfo, konamigtRomName, NULL, NULL, KonamigtInputInfo, KonamigtDIPInfo,
+	NULL, konamigtRomInfo, konamigtRomName, NULL, NULL, NULL, NULL, KonamigtInputInfo, KonamigtDIPInfo,
 	KonamigtInit, DrvExit, KonamigtFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3654,7 +3804,7 @@ struct BurnDriver BurnDrvSalamand = {
 	"Salamander (version D)\0", NULL, "Konami", "GX587",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, salamandRomInfo, salamandRomName, NULL, NULL, SalamandInputInfo, SalamandDIPInfo,
+	NULL, salamandRomInfo, salamandRomName, NULL, NULL, NULL, NULL, SalamandInputInfo, SalamandDIPInfo,
 	SalamandInit, DrvExit, SalamandFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3683,7 +3833,7 @@ struct BurnDriver BurnDrvSalamandj = {
 	"Salamander (version J)\0", NULL, "Konami", "GX587",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, salamandjRomInfo, salamandjRomName, NULL, NULL, SalamandInputInfo, SalamandDIPInfo,
+	NULL, salamandjRomInfo, salamandjRomName, NULL, NULL, NULL, NULL, SalamandInputInfo, SalamandDIPInfo,
 	SalamandInit, DrvExit, SalamandFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3712,7 +3862,7 @@ struct BurnDriver BurnDrvLifefrce = {
 	"Lifeforce (US)\0", NULL, "Konami", "GX587",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, lifefrceRomInfo, lifefrceRomName, NULL, NULL, SalamandInputInfo, SalamandDIPInfo,
+	NULL, lifefrceRomInfo, lifefrceRomName, NULL, NULL, NULL, NULL, SalamandInputInfo, SalamandDIPInfo,
 	SalamandInit, DrvExit, SalamandFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3741,7 +3891,7 @@ struct BurnDriver BurnDrvLifefrcej = {
 	"Lifeforce (Japan)\0", NULL, "Konami", "GX587",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, lifefrcejRomInfo, lifefrcejRomName, NULL, NULL, SalamandInputInfo, LifefrcjDIPInfo,
+	NULL, lifefrcejRomInfo, lifefrcejRomName, NULL, NULL, NULL, NULL, LifefrcejInputInfo, LifefrcejDIPInfo,
 	SalamandInit, DrvExit, SalamandFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3769,7 +3919,7 @@ struct BurnDriver BurnDrvTwinbee = {
 	"TwinBee (ROM version)\0", NULL, "Konami", "GX412",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 2, HARDWARE_KONAMI_68K_Z80, GBF_VERSHOOT, 0,
-	NULL, twinbeeRomInfo, twinbeeRomName, NULL, NULL, TwinbeeInputInfo, TwinbeeDIPInfo,
+	NULL, twinbeeRomInfo, twinbeeRomName, NULL, NULL, NULL, NULL, TwinbeeInputInfo, TwinbeeDIPInfo,
 	Gx400Init, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };
@@ -3797,7 +3947,7 @@ struct BurnDriver BurnDrvGradius = {
 	"Gradius (Japan, ROM version)\0", NULL, "Konami", "GX456",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_HORSHOOT, 0,
-	NULL, gradiusRomInfo, gradiusRomName, NULL, NULL, GradiusInputInfo, GradiusDIPInfo,
+	NULL, gradiusRomInfo, gradiusRomName, NULL, NULL, NULL, NULL, GradiusInputInfo, GradiusDIPInfo,
 	Gx400Init, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3825,7 +3975,7 @@ struct BurnDriver BurnDrvGwarrior = {
 	"Galactic Warriors\0", NULL, "Konami", "GX578",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_VSFIGHT, 0,
-	NULL, gwarriorRomInfo, gwarriorRomName, NULL, NULL, GwarriorInputInfo, GwarriorDIPInfo,
+	NULL, gwarriorRomInfo, gwarriorRomName, NULL, NULL, NULL, NULL, GwarriorInputInfo, GwarriorDIPInfo,
 	Gx400Init, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3853,7 +4003,7 @@ struct BurnDriver BurnDrvRf2 = {
 	"Konami RF2 - Red Fighter\0", NULL, "Konami", "GX561",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_RACING, 0,
-	NULL, rf2RomInfo, rf2RomName, NULL, NULL, KonamigtInputInfo, KonamigtDIPInfo,
+	NULL, rf2RomInfo, rf2RomName, NULL, NULL, NULL, NULL, KonamigtInputInfo, KonamigtDIPInfo,
 	Rf2_gx400Init, DrvExit, Gx400Frame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3880,7 +4030,7 @@ struct BurnDriver BurnDrvBlkpnthr = {
 	"Black Panther\0", NULL, "Konami", "GX604",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_SCRFIGHT, 0,
-	NULL, blkpnthrRomInfo, blkpnthrRomName, NULL, NULL, BlkpnthrInputInfo, BlkpnthrDIPInfo,
+	NULL, blkpnthrRomInfo, blkpnthrRomName, NULL, NULL, NULL, NULL, BlkpnthrInputInfo, BlkpnthrDIPInfo,
 	BlkpnthrInit, DrvExit, BlkpnthrFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3911,7 +4061,7 @@ struct BurnDriver BurnDrvCitybomb = {
 	"City Bomber (World)\0", NULL, "Konami", "GX787",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_KONAMI_68K_Z80, GBF_SHOOT, 0,
-	NULL, citybombRomInfo, citybombRomName, NULL, NULL, CitybombInputInfo, CitybombDIPInfo,
+	NULL, citybombRomInfo, citybombRomName, NULL, NULL, NULL, NULL, CitybombInputInfo, CitybombDIPInfo,
 	CitybombInit, DrvExit, CitybombFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };
@@ -3942,7 +4092,7 @@ struct BurnDriver BurnDrvCitybombj = {
 	"City Bomber (Japan)\0", NULL, "Konami", "GX787",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL, 2, HARDWARE_KONAMI_68K_Z80, GBF_SHOOT, 0,
-	NULL, citybombjRomInfo, citybombjRomName, NULL, NULL, CitybombInputInfo, CitybombDIPInfo,
+	NULL, citybombjRomInfo, citybombjRomName, NULL, NULL, NULL, NULL, CitybombInputInfo, CitybombDIPInfo,
 	CitybombInit, DrvExit, CitybombFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	224, 256, 3, 4
 };
@@ -3969,7 +4119,7 @@ struct BurnDriver BurnDrvKittenk = {
 	"Kitten Kaboodle\0", NULL, "Konami", "GX712",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_PUZZLE, 0,
-	NULL, kittenkRomInfo, kittenkRomName, NULL, NULL, NyanpaniInputInfo, NyanpaniDIPInfo,
+	NULL, kittenkRomInfo, kittenkRomName, NULL, NULL, NULL, NULL, NyanpaniInputInfo, NyanpaniDIPInfo,
 	NyanpaniInit, DrvExit, CitybombFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -3996,7 +4146,7 @@ struct BurnDriver BurnDrvNyanpani = {
 	"Nyan Nyan Panic (Japan)\0", NULL, "Konami", "GX712",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_PUZZLE, 0,
-	NULL, nyanpaniRomInfo, nyanpaniRomName, NULL, NULL, NyanpaniInputInfo, NyanpaniDIPInfo,
+	NULL, nyanpaniRomInfo, nyanpaniRomName, NULL, NULL, NULL, NULL, NyanpaniInputInfo, NyanpaniDIPInfo,
 	NyanpaniInit, DrvExit, CitybombFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -4025,7 +4175,7 @@ struct BurnDriver BurnDrvHcrash = {
 	"Hyper Crash (version D)\0", NULL, "Konami", "GX790",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_KONAMI_68K_Z80, GBF_RACING, 0,
-	NULL, hcrashRomInfo, hcrashRomName, NULL, NULL, HcrashInputInfo, HcrashDIPInfo,
+	NULL, hcrashRomInfo, hcrashRomName, NULL, NULL, NULL, NULL, HcrashInputInfo, HcrashDIPInfo,
 	HcrashInit, DrvExit, HcrashFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };
@@ -4054,7 +4204,7 @@ struct BurnDriver BurnDrvHcrashc = {
 	"Hyper Crash (version C)\0", NULL, "Konami", "GX790",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_KONAMI_68K_Z80, GBF_RACING, 0,
-	NULL, hcrashcRomInfo, hcrashcRomName, NULL, NULL, HcrashInputInfo, HcrashDIPInfo,
+	NULL, hcrashcRomInfo, hcrashcRomName, NULL, NULL, NULL, NULL, HcrashInputInfo, HcrashDIPInfo,
 	HcrashInit, DrvExit, HcrashFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	256, 224, 4, 3
 };

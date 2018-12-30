@@ -1,7 +1,8 @@
+// FB Alpha V-Five & Grind Stormer driver module
+// Driver and emulation by Jan Klaassen
+
 #include "toaplan.h"
 #include "nec_intf.h"
-
-// V-Five & Grind Stormer
 
 static UINT8 DrvButton[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 static UINT8 DrvJoy1[8] = {0, 0, 0, 0, 0, 0, 0, 0};
@@ -234,7 +235,7 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 
 		SekScan(nAction);				// scan 68000 states
 		VezScan(nAction);
-		BurnYM2151Scan(nAction);
+		BurnYM2151Scan(nAction, pnMin);
 
 		ToaScanGP9001(nAction, pnMin);
 	}
@@ -385,7 +386,7 @@ UINT8 __fastcall vfive_v25_read(UINT32 address)
 	switch (address)
 	{
 		case 0x00001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 	}
 
 	return 0;
@@ -402,7 +403,7 @@ UINT8 __fastcall vfive_v25_read_port(UINT32 port)
 			return DrvInput[4]^0xff;
 
 		case V25_PORT_P1:
-			return DrvInput[5]^0xff;
+			return (DrvInput[5] << 4)^0xff; // hehe.
 	}
 
 	return 0;
@@ -419,6 +420,8 @@ static INT32 DrvDoReset()
 	VezClose();
 
 	BurnYM2151Reset();
+
+	HiscoreReset();
 
 	v25_reset = 1;
 
@@ -657,8 +660,8 @@ struct BurnDriver BurnDrvVFive = {
 	"vfive", "grindstm", NULL, NULL, "1993",
 	"V-Five (Japan)\0", NULL, "Toaplan", "Toaplan GP9001 based",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | TOA_ROTATE_GRAPHICS_CCW, 2, HARDWARE_TOAPLAN_68K_Zx80, GBF_VERSHOOT, 0,
-	NULL, vfiveRomInfo, vfiveRomName, NULL, NULL, vfiveInputInfo, vfiveDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | TOA_ROTATE_GRAPHICS_CCW | BDF_HISCORE_SUPPORTED, 2, HARDWARE_TOAPLAN_68K_Zx80, GBF_VERSHOOT, 0,
+	NULL, vfiveRomInfo, vfiveRomName, NULL, NULL, NULL, NULL, vfiveInputInfo, vfiveDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &ToaRecalcPalette, 0x800,
 	240, 320, 3, 4
 };
@@ -667,8 +670,8 @@ struct BurnDriver BurnDrvGrindStormer = {
 	"grindstm", NULL, NULL, NULL, "1992",
 	"Grind Stormer\0", NULL, "Toaplan", "Toaplan GP9001 based",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | TOA_ROTATE_GRAPHICS_CCW, 2, HARDWARE_TOAPLAN_68K_Zx80, GBF_VERSHOOT, 0,
-	NULL, grindstmRomInfo, grindstmRomName, NULL, NULL, vfiveInputInfo, grindstmDIPInfo,
+	BDF_GAME_WORKING | TOA_ROTATE_GRAPHICS_CCW | BDF_HISCORE_SUPPORTED, 2, HARDWARE_TOAPLAN_68K_Zx80, GBF_VERSHOOT, 0,
+	NULL, grindstmRomInfo, grindstmRomName, NULL, NULL, NULL, NULL, vfiveInputInfo, grindstmDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &ToaRecalcPalette, 0x800,
 	240, 320, 3, 4
 };
@@ -677,8 +680,8 @@ struct BurnDriver BurnDrvGrindStormerA = {
 	"grindstma", "grindstm", NULL, NULL, "1992",
 	"Grind Stormer (older set)\0", NULL, "Toaplan GP9001 based", "Toaplan",
 	NULL, NULL, NULL, NULL,
-	BDF_GAME_WORKING | BDF_CLONE | TOA_ROTATE_GRAPHICS_CCW, 2, HARDWARE_TOAPLAN_68K_Zx80, GBF_VERSHOOT, 0,
-	NULL, grindstaRomInfo, grindstaRomName, NULL, NULL, vfiveInputInfo, grindstmDIPInfo,
+	BDF_GAME_WORKING | BDF_CLONE | TOA_ROTATE_GRAPHICS_CCW | BDF_HISCORE_SUPPORTED, 2, HARDWARE_TOAPLAN_68K_Zx80, GBF_VERSHOOT, 0,
+	NULL, grindstaRomInfo, grindstaRomName, NULL, NULL, NULL, NULL, vfiveInputInfo, grindstmDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &ToaRecalcPalette, 0x800,
 	240, 320, 3, 4
 };

@@ -431,7 +431,7 @@ static void __fastcall dbz_sound_write(UINT16 address, UINT8 data)
 		case 0xd000:
 		case 0xd002:
 		case 0xd001:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 	}
 }
@@ -442,12 +442,12 @@ static UINT8 __fastcall dbz_sound_read(UINT16 address)
 	{
 		case 0xc000:
 		case 0xc001:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 
 		case 0xd000:
 		case 0xd002:
 		case 0xd001:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0xe000:
 		case 0xe001:
@@ -979,8 +979,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
-		MSM6295Scan(0,nAction);
+		BurnYM2151Scan(nAction, pnMin);
+		MSM6295Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
 
@@ -1022,7 +1022,7 @@ struct BurnDriver BurnDrvDbz = {
 	"Dragonball Z (rev B)\0", NULL, "Banpresto", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
-	NULL, dbzRomInfo, dbzRomName, NULL, NULL, DbzInputInfo, DbzDIPInfo,
+	NULL, dbzRomInfo, dbzRomName, NULL, NULL, NULL, NULL, DbzInputInfo, DbzDIPInfo,
 	dbzInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x2000,
 	384, 256, 4, 3
 };
@@ -1058,7 +1058,7 @@ struct BurnDriver BurnDrvDbza = {
 	"Dragonball Z (rev A)\0", NULL, "Banpresto", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
-	NULL, dbzaRomInfo, dbzaRomName, NULL, NULL, DbzInputInfo, DbzDIPInfo,
+	NULL, dbzaRomInfo, dbzaRomName, NULL, NULL, NULL, NULL, DbzInputInfo, DbzDIPInfo,
 	dbzaInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x2000,
 	384, 256, 4, 3
 };
@@ -1097,7 +1097,7 @@ struct BurnDriver BurnDrvDbz2 = {
 	"Dragonball Z 2 - Super Battle\0", NULL, "Banpresto", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_VSFIGHT, 0,
-	NULL, dbz2RomInfo, dbz2RomName, NULL, NULL, DbzInputInfo, Dbz2DIPInfo,
+	NULL, dbz2RomInfo, dbz2RomName, NULL, NULL, NULL, NULL, DbzInputInfo, Dbz2DIPInfo,
 	dbz2Init,DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x2000,
 	384, 256, 4, 3
 };

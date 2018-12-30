@@ -260,16 +260,6 @@ static INT32 DrvDoReset()
 	return 0;
 }
 
-inline static INT32 DrvSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 1748000;
-}
-
-inline static double DrvGetTime()
-{
-	return (double)ZetTotalCycles() / 1748000.0;
-}
-
 static INT32 DrvInit()
 {
 	AllMem = NULL;
@@ -328,7 +318,7 @@ static INT32 DrvInit()
 	ZetSetReadHandler(skyfox_sound_read);
 	ZetClose();
 
-	BurnYM2203Init(2, 1748000, NULL, DrvSynchroniseStream, DrvGetTime, 0);
+	BurnYM2203Init(2, 1748000, NULL, 0);
 	BurnTimerAttachZet(1748000);
 	BurnYM2203SetAllRoutes(0, 0.80, BURN_SND_ROUTE_BOTH);
 	BurnYM2203SetAllRoutes(1, 0.80, BURN_SND_ROUTE_BOTH);
@@ -580,7 +570,7 @@ struct BurnDriver BurnDrvSkyfox = {
 	"Sky Fox\0", NULL, "Jaleco (Nichibutsu USA license)", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, skyfoxRomInfo, skyfoxRomName, NULL, NULL, SkyfoxInputInfo, SkyfoxDIPInfo,
+	NULL, skyfoxRomInfo, skyfoxRomName, NULL, NULL, NULL, NULL, SkyfoxInputInfo, SkyfoxDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x200,
 	224, 320, 3, 4
 };
@@ -616,7 +606,7 @@ struct BurnDriver BurnDrvExerizrb = {
 	"Exerizer (Japan) (bootleg)\0", NULL, "Jaleco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_ORIENTATION_VERTICAL | BDF_ORIENTATION_FLIPPED, 1, HARDWARE_MISC_PRE90S, GBF_VERSHOOT, 0,
-	NULL, exerizrbRomInfo, exerizrbRomName, NULL, NULL, SkyfoxInputInfo, SkyfoxDIPInfo,
+	NULL, exerizrbRomInfo, exerizrbRomName, NULL, NULL, NULL, NULL, SkyfoxInputInfo, SkyfoxDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, NULL, &DrvRecalc, 0x200,
 	224, 320, 3, 4
 };

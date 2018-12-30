@@ -1,4 +1,5 @@
-// FB Alpha Asterix drier module
+// FB Alpha Asterix driver module
+// Based on MAME driver by Olivier Galibert
 
 #include "tiles_generic.h"
 #include "m68000_intf.h"
@@ -57,6 +58,7 @@ static struct BurnInputInfo AsterixInputList[] = {
 	{"P1 Button 2",		BIT_DIGITAL,	DrvJoy1 + 5,	"p1 fire 2"	},
 
 	{"P2 Coin",		BIT_DIGITAL,	DrvJoy1 + 9,	"p2 coin"	},
+	{"P2 Start",		BIT_DIGITAL,	DrvJoy2 + 7,	"p2 start"	},
 	{"P2 Up",		BIT_DIGITAL,	DrvJoy2 + 2,	"p2 up"		},
 	{"P2 Down",		BIT_DIGITAL,	DrvJoy2 + 3,	"p2 down"	},
 	{"P2 Left",		BIT_DIGITAL,	DrvJoy2 + 0,	"p2 left"	},
@@ -73,11 +75,11 @@ STDINPUTINFO(Asterix)
 
 static struct BurnDIPInfo AsterixDIPList[]=
 {
-	{0x11, 0xff, 0xff, 0x04, NULL		},
+	{0x12, 0xff, 0xff, 0x04, NULL		},
 
 	{0   , 0xfe, 0   ,    2, "Service Mode"	},
-	{0x11, 0x01, 0x04, 0x04, "Off"		},
-	{0x11, 0x01, 0x04, 0x00, "On"		},
+	{0x12, 0x01, 0x04, 0x04, "Off"		},
+	{0x12, 0x01, 0x04, 0x00, "On"		},
 };
 
 STDDIPINFO(Asterix)
@@ -338,7 +340,7 @@ static UINT8 __fastcall asterix_sound_read(UINT16 address)
 	switch (address)
 	{
 		case 0xf801:
-			return BurnYM2151ReadStatus();
+			return BurnYM2151Read();
 	}
 
 	if (address >= 0xfa00 && address <= 0xfa2f) {
@@ -707,8 +709,8 @@ static INT32 DrvScan(INT32 nAction,INT32 *pnMin)
 		SekScan(nAction);
 		ZetScan(nAction);
 
-		BurnYM2151Scan(nAction);
-		K053260Scan(nAction);
+		BurnYM2151Scan(nAction, pnMin);
+		K053260Scan(nAction, pnMin);
 
 		KonamiICScan(nAction);
 
@@ -757,7 +759,7 @@ struct BurnDriver BurnDrvAsterix = {
 	"Asterix (ver EAD)\0", NULL, "Konami", "GX068",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, asterixRomInfo, asterixRomName, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
+	NULL, asterixRomInfo, asterixRomName, NULL, NULL, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -792,7 +794,7 @@ struct BurnDriver BurnDrvAsterixeac = {
 	"Asterix (ver EAC)\0", NULL, "Konami", "GX068",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, asterixeacRomInfo, asterixeacRomName, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
+	NULL, asterixeacRomInfo, asterixeacRomName, NULL, NULL, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -827,7 +829,7 @@ struct BurnDriver BurnDrvAsterixeaa = {
 	"Asterix (ver EAA)\0", NULL, "Konami", "GX068",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, asterixeaaRomInfo, asterixeaaRomName, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
+	NULL, asterixeaaRomInfo, asterixeaaRomName, NULL, NULL, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -862,7 +864,7 @@ struct BurnDriver BurnDrvAsterixaad = {
 	"Asterix (ver AAD)\0", NULL, "Konami", "GX068",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, asterixaadRomInfo, asterixaadRomName, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
+	NULL, asterixaadRomInfo, asterixaadRomName, NULL, NULL, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };
@@ -897,7 +899,7 @@ struct BurnDriver BurnDrvAsterixj = {
 	"Asterix (ver JAD)\0", NULL, "Konami", "GX068",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SCRFIGHT, 0,
-	NULL, asterixjRomInfo, asterixjRomName, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
+	NULL, asterixjRomInfo, asterixjRomName, NULL, NULL, NULL, NULL, AsterixInputInfo, AsterixDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x800,
 	288, 224, 4, 3
 };

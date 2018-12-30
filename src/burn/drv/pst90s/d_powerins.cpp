@@ -10,6 +10,7 @@
 #include "m68000_intf.h"
 #include "z80_intf.h"
 #include "msm6295.h"
+#include "nmk112.h"
 #include "burn_ym2203.h"
 
 static UINT8 *Mem = NULL, *MemEnd = NULL;
@@ -339,15 +340,6 @@ static struct BurnRomInfo powerinbRomDesc[] = {
 STD_ROM_PICK(powerinb)
 STD_ROM_FN(powerinb)
 
-static void sndSetBank(UINT8 offset, UINT8 data)
-{
-	INT32 chip = (offset & 4) >> 2;
-	INT32 bank = offset & 3;
-
-	MSM6295SampleInfo[chip][bank] = MSM6295ROM + 0x200000 * chip + 0x010000 * data + (bank << 8);
-	MSM6295SampleData[chip][bank] = MSM6295ROM + 0x200000 * chip + 0x010000 * data;
-}
-
 static INT32 MemIndex()
 {
 	UINT8 *Next; Next = Mem;
@@ -381,7 +373,7 @@ UINT8 __fastcall powerinsReadByte(UINT32 sekAddress)
 	switch (sekAddress) {
 		
 		case 0x10003f:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 			
 //		default:
 //			bprintf(PRINT_NORMAL, _T("Attempt to read byte value of location %x\n"), sekAddress);
@@ -419,7 +411,7 @@ void __fastcall powerinsWriteByte(UINT32 sekAddress, UINT8 byteValue)
 			// powerins_okibank
 			if (oki_bank != (byteValue & 7)) {
 				oki_bank = byteValue & 7;
-				memcpy(&MSM6295ROM[0x30000],&MSM6295ROM[0x40000 + 0x10000*oki_bank],0x10000);
+				MSM6295SetBank(0, MSM6295ROM + 0x40000 + 0x10000*oki_bank, 0x30000, 0x3ffff);
 			}
 			break;
 
@@ -429,7 +421,7 @@ void __fastcall powerinsWriteByte(UINT32 sekAddress, UINT8 byteValue)
 
 		case 0x10003f:
 			// powerina only!
-			MSM6295Command(0, byteValue);
+			MSM6295Write(0, byteValue);
 			break;
 			
 //		default:
@@ -457,7 +449,7 @@ void __fastcall powerinsWriteWord(UINT32 sekAddress, UINT16 wordValue)
 
 		case 0x10003e:
 			// powerina only!
-			MSM6295Command(0, wordValue & 0xff);
+			MSM6295Write(0, wordValue & 0xff);
 			break;
 
 		case 0x130000:	RamVReg[0] = wordValue; break;
@@ -526,10 +518,10 @@ UINT8 __fastcall powerinsZ80In(UINT16 p)
 				return 0;
 
 		case 0x80:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0x88:
-			return MSM6295ReadStatus(1);
+			return MSM6295Read(1);
 
 //		default:
 //			bprintf(PRINT_NORMAL, _T("Z80 Attempt to read port %04x\n"), p);
@@ -554,21 +546,23 @@ void __fastcall powerinsZ80Out(UINT16 p, UINT8 v)
 			break;
 
 		case 0x80:
-			MSM6295Command(0, v);
+			MSM6295Write(0, v);
 			break;
 
 		case 0x88:
-			MSM6295Command(1, v);
+			MSM6295Write(1, v);
 			break;
 
-		case 0x90: sndSetBank(0, v); break;
-		case 0x91: sndSetBank(1, v); break;
-		case 0x92: sndSetBank(2, v); break;
-		case 0x93: sndSetBank(3, v); break;
-		case 0x94: sndSetBank(4, v); break;
-		case 0x95: sndSetBank(5, v); break;
-		case 0x96: sndSetBank(6, v); break;
-		case 0x97: sndSetBank(7, v); break;
+		case 0x90:
+		case 0x91:
+		case 0x92:
+		case 0x93:
+		case 0x94:
+		case 0x95:
+		case 0x96:
+		case 0x97:
+			NMK112_okibank_write(p & 7, v);
+			break;
 
 //		default:
 //			bprintf(PRINT_NORMAL, _T("Z80 Attempt to write %02x to port %04x\n"), v, p);
@@ -586,16 +580,6 @@ static void powerinsIRQHandler(INT32, INT32 nStatus)
 	}
 }
 
-static INT32 powerinsSynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)ZetTotalCycles() * nSoundRate / 6000000;
-}
-
-static double powerinsGetTime()
-{
-	return (double)ZetTotalCycles() / 6000000;
-}
-
 static INT32 DrvDoReset()
 {
 	SekOpen(0);
@@ -603,7 +587,7 @@ static INT32 DrvDoReset()
 	SekReset();
 	SekClose();
 	
-	MSM6295Reset(0);
+	MSM6295Reset();
 	
 	if (game_drv != GAME_POWERINA) {
 		ZetOpen(0);
@@ -612,8 +596,7 @@ static INT32 DrvDoReset()
 		
 		if (game_drv == GAME_POWERINS) BurnYM2203Reset();
 
-		MSM6295Reset(1);
-		
+		NMK112Reset();
 	}
 
 	return 0;
@@ -854,7 +837,7 @@ static INT32 powerinsInit()
 	}
 	
 	if (game_drv == GAME_POWERINS ) {
-		BurnYM2203Init(1, 12000000 / 8, &powerinsIRQHandler, powerinsSynchroniseStream, powerinsGetTime, 0);
+		BurnYM2203Init(1, 12000000 / 8, &powerinsIRQHandler, 0);
 		BurnTimerAttachZet(6000000);
 		BurnYM2203SetAllRoutes(0, 2.00, BURN_SND_ROUTE_BOTH);
 		BurnSetRefreshRate(56.0);
@@ -863,6 +846,8 @@ static INT32 powerinsInit()
 		MSM6295Init(1, 4000000 / 165, 1);
 		MSM6295SetRoute(0, 0.15, BURN_SND_ROUTE_BOTH);
 		MSM6295SetRoute(1, 0.15, BURN_SND_ROUTE_BOTH);
+
+		NMK112_init(0, MSM6295ROM, MSM6295ROM + 0x200000, 0x200000, 0x200000);
 	}
 
 	if (game_drv == GAME_POWERINB ) {
@@ -870,6 +855,8 @@ static INT32 powerinsInit()
 		MSM6295Init(1, 4000000 / 165, 1);
 		MSM6295SetRoute(0, 0.15, BURN_SND_ROUTE_BOTH);
 		MSM6295SetRoute(1, 0.15, BURN_SND_ROUTE_BOTH);
+
+		NMK112_init(0, MSM6295ROM, MSM6295ROM + 0x200000, 0x200000, 0x200000);
 	}
 
 	GenericTilesInit();
@@ -884,11 +871,9 @@ static INT32 powerinsExit()
 	GenericTilesExit();
 
 	SekExit();
-	MSM6295Exit(0);
+	MSM6295Exit();
 
 	if (game_drv != GAME_POWERINA) {
-		MSM6295Exit(1);
-
 		if (game_drv == GAME_POWERINS)
 			BurnYM2203Exit();
 
@@ -997,7 +982,7 @@ static void DrawSprites()
 	}
 }
 
-static void DrvDraw()
+static INT32 DrvDraw()
 {
 	if (bRecalcPalette) {
 		for (INT32 i=0; i<0x800; i++) CalcCol(i);
@@ -1011,6 +996,8 @@ static void DrvDraw()
 	TileForeground();
 
 	BurnTransferCopy(RamCurPal);
+
+	return 0;
 }
 
 static INT32 powerinsFrame()
@@ -1045,7 +1032,7 @@ static INT32 powerinsFrame()
 		SekRun(nCyclesTotal[0]);
 		SekSetIRQLine(4, CPU_IRQSTATUS_AUTO);
 
-		if (pBurnSoundOut) MSM6295Render(0, pBurnSoundOut, nBurnSoundLen);
+		if (pBurnSoundOut) MSM6295Render(pBurnSoundOut, nBurnSoundLen);
 	}
 	
 	if (game_drv == GAME_POWERINS) {
@@ -1091,8 +1078,7 @@ static INT32 powerinsFrame()
 	
 		if (pBurnSoundOut) {
 			BurnYM2203Update(pBurnSoundOut, nBurnSoundLen);
-			MSM6295Render(0, pBurnSoundOut, nBurnSoundLen);
-			MSM6295Render(1, pBurnSoundOut, nBurnSoundLen);
+			MSM6295Render(pBurnSoundOut, nBurnSoundLen);
 		}
 		
 		ZetClose();
@@ -1100,11 +1086,10 @@ static INT32 powerinsFrame()
 	
 	if (game_drv == GAME_POWERINB) {
 		ZetRun(nCyclesTotal[1] - nCyclesDone[1]);
-	
+
 		if (pBurnSoundOut) {
-			memset(pBurnSoundOut, 0, nBurnSoundLen * 2 * sizeof(INT16));
-			MSM6295Render(0, pBurnSoundOut, nBurnSoundLen);
-			MSM6295Render(1, pBurnSoundOut, nBurnSoundLen);				
+			BurnSoundClear();
+			MSM6295Render(pBurnSoundOut, nBurnSoundLen);
 		}
 		
 		ZetClose();
@@ -1135,28 +1120,20 @@ static INT32 powerinsScan(INT32 nAction,INT32 *pnMin)
 
 		SekScan(nAction);										// Scan 68000 state
 
-		if ( game_drv != GAME_POWERINA )
-		ZetScan(nAction);										// Scan Z80 state
+		if ( game_drv != GAME_POWERINA ) ZetScan(nAction);										// Scan Z80 state
 
-	  if ( game_drv == GAME_POWERINS )
-		BurnYM2203Scan(nAction, pnMin);
+		if ( game_drv == GAME_POWERINS ) BurnYM2203Scan(nAction, pnMin);
 
-		MSM6295Scan(0, nAction);
-		if ( game_drv != GAME_POWERINA )
-		MSM6295Scan(1, nAction);
+		MSM6295Scan(nAction, pnMin);
 
-		SCAN_VAR(m6295size);
 		SCAN_VAR(soundlatch);
-		if ( game_drv == GAME_POWERINA )
-		SCAN_VAR(oki_bank);
+		if ( game_drv == GAME_POWERINA ) SCAN_VAR(oki_bank);
 
 		SCAN_VAR(tile_bank);
-		SCAN_VAR(RamCurPal);
 
 		if (nAction & ACB_WRITE) {
 			bRecalcPalette = 1;
-	   if ( game_drv == GAME_POWERINA )
-			memcpy(&MSM6295ROM[0x30000],&MSM6295ROM[0x40000 + 0x10000*oki_bank],0x10000);
+			if ( game_drv == GAME_POWERINA )  MSM6295SetBank(0, MSM6295ROM + 0x40000 + 0x10000*oki_bank, 0x30000, 0x3ffff);
 		}
 	}
 
@@ -1168,8 +1145,8 @@ struct BurnDriver BurnDrvPowerins = {
 	"Power Instinct (USA)\0", NULL, "Atlus", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, powerinsRomInfo, powerinsRomName, NULL, NULL, powerinsInputInfo, powerinsDIPInfo,
-	powerinsInit, powerinsExit, powerinsFrame, NULL, powerinsScan, &bRecalcPalette, 0x800,
+	NULL, powerinsRomInfo, powerinsRomName, NULL, NULL, NULL, NULL, powerinsInputInfo, powerinsDIPInfo,
+	powerinsInit, powerinsExit, powerinsFrame, DrvDraw, powerinsScan, &bRecalcPalette, 0x800,
 	320, 224, 4, 3
 };
 
@@ -1178,8 +1155,8 @@ struct BurnDriver BurnDrvPowerinj = {
 	"Gouketsuji Ichizoku (Japan)\0", NULL, "Atlus", "Miscellaneous",
 	L"\u8C6A\u8840\u5BFA\u4E00\u65CF (Japan)\0Gouketsuji Ichizoku\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, powerinjRomInfo, powerinjRomName, NULL, NULL, powerinsInputInfo, powerinjDIPInfo,
-	powerinsInit, powerinsExit, powerinsFrame, NULL, powerinsScan, &bRecalcPalette, 0x800,
+	NULL, powerinjRomInfo, powerinjRomName, NULL, NULL, NULL, NULL, powerinsInputInfo, powerinjDIPInfo,
+	powerinsInit, powerinsExit, powerinsFrame, DrvDraw, powerinsScan, &bRecalcPalette, 0x800,
 	320, 224, 4, 3
 };
 
@@ -1188,8 +1165,8 @@ struct BurnDriver BurnDrvPowerina = {
 	"Power Instinct (USA, bootleg set 1)\0", NULL, "Atlus", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, powerinaRomInfo, powerinaRomName, NULL, NULL, powerinsInputInfo, powerinsDIPInfo,
-	powerinsInit, powerinsExit, powerinsFrame, NULL, powerinsScan, &bRecalcPalette, 0x800,
+	NULL, powerinaRomInfo, powerinaRomName, NULL, NULL, NULL, NULL, powerinsInputInfo, powerinsDIPInfo,
+	powerinsInit, powerinsExit, powerinsFrame, DrvDraw, powerinsScan, &bRecalcPalette, 0x800,
 	320, 224, 4, 3
 };
 
@@ -1198,7 +1175,7 @@ struct BurnDriver BurnDrvPowerinb = {
 	"Power Instinct (USA, bootleg set 2)\0", NULL, "Atlus", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE | BDF_BOOTLEG, 2, HARDWARE_MISC_POST90S, GBF_VSFIGHT, FBF_PWRINST,
-	NULL, powerinbRomInfo, powerinbRomName, NULL, NULL, powerinsInputInfo, powerinsDIPInfo,
-	powerinsInit, powerinsExit, powerinsFrame, NULL, powerinsScan, &bRecalcPalette, 0x800,
+	NULL, powerinbRomInfo, powerinbRomName, NULL, NULL, NULL, NULL, powerinsInputInfo, powerinsDIPInfo,
+	powerinsInit, powerinsExit, powerinsFrame, DrvDraw, powerinsScan, &bRecalcPalette, 0x800,
 	320, 224, 4, 3
 };

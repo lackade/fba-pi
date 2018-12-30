@@ -8,6 +8,7 @@
 
 #include "burnint.h"
 #include "tlcs90_intf.h"
+#include <stddef.h>
 
 #define T90_IOBASE	0xffc0
 
@@ -27,6 +28,10 @@ enum e_ir
 	T90_TREG4L,         T90_TREG4H, T90_TREG5L,     T90_TREG5H, T90_T4MOD,  T90_T4FFCR, T90_INTEL,  T90_INTEH,
 	T90_DMAEH,          T90_SCMOD,  T90_SCCR,       T90_SCBUF,  T90_BX,     T90_BY,     T90_ADREG,  T90_ADMOD
 };
+
+#ifdef INLINE
+#undef INLINE
+#endif
 
 #define INLINE	static
 
@@ -51,37 +56,38 @@ struct t90_Regs
 	UINT8       halt, after_EI;
 	UINT16      irq_state, irq_mask;
 
-	INT32     icount;
-	INT32         extra_cycles;       // extra cycles for interrupts
+	INT32       icount;
+	INT32       extra_cycles;       // extra cycles for interrupts
 	UINT8       internal_registers[48];
 	UINT32      ixbase,iybase;
 
 	// Timers: 4 x 8-bit + 1 x 16-bit
-	INT32 timer_enable[4+1];
-	double timer_periods[4+1];
-	double timer_periods_full[4+1];
-	timer_callback	timer_cb[4+1];
+	INT32       timer_enable[4+1];
+	double      timer_periods[4+1];
+	double      timer_periods_full[4+1];
 
 	UINT8       timer_value[4];
 	UINT16      timer4_value;
-	double    timer_period;
+	double      timer_period;
 
 	// Work registers
 	e_op        op;
 
-	e_mode  mode1;
-	e_r     r1,r1b;
+	e_mode      mode1;
+	e_r         r1,r1b;
 
-	e_mode  mode2;
-	e_r     r2,r2b;
+	e_mode      mode2;
+	e_r         r2,r2b;
 
-	INT32 cyc_t,cyc_f;
+	INT32       cyc_t,cyc_f;
 
-	UINT32  addr;
+	UINT32      addr;
 
-	UINT32	total_cycles;
-	INT32 nCycles;
-	INT32 run_end;
+	UINT32	    total_cycles;
+	INT32       nCycles;
+	INT32       run_end;
+
+	timer_callback	timer_cb[4+1];
 };
 
 static struct t90_Regs tlcs90_data[1];
@@ -2075,7 +2081,7 @@ INT32 tlcs90TotalCycles()
 	return cpustate->total_cycles;// + (cpustate->nCycles - cpustate->icount);
 }
 
-INT32 tlcs90Reset()
+void tlcs90Reset()
 {
 	t90_Regs *cpustate = &tlcs90_data[0]; //get_safe_token(device);
 	cpustate->irq_state = 0;
@@ -2086,10 +2092,10 @@ INT32 tlcs90Reset()
     P0/D0-D7 P1/A0-A7 P2/A8-A15 P6 P7 = INPUT
     P35/~RD P36/~WR CLK = 1 (ALWAYS OUTPUTS)
     P4/A16-A19 P83 = 0
-    dedicated input ports and registers remain unchanged,
+    dedicated input ports and CPU registers remain unchanged,
     but PC IFF BX BY = 0, A undefined
 */
-	return 0;
+	memset(&cpustate->internal_registers, 0, sizeof(cpustate->internal_registers));
 }
 
 void tlcs90BurnCycles(INT32 cycles)
@@ -2489,11 +2495,12 @@ void t90_timer_callback(INT32 param)
 
 	INT32 mode, timer_fired;
 	INT32 i = param;
+	INT32 mask = 0x20 | (1 << i);
 
-	if ( (cpustate->internal_registers[ T90_TRUN - T90_IOBASE ] & (1 << i)) == 0 )
+	if ( (cpustate->internal_registers[ T90_TRUN - T90_IOBASE ] & mask) != mask )
 		return;
 
-  timer_fired = 0;
+	timer_fired = 0;
 
 	mode = (cpustate->internal_registers[ T90_TMOD - T90_IOBASE ] >> ((i & ~1) + 2)) & 0x03;
 	// Match
@@ -2585,19 +2592,22 @@ void t90_internal_registers_w(UINT16 offset, UINT8 data)
 		case T90_TRUN:
 		{
 			int i;
+			UINT8 mask;
 			// Timers 0-3
 			for (i = 0; i < 4; i++)
 			{
-				if ( (old ^ data) & (0x20 | (1 << i)) ) // if timer bit or prescaler bit changed
+				mask = 0x20 | (1 << i);
+				if ( (old ^ data) & mask ) // if timer bit or prescaler bit changed
 				{
-					if ( (data & (1 << i)) && (data & 0x20) )    t90_start_timer(cpustate, i);
+					if ( (data & mask) == mask ) t90_start_timer(cpustate, i);
 					else 					     t90_stop_timer(cpustate, i);
 				}
 			}
 			// Timer 4
-			if ( (old ^ data) & (0x20 | 0x10) )
+			mask = 0x20 | 0x10;
+			if ( (old ^ data) & mask )
 			{
-				if ( data == (0x20 | 0x10) )    t90_start_timer4(cpustate);
+				if ( (data & mask) == mask )    t90_start_timer4(cpustate);
 				else                            t90_stop_timer4(cpustate);
 			}
 			break;
@@ -2745,11 +2755,6 @@ INT32 tlcs90_init(INT32 clock)
 
 	cpustate->timer_period = clock / 1000000;
 
-	// Reset registers to their initial values
-
-//  IX = IY = 0xffff;
-//  F = ZF;
-
 	// Timers
 	for (i = 0; i < 4; i++)
 		cpustate->timer_cb[i] = t90_timer_callback;
@@ -2762,28 +2767,16 @@ INT32 tlcs90_init(INT32 clock)
 
 INT32 tlcs90Scan(INT32 nAction)
 {
-	struct BurnArea ba;
+	if (nAction & ACB_DRIVER_DATA) {
+		struct BurnArea ba;
 
-	if ((nAction & ACB_DRIVER_DATA) == 0)
-		return 0;
-
-	t90_Regs *cpustate = &tlcs90_data[0];
-
-	if (nAction & ACB_MEMORY_RAM) {
-		ba.Data		= cpustate;
-		ba.nLen		= sizeof(tlcs90_data);
-		ba.nAddress = 0;
+		memset(&ba, 0, sizeof(ba));
+		ba.Data		= &tlcs90_data[0];
+		ba.nLen		= STRUCT_SIZE_HELPER(struct t90_Regs, run_end);
 		ba.szName	= "tlcs90 CPU Data";
 		BurnAcb(&ba);
 	}
 
-	if (nAction & ACB_WRITE) {
-		for (INT32 i = 0; i < 4; i++)
-			cpustate->timer_cb[i] = t90_timer_callback;
-
-		cpustate->timer_cb[4] = t90_timer4_callback;
-	}
-	
 	return 0;
 }
 

@@ -1,7 +1,7 @@
 #ifndef MIPS3_INTF
 #define MIPS3_INTF
 
-#include "mips3/common.h"
+#include "mips3/mips3_common.h"
 
 typedef unsigned char (*pMips3ReadByteHandler)(unsigned int a);
 typedef void (*pMips3WriteByteHandler)(unsigned int a, unsigned char d);
@@ -20,6 +20,7 @@ int Mips3UseRecompiler(bool use);
 int Mips3Exit();
 void Mips3Reset();
 int Mips3Run(int cycles);
+unsigned int Mips3GetPC();
 
 int Mips3MapMemory(unsigned char* pMemory, unsigned int nStart, unsigned int nEnd, int nType);
 int Mips3MapHandler(uintptr_t nHandler, unsigned int nStart, unsigned int nEnd, int nType);

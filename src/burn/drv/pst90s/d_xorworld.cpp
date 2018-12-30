@@ -400,7 +400,7 @@ static INT32 DrvScan(INT32 nAction, INT32 *pnMin)
 	if (nAction & ACB_DRIVER_DATA) {
 		SekScan(nAction);
 
-		saa1099Scan(0, nAction);
+		saa1099Scan(nAction, pnMin);
 
 		EEPROMScan(nAction, pnMin);
 	}
@@ -431,7 +431,7 @@ struct BurnDriver BurnDrvXorworld = {
 	"Xor World (prototype)\0", NULL, "Gaelco", "Miscellaneous",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_MISC_POST90S, GBF_PUZZLE, 0,
-	NULL, xorworldRomInfo, xorworldRomName, NULL, NULL, XorworldInputInfo, XorworldDIPInfo,
+	NULL, xorworldRomInfo, xorworldRomName, NULL, NULL, NULL, NULL, XorworldInputInfo, XorworldDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x100,
 	256, 224, 4, 3
 };

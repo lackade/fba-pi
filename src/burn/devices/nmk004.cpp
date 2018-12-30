@@ -18,6 +18,8 @@ static UINT8 to_nmk004 = 0;
 static UINT8 to_main = 0;
 static INT32 bankdata[2] = { 0, 0 };
 
+static INT32 nmk004_initted = 0;
+
 static UINT8 nmk004_tlcs90_read(UINT32 address)
 {
 	if (address >= 0xfec0 && address < 0xffc0) {	// internal ram
@@ -31,10 +33,10 @@ static UINT8 nmk004_tlcs90_read(UINT32 address)
 			return BurnYM2203Read(0, address & 1);
 
 		case 0xf900:
-			return MSM6295ReadStatus(0);
+			return MSM6295Read(0);
 
 		case 0xfa00:
-			return MSM6295ReadStatus(1);
+			return MSM6295Read(1);
 
 		case 0xfb00:
 			return to_nmk004;
@@ -68,11 +70,11 @@ static void nmk004_tlcs90_write(UINT32 address, UINT8 data)
 		return;
 
 		case 0xf900:
-			MSM6295Command(0, data);
+			MSM6295Write(0, data);
 		return;
 
 		case 0xfa00:
-			MSM6295Command(1, data);
+			MSM6295Write(1, data);
 		return;
 
 		case 0xfc00:
@@ -113,8 +115,7 @@ void NMK004_reset()
 	BurnYM2203Reset();
 	tlcs90Close();
 
-	MSM6295Reset(0);
-	MSM6295Reset(1);
+	MSM6295Reset();
 
 	oki_bankswitch(0,0);
 	oki_bankswitch(1,0);
@@ -127,18 +128,9 @@ static void NMK004YM2203IrqHandler(INT32, INT32 nStatus)
 	tlcs90SetIRQLine(0, (nStatus) ? CPU_IRQSTATUS_ACK : CPU_IRQSTATUS_NONE);
 }
 
-inline static double NMK004GetTime()
-{
-	return (double)tlcs90TotalCycles() / 8000000;
-}
-
-inline static INT32 NMK004SynchroniseStream(INT32 nSoundRate)
-{
-	return (INT64)(tlcs90TotalCycles() * nSoundRate / 8000000);
-}
-
 void NMK004_init()
 {
+	nmk004_initted = 1;
 	ram = (UINT8*)BurnMalloc(0x900);
 
 	tlcs90Init(0, 8000000);
@@ -150,7 +142,7 @@ void NMK004_init()
 	tlcs90SetWritePortHandler(nmk004_tlcs90_write_port);
 	tlcs90Close();
 
-	BurnYM2203Init(1, 1500000, &NMK004YM2203IrqHandler, NMK004SynchroniseStream, NMK004GetTime, 0);
+	BurnYM2203Init(1, 1500000, &NMK004YM2203IrqHandler, 0);
 	BurnTimerAttachTlcs90(8000000);
 	/* reminder: these route#s are opposite of MAME, for example:
 	MCFG_SOUND_ROUTE(0, "mono", 0.50)
@@ -172,19 +164,23 @@ void NMK004_init()
 
 void NMK004_exit()
 {
+	if (!nmk004_initted) return;
+
+	nmk004_initted = 0;
+
 	BurnFree(ram);
+	ram = NULL;
 
 	tlcs90Exit();
 	BurnYM2203Exit();
-	MSM6295Exit(0);
-	MSM6295Exit(1);
+	MSM6295Exit();
 }
 
-INT32 NMK004Scan(INT32 nAction,INT32 *pnMin)
+INT32 NMK004Scan(INT32 nAction, INT32 *pnMin)
 {
 	struct BurnArea ba;
 
-	if (nAction & ACB_VOLATILE) {		
+	if (nAction & ACB_VOLATILE) {
 		memset(&ba, 0, sizeof(ba));
 
 		ba.Data	  = ram;
@@ -195,8 +191,7 @@ INT32 NMK004Scan(INT32 nAction,INT32 *pnMin)
 		tlcs90Scan(nAction);
 
 		BurnYM2203Scan(nAction, pnMin);
-		MSM6295Scan(0, nAction);
-		MSM6295Scan(1, nAction);
+		MSM6295Scan(nAction, pnMin);
 
 		SCAN_VAR(to_nmk004);
 		SCAN_VAR(to_main);

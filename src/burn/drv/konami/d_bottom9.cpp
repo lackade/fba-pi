@@ -433,6 +433,9 @@ static INT32 DrvDoReset()
 	ZetReset();
 	ZetClose();
 
+	K007232Reset(0);
+	K007232Reset(1);
+
 	KonamiICReset();
 
 	bottom9_video_enable = 0;
@@ -540,7 +543,7 @@ static INT32 DrvInit()
 		K051960GfxDecode(DrvGfxROM1, DrvGfxROMExp1, 0x100000);
 	}
 
-	M6809Init(1);
+	M6809Init(0);
 	M6809Open(0);
 	M6809MapMemory(DrvM6809RAM,	      0x4000, 0x5fff, MAP_RAM);
 	M6809MapMemory(DrvM6809ROM + 0x10000, 0x6000, 0x7fff, MAP_ROM);
@@ -663,7 +666,7 @@ static INT32 DrvFrame()
 	if (K052109_irq_enabled) M6809SetIRQLine(0, CPU_IRQSTATUS_AUTO);
 
 	if (pBurnSoundOut) {
-		memset(pBurnSoundOut, 0, nBurnSoundLen * sizeof(INT16) * 2);
+		BurnSoundClear();
 		K007232Update(0, pBurnSoundOut, nBurnSoundLen);
 		K007232Update(1, pBurnSoundOut, nBurnSoundLen);
 	}
@@ -774,7 +777,7 @@ struct BurnDriver BurnDrvBottom9 = {
 	"Bottom of the Ninth (ver. T)\0", NULL, "Konami", "GX891",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, bottom9RomInfo, bottom9RomName, NULL, NULL, Bottom9InputInfo, Bottom9DIPInfo,
+	NULL, bottom9RomInfo, bottom9RomName, NULL, NULL, NULL, NULL, Bottom9InputInfo, Bottom9DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };
@@ -838,7 +841,7 @@ struct BurnDriver BurnDrvBottom9n = {
 	"Bottom of the Ninth (ver. N)\0", NULL, "Konami", "GX891",
 	NULL, NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, bottom9nRomInfo, bottom9nRomName, NULL, NULL, Bottom9InputInfo, Bottom9DIPInfo,
+	NULL, bottom9nRomInfo, bottom9nRomName, NULL, NULL, NULL, NULL, Bottom9InputInfo, Bottom9DIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };
@@ -902,7 +905,7 @@ struct BurnDriver BurnDrvMstadium = {
 	"Main Stadium (Japan ver. 4)\0", NULL, "Konami", "GX891",
 	L"Main Stadium\0\u30E1\u30A4\u30F3\u30B9\u30BF\u30B8\u30A2\u30E0 (Japan ver. 4)\0", NULL, NULL, NULL,
 	BDF_GAME_WORKING | BDF_CLONE, 2, HARDWARE_PREFIX_KONAMI, GBF_SPORTSMISC, 0,
-	NULL, mstadiumRomInfo, mstadiumRomName, NULL, NULL, Bottom9InputInfo, MstadiumDIPInfo,
+	NULL, mstadiumRomInfo, mstadiumRomName, NULL, NULL, NULL, NULL, Bottom9InputInfo, MstadiumDIPInfo,
 	DrvInit, DrvExit, DrvFrame, DrvDraw, DrvScan, &DrvRecalc, 0x400,
 	288, 224, 4, 3
 };

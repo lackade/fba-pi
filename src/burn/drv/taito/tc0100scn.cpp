@@ -1,4 +1,5 @@
 // TC0100SCN
+// Based on MAME sources by Nicola Salmoria
 
 #include "tiles_generic.h"
 #include "taito_ic.h"
@@ -152,13 +153,13 @@ void TC0100SCNCtrlWordWrite(INT32 Chip, UINT32 Offset, UINT16 Data)
 		
 		case 0x06: {
 			TC0100SCNDblWidth[Chip] = (Data & 0x10) >> 4;
-			if (TC0100SCNFlip[Chip]) bprintf(PRINT_NORMAL, _T("Double\n"));
+			//if (TC0100SCNFlip[Chip]) bprintf(PRINT_NORMAL, _T("Double\n"));
 			return;
 		}
 		
 		case 0x07: {
 			TC0100SCNFlip[Chip] = (Data & 0x01) ? 1: 0;
-			if (TC0100SCNFlip[Chip]) bprintf(PRINT_NORMAL, _T("Flipped\n"));
+			//if (TC0100SCNFlip[Chip]) bprintf(PRINT_NORMAL, _T("Flipped\n"));
 			return;
 		}
 	}
@@ -171,7 +172,7 @@ INT32 TC0100SCNBottomLayer(INT32 Chip)
 	return (TC0100SCNCtrl[Chip][6] & 0x08) >> 3;
 }
 
-void TC0100SCNRenderBgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc)
+void TC0100SCNRenderBgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc, INT32 Priority)
 {
 	INT32 mx, my, Attr, Code, Colour, x, y, xSrc = 0, ySrc = 0, TileIndex = 0, Offset, Flip, xFlip, yFlip, p, dxScroll, dyScroll;
 	
@@ -253,8 +254,10 @@ void TC0100SCNRenderBgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc)
 
 			if ((p & 0x0f) != 0 || Opaque) {
 				pTransDraw[(y * nScreenWidth) + x] = p;
-//				if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(y * TC0100SCNClipWidth[Chip]) + (x - TC0100SCNClipStartX[Chip])] = 1;
-				if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(y * nScreenWidth) + x] = 1;
+
+				if (TC0100SCNPriorityMap[Chip]) {
+					TC0100SCNPriorityMap[Chip][(y * nScreenWidth) + x] = Priority;
+				}
 			}
 			xSrc = (xSrc + 1);
 			xSrc &= WidthMask;
@@ -264,7 +267,7 @@ void TC0100SCNRenderBgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc)
 	}
 }
 
-void TC0100SCNRenderFgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc)
+void TC0100SCNRenderFgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc, INT32 Priority)
 {
 	INT32 mx, my, Attr, Code, Colour, x, y, xSrc = 0, ySrc = 0, TileIndex = 0, Offset, Flip, xFlip, yFlip, p, ColumnOffset, dxScroll, dyScroll;
 	
@@ -349,8 +352,10 @@ void TC0100SCNRenderFgLayer(INT32 Chip, INT32 Opaque, UINT8 *pSrc)
 
 			if ((p & 0x0f) != 0 || Opaque) {
 				pTransDraw[(y * nScreenWidth) + x] = p;
-//				if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(y * TC0100SCNClipWidth[Chip]) + (x - TC0100SCNClipStartX[Chip])] = 2;
-				if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(y * nScreenWidth) + x] = 2;
+
+				if (TC0100SCNPriorityMap[Chip]) {
+					TC0100SCNPriorityMap[Chip][(y * nScreenWidth) + x] = Priority;
+				}
 			}
 			xSrc = (xSrc + 1);
 			xSrc &= WidthMask;
@@ -364,7 +369,7 @@ static INT32 TC0100SCNPlaneOffsets[2] = { 8, 0 };
 static INT32 TC0100SCNXOffsets[8]     = { 0, 1, 2, 3, 4, 5, 6, 7 };
 static INT32 TC0100SCNYOffsets[8]     = { 0, 16, 32, 48, 64, 80, 96, 112 };
 
-void TC0100SCNRenderCharLayer(INT32 Chip)
+void TC0100SCNRenderCharLayer(INT32 Chip, INT32 Priority)
 {
 	INT32 mx, my, Attr, Code, Colour, x, y, TileIndex = 0, Flip, xFlip, yFlip;
 	
@@ -462,7 +467,7 @@ void TC0100SCNRenderCharLayer(INT32 Chip)
 							if (xPos >= TC0100SCNClipStartX[Chip] && xPos < TC0100SCNClipStartX[Chip] + TC0100SCNClipWidth[Chip]) {
 								pPixel[xPos] = c | nPalette | TC0100SCNPaletteOffset[Chip];
 //								if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(yPos * TC0100SCNClipWidth[Chip]) + xPos - TC0100SCNClipStartX[Chip]] = 4;
-								if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(yPos * nScreenWidth) + xPos] = 4;
+								if (TC0100SCNPriorityMap[Chip]) TC0100SCNPriorityMap[Chip][(yPos * nScreenWidth) + xPos] = Priority;
 							}
 						}
 					}
@@ -479,7 +484,7 @@ void TC0100SCNRenderCharLayer(INT32 Chip)
 void TC0100SCNReset()
 {
 	for (INT32 i = 0;i < TC0100SCNNum; i++) {
-		memset(TC0100SCNCtrl[i], 0, 8);	
+		memset(TC0100SCNCtrl[i], 0, sizeof(TC0100SCNCtrl[i]));
 		memset(TC0100SCNChars[i], 0, 256 * 8 * 8);
 		
 		BgScrollX[i] = 0;
@@ -569,7 +574,7 @@ void TC0100SCNExit()
 		BurnFree(pTC0100SCNBgTempDraw[i]);
 		BurnFree(pTC0100SCNFgTempDraw[i]);
 		
-		memset(TC0100SCNCtrl[i], 0, 8);
+		memset(TC0100SCNCtrl[i], 0, sizeof(TC0100SCNCtrl[i]));
 		
 		BgScrollX[i] = 0;
 		BgScrollY[i] = 0;

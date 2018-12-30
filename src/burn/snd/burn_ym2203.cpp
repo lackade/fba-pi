@@ -1,5 +1,4 @@
 #include "burnint.h"
-#include "burn_sound.h"
 #include "burn_ym2203.h"
 
 #define MAX_YM2203	3
@@ -570,6 +569,8 @@ void BurnYM2203Exit()
 	if (!DebugSnd_YM2203Initted) bprintf(PRINT_ERROR, _T("BurnYM2203Exit called without init\n"));
 #endif
 
+	if (!DebugSnd_YM2203Initted) return;
+
 	YM2203Shutdown();
 	
 	for (INT32 i = 0; i < nNumChips; i++) {
@@ -578,16 +579,18 @@ void BurnYM2203Exit()
 
 	BurnTimerExit();
 
-	if (pBuffer) {
-		free(pBuffer);
-		pBuffer = NULL;
-	}
+	BurnFree(pBuffer);
 	
 	nNumChips = 0;
 	bYM2203AddSignal = 0;
 	bYM2203UseSeperateVolumes = 0;
 	
 	DebugSnd_YM2203Initted = 0;
+}
+
+INT32 BurnYM2203Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback, INT32 bAddSignal)
+{
+	return BurnYM2203Init(num, nClockFrequency, IRQCallback, BurnSynchroniseStream, BurnGetTime, bAddSignal);
 }
 
 INT32 BurnYM2203Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback, INT32 (*StreamCallback)(INT32), double (*GetTimeCallback)(), INT32 bAddSignal)
@@ -619,6 +622,9 @@ INT32 BurnYM2203Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback
 			nBurnYM2203SoundRate >>= 1;
 		}
 
+		if (nBurnYM2203SoundRate < nBurnSoundRate)
+			nBurnYM2203SoundRate = nBurnSoundRate;
+
 		BurnYM2203Update = YM2203UpdateResample;
 		nSampleSize = (UINT32)nBurnYM2203SoundRate * (1 << 16) / nBurnSoundRate;
 
@@ -633,7 +639,7 @@ INT32 BurnYM2203Init(INT32 num, INT32 nClockFrequency, FM_IRQHANDLER IRQCallback
 	
 	YM2203Init(num, nClockFrequency, nBurnYM2203SoundRate, &BurnOPNTimerCallback, IRQCallback);
 
-	pBuffer = (INT16*)malloc(4096 * 4 * num * sizeof(INT16));
+	pBuffer = (INT16*)BurnMalloc(4096 * 4 * num * sizeof(INT16));
 	memset(pBuffer, 0, 4096 * 4 * num * sizeof(INT16));
 
 	nYM2203Position = 0;
