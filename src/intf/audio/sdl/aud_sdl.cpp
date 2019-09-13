@@ -194,7 +194,12 @@ static int SDLSoundInit()
 		fprintf(stderr, "Couldn't open audio: %s\n", SDL_GetError());
 		dprintf(_T("Couldn't open audio: %s\n"), SDL_GetError());
 		return 1;
-	}		
+	}
+
+	if (audiospec_req.freq != audiospec.freq) {
+		fprintf(stderr, "WARNING: Freq mismatch (req: %d; got: %d)\n",
+			audiospec_req.freq, audiospec.freq);
+	}
 
 	SDLSetCallback(NULL);
 

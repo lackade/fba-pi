@@ -47,6 +47,7 @@ int piLoadConfig()
 		STR(szAppRomPaths[17]);
 		STR(szAppRomPaths[18]);
 		STR(szAppRomPaths[19]);
+		VAR(nAudSampleRate[0]);
 	}
 
 #undef STR
@@ -93,6 +94,7 @@ int piSaveConfig()
 	STR(szAppRomPaths[17]);
 	STR(szAppRomPaths[18]);
 	STR(szAppRomPaths[19]);
+	VAR(nAudSampleRate[0]);
 
 #undef STR
 #undef FLT
