@@ -1,6 +1,10 @@
 Final Burn Alpha for Raspberry Pi
 ---------------------------------
 
+**NOTE** Please note that I'm no longer updating this project. Most of the features of
+this emulator have been migrated to the Pi build of
+[FBNeo](https://github.com/finalburnneo/FBNeo), which also includes updated driver list.
+
 Final Burn Alpha is a multi-system emulator. This particular port is
 based on the SDL version of the emulator with native GLES-based
 rendering for the Raspberry Pi.
